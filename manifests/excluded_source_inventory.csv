@@ -1,0 +1,11 @@
+source_pattern_or_path,source_package,exclusion_reason
+raw/**/*.jsonl,all source packages,raw multi-GB market data
+minute/**/market_1m.csv,collector,derived market data
+**/*.csv,research packages,full analytical outputs; only provenance inventories allowed
+**/*.html,R5 and replay packages,generated replay/UI
+**/*.png,R5 and replay packages,screenshots
+runs/,R6A/R6B2R,generated analytical runs
+forensic_snapshot/,R1D,untrusted quarantined legacy application
+*.service,legacy/R5,operational deployment not authorized
+.env/private keys/tokens,collector and services,credentials and secrets
+__pycache__/.venv/logs,all,"cache, environment, and logs"
