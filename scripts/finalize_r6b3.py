@@ -11,7 +11,7 @@ def write(path,rows):
   w=csv.DictWriter(f,fieldnames=fields);w.writeheader();w.writerows(rows)
 def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 def main():
- p=argparse.ArgumentParser();p.add_argument('--root',type=Path,required=True);p.add_argument('--r4',type=Path,required=True);a=p.parse_args();root=a.root
+ p=argparse.ArgumentParser();p.add_argument('--root',type=Path,required=True);p.add_argument('--r4',type=Path,required=True);p.add_argument('--r5',type=Path,required=True);a=p.parse_args();root=a.root
  futures=read(root/'runs/stream/futures_participation.csv');options=read(root/'runs/stream/option_participation.csv')
  write(root/'futures_participation.csv',futures);write(root/'option_participation.csv',options)
  grouped=defaultdict(list)
@@ -47,7 +47,7 @@ def main():
  write(root/'manual_reconciliation.csv',manual)
  # Reference C is opened only here, after A/B seals exist.
  r4f=a.r4/'futures_5m_participation.csv';r4o=a.r4/'option_5m_participation.csv';r4b=a.r4/'option_strike_breadth.csv'
- refs=[r4f,r4o,r4b];reference_rows=read(r4f);reference_times={x['episode_id']:x['evaluation_timestamp'].replace(' ','T') for x in reference_rows};native_confirmation={r['episode_id']:r for r in futures if r['observation_timestamp'].replace(' ','T')==reference_times.get(r['episode_id'],'')}
+ r5c=a.r5/'cross_component_reconciliation.csv';r5clock=a.r5/'cross_layer_clock_audit.csv';refs=[r4f,r4o,r4b,r5c,r5clock];reference_rows=read(r4f);reference_times={x['episode_id']:x['evaluation_timestamp'].replace(' ','T') for x in reference_rows};native_confirmation={r['episode_id']:r for r in futures if r['observation_timestamp'].replace(' ','T')==reference_times.get(r['episode_id'],'')}
  differences=[]
  for ref in reference_rows:
   native=native_confirmation.get(ref['episode_id'])
@@ -58,6 +58,8 @@ def main():
  # R4 options use a selected first qualifying receipt; native preserves all seven-by-type strikes at every receipt.
  for ref in read(r4o):
   differences.append({'episode_id':ref['episode_id'],'component':ref.get('option_type'),'field':'row_granularity','native_value':'STRIKE_SPECIFIC_ALL_CAUSAL_RECEIPTS','reference_value':'SELECTED_QUALIFYING_RECEIPT','classification':'strike-selection difference','detail':'legitimate native/reference compatibility distinction'})
+ for ref in read(r5c):
+  if ref.get('component')=='PARTICIPATION':differences.append({'episode_id':'R5_AGGREGATE','component':'R5_PARTICIPATION','field':ref.get('metric'),'native_value':'NOT_COMPARABLE_AT_AGGREGATE_REFERENCE_GRANULARITY','reference_value':ref.get('actual'),'classification':'aggregation difference','detail':'R5 preserves R4-derived aggregate cohorts, not independent strike-specific raw rows'})
  write(root/'reference_difference_classification.csv',differences)
  opens=[]
  for mode in ('stream','batch'):
