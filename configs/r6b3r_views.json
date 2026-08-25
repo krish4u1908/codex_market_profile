@@ -1,0 +1,8 @@
+{
+  "identity": "R6B3R_PARTICIPATION_VIEWS",
+  "dense_partitions": ["FUTURES", "OPTION"],
+  "compatibility_label": "LEGACY R4/R5 COMPATIBILITY SNAPSHOT — LOSSY, NOT RAW AUTHORITY",
+  "material_futures_fields": ["price_change_1m", "price_change_3m", "price_change_5m", "delta_oi_1m", "delta_oi_3m", "delta_oi_5m", "volume_spike", "stale", "volume_status"],
+  "material_option_fields": ["symbol", "strike", "expiry", "moneyness", "inventory_state", "semantic_classification", "volume_spike", "oi_spike", "stale"],
+  "joint_quality_states": ["COMPLETE_AGREED", "COMPLETE_MIXED", "PARTIAL", "STALE"]
+}
