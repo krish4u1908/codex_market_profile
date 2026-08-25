@@ -12,19 +12,21 @@ def load_market(raw_root:Path,date:str,symbols:set[str])->pd.DataFrame:
     try:r=json.loads(line);m=r.get('message',{});sym=m.get('symbol')
     except json.JSONDecodeError:continue
     if sym not in symbols:continue
-    rows.append({'session_date':date,'symbol':sym,'event_timestamp':pd.to_datetime(r.get('event_time'),errors='coerce'),'receipt_timestamp':pd.to_datetime(r.get('received_at'),errors='coerce'),'availability_timestamp':pd.to_datetime(r.get('received_at'),errors='coerce'),'last_price':m.get('ltp'),'cumulative_volume':m.get('vol_traded_today'),'last_traded_quantity':m.get('last_traded_qty'),'source_file':str(path),'source_row':offset,'source_quality':'RAW_WEBSOCKET_EVENT'})
+    rows.append({'session_date':date,'symbol':sym,'event_timestamp':r.get('event_time'),'receipt_timestamp':r.get('received_at'),'availability_timestamp':r.get('received_at'),'last_price':m.get('ltp'),'cumulative_volume':m.get('vol_traded_today'),'last_traded_quantity':m.get('last_traded_qty'),'source_file':str(path),'source_row':offset,'source_quality':'RAW_WEBSOCKET_EVENT'})
  z=pd.DataFrame(rows)
- if len(z):z=z.sort_values(['receipt_timestamp','symbol','source_file','source_row']).reset_index(drop=True)
+ if len(z):
+  for field in ('event_timestamp','receipt_timestamp','availability_timestamp'):z[field]=pd.to_datetime(z[field],errors='coerce')
+  z=z.sort_values(['receipt_timestamp','symbol','source_file','source_row']).reset_index(drop=True)
  return z
 
 def load_oi(oi_root:Path,date:str)->pd.DataFrame:
- rows=[]
+ rows=[];expiry_cache={}
  for path in sorted((oi_root/date).glob('oi_*.jsonl')):
   with path.open(errors='replace') as fh:
    for offset,line in enumerate(fh,1):
     try:r=json.loads(line)
     except json.JSONDecodeError:continue
-    receipt=pd.to_datetime(r.get('received_at'),errors='coerce');request=pd.to_datetime(r.get('request_time'),errors='coerce');source=r.get('source');response=r.get('response',{});items=[];selected=None
+    receipt=r.get('received_at');request=r.get('request_time');source=r.get('source');response=r.get('response',{});items=[];selected=None
     if source=='option_chain':
      data=response.get('data',{});items=data.get('optionsChain',[]);eds=data.get('expiryData',[])
      if eds:selected=pd.to_datetime(eds[0].get('date'),dayfirst=True,errors='coerce').date()
@@ -32,10 +34,15 @@ def load_oi(oi_root:Path,date:str)->pd.DataFrame:
     for m in items:
      sym=m.get('symbol','')
      if 'BANKNIFTY' not in sym or sym.endswith('-INDEX'):continue
-     typ='call' if sym.endswith('CE') else 'put' if sym.endswith('PE') else 'future';strike=m.get('strike_price') if typ!='future' else np.nan;epoch=m.get('expiry');expiry=pd.to_datetime(float(epoch),unit='s',utc=True).tz_convert('Asia/Kolkata').date() if epoch not in (None,'') else selected
+     typ='call' if sym.endswith('CE') else 'put' if sym.endswith('PE') else 'future';strike=m.get('strike_price') if typ!='future' else np.nan;epoch=m.get('expiry')
+     if epoch not in (None,''):
+      if epoch not in expiry_cache:expiry_cache[epoch]=pd.to_datetime(float(epoch),unit='s',utc=True).tz_convert('Asia/Kolkata').date()
+      expiry=expiry_cache[epoch]
+     else:expiry=selected
      rows.append({'session_date':date,'symbol':sym,'instrument_class':typ,'expiry_date':expiry,'strike':strike,'oi_observation_timestamp':request,'oi_receipt_timestamp':receipt,'availability_timestamp':receipt,'oi_close':m.get('oi'),'instrument_price':m.get('ltp'),'cumulative_volume':m.get('volume',m.get('v')),'source_file':str(path),'source_row':offset,'availability_quality':'EXACT_REST_RECEIPT','source_quality':'RAW_REST_OI'})
  z=pd.DataFrame(rows)
  if z.empty:return z
+ for field in ('oi_observation_timestamp','oi_receipt_timestamp','availability_timestamp'):z[field]=pd.to_datetime(z[field],errors='coerce')
  z=z.sort_values(['symbol','availability_timestamp','source_file','source_row']).reset_index(drop=True);g=z.groupby('symbol',observed=True);z['previous_oi']=g.oi_close.shift();z['delta_oi_raw']=z.oi_close-z.previous_oi;z['valid_receipt']=z.oi_close.notna()&z.availability_timestamp.notna();z['oi_changed']=z.delta_oi_raw.ne(0)&z.delta_oi_raw.notna();z['duplicate_record']=z.duplicated(['symbol','availability_timestamp','oi_close','instrument_price'],keep='first');z['delta_oi']=z.delta_oi_raw.where(z.delta_oi_raw.ne(0));z.loc[g.cumcount().eq(0)|~z.valid_receipt,'delta_oi']=np.nan;z['last_valid_receipt_timestamp']=z.availability_timestamp.where(z.valid_receipt).groupby(z.symbol).ffill();z['last_change_timestamp']=z.availability_timestamp.where(z.oi_changed).groupby(z.symbol).ffill();z['freshness_age_minutes']=0.0;z['change_age_minutes']=(z.availability_timestamp-z.last_change_timestamp).dt.total_seconds()/60;return z
 
 def select_contracts(o:pd.DataFrame,date:str):

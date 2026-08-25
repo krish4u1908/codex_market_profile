@@ -1,10 +1,13 @@
 {
-  "branch": "fix/r6c0-raw-provenance",
+  "branch": "fix/r6c0i-inventory-provenance",
   "excludes": [
     ".git",
-    "manifests/repository_source_manifest.json"
+    "manifests/repository_source_manifest.json",
+    "__pycache__",
+    "*.pyc",
+    "*.egg-info"
   ],
-  "file_count": 71,
+  "file_count": 77,
   "files": [
     {
       "path": ".gitignore",
@@ -12,14 +15,34 @@
       "size": 139
     },
     {
+      "path": ".pytest_cache/.gitignore",
+      "sha256": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd",
+      "size": 37
+    },
+    {
+      "path": ".pytest_cache/CACHEDIR.TAG",
+      "sha256": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4",
+      "size": 191
+    },
+    {
+      "path": ".pytest_cache/README.md",
+      "sha256": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad",
+      "size": 302
+    },
+    {
+      "path": ".pytest_cache/v/cache/nodeids",
+      "sha256": "8f4f214e30d95d412cf7bd7248b1ec5ff72b76967e8553da7d125a5c50c9688e",
+      "size": 3410
+    },
+    {
       "path": "ARCHITECTURE.md",
-      "sha256": "aa5ae5c032a393415b8fcc682c8e74f986cbae615d1dc6bb4383ffc5508b711f",
-      "size": 1259
+      "sha256": "bb32e4a8b026aeba30dc112e9e7eb840be063d8776bc5283e89ab80a0c4bc507",
+      "size": 1748
     },
     {
       "path": "CHANGELOG.md",
-      "sha256": "b65a3342fff7d53b559c8fd08138ef17ee33d23af81e6dd2f076a4c7b11c896f",
-      "size": 586
+      "sha256": "7419e9a335b14cf90e19f511f19cea16c5fd896235ed7233076f6af581a0a274",
+      "size": 946
     },
     {
       "path": "CONTRIBUTING.md",
@@ -38,8 +61,8 @@
     },
     {
       "path": "SOURCE_LINEAGE.md",
-      "sha256": "2a4a89540294a8da72a0e4cbd749adba440c6d80099ad8bffab96eda1a6b1e33",
-      "size": 1131
+      "sha256": "1c2f1959ffba7c9038603b1360d5dbb1e99a2ecc10a9e4872be3c2d0ea82b886",
+      "size": 1614
     },
     {
       "path": "configs/r6b3_participation.json",
@@ -55,6 +78,11 @@
       "path": "configs/r6c0_raw.json",
       "sha256": "9bc3e3c50ea87359371c89214804e40f1f2c16404b3eb2b3ead622a8bf37cf71",
       "size": 259
+    },
+    {
+      "path": "configs/r6c0i_inventory.json",
+      "sha256": "a74d1810118e9d77719b5768bab7e0ce922d1169a3153aed799842d451b264d3",
+      "size": 411
     },
     {
       "path": "docs/causality/R6B3R_PUBLICATION_CLOCK_CONTRACT.md",
@@ -248,8 +276,8 @@
     },
     {
       "path": "src/banknifty_profiler/inventory/engine.py",
-      "sha256": "856ac89f260adfff8589d152fe0fbcbcc63c86b274a198575657f922f838a228",
-      "size": 12688
+      "sha256": "543b20e86be6773541f355534a584f70b43a9fe6aa4d4609cc4169e57d33a493",
+      "size": 12721
     },
     {
       "path": "src/banknifty_profiler/inventory/oi_profiles.py",
@@ -293,8 +321,8 @@
     },
     {
       "path": "src/banknifty_profiler/raw_io/reader.py",
-      "sha256": "0fc37ea41465b2dce2595b3a299d6565c100444ab3b1bbdf46300666c093c6ed",
-      "size": 6019
+      "sha256": "490751c7764c6d4d2d9b8bf552ecd989c18b29be94fdd3cc725952f60632b8b4",
+      "size": 6248
     },
     {
       "path": "tests/__init__.py",
@@ -357,11 +385,16 @@
       "size": 2426
     },
     {
+      "path": "tests/unit/test_r6c0i_inventory.py",
+      "sha256": "da531203959241157bf7c9b956f70c47223a845dcd9c15c0e54fa8b66d2ad005",
+      "size": 6279
+    },
+    {
       "path": "tests/unit/test_raw_participation.py",
       "sha256": "39a7c792fa9adfc4356373081adc63ac7b007ad84537299284fb4c319f9bc329",
       "size": 2741
     }
   ],
-  "repository": "banknifty-market-profiler",
-  "verification_status": "PASS"
+  "repository": "/opt/banknifty/repositories/banknifty-market-profiler",
+  "verification_status": "R6C0I_SOURCE_MANIFEST_VERIFIED"
 }

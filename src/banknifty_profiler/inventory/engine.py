@@ -1,83 +1,95 @@
-#!/usr/bin/env python3
+"""Canonical raw-only BN-reference multi-horizon inventory engine."""
 from __future__ import annotations
-import csv,hashlib,json,math,sys
+import argparse,csv,hashlib,json
 from collections import defaultdict
 from pathlib import Path
-import numpy as np,pandas as pd
-ROOT=Path(__file__).resolve().parents[1];BASE=ROOT.parent;RAW=Path('/opt/banknifty-collector/data-prod-v4/raw');OI=Path('/opt/banknifty-collector/data-prod-v4/oi');MINUTE=Path('/opt/banknifty-collector/data-prod-v4/minute')
-sys.path.insert(0,str(ROOT/'locked_primitives'));from raw_io import load_market,load_oi,select_contracts,backward_join,moneyness
-IDX='NSE:NIFTYBANK-INDEX';BIN=25.;TOL=5.;EVAL=['2026-08-13','2026-08-18','2026-08-19','2026-08-20'];CHAINS={'2026-08-13':['2026-08-10','2026-08-11','2026-08-12'],'2026-08-18':['2026-08-11','2026-08-12','2026-08-13'],'2026-08-19':['2026-08-12','2026-08-13','2026-08-18'],'2026-08-20':['2026-08-13','2026-08-18','2026-08-19']};FAMS=['BN_REF_FUT_VOLUME_VPOC','FUT_POS_OI_VPOC','FUT_NEG_OI_VPOC','CE_POS_OI_VPOC','CE_NEG_OI_VPOC','PE_POS_OI_VPOC','PE_NEG_OI_VPOC']
-def sha(p):
- h=hashlib.sha256()
- with open(p,'rb') as f:
-  for b in iter(lambda:f.read(1<<20),b''):h.update(b)
- return h.hexdigest()
-def iso(x):return '' if pd.isna(x) else pd.Timestamp(x).isoformat()
-def write(p,rows,fields=None):
- rows=list(rows);fields=fields or (list(rows[0]) if rows else [])
- with open(p,'w',newline='') as f:w=csv.DictWriter(f,fieldnames=fields,extrasaction='ignore');w.writeheader();w.writerows(rows)
+import numpy as np
+import pandas as pd
+from banknifty_profiler.raw_io.reader import load_market,load_oi,select_contracts,backward_join,moneyness
+
+FAMILIES=("BN_REF_FUT_VOLUME_VPOC","FUT_POS_OI_VPOC","FUT_NEG_OI_VPOC","CE_POS_OI_VPOC","CE_NEG_OI_VPOC","PE_POS_OI_VPOC","PE_NEG_OI_VPOC")
+def iso(x):return "" if pd.isna(x) else pd.Timestamp(x).isoformat()
+def sha(path):
+ d=hashlib.sha256()
+ with path.open("rb") as f:
+  for block in iter(lambda:f.read(1<<20),b""):d.update(block)
+ return d.hexdigest()
+def write(path,rows):
+ rows=list(rows);fields=list(dict.fromkeys(k for row in rows for k in row))
+ with path.open("w",newline="") as f:w=csv.DictWriter(f,fieldnames=fields,lineterminator="\n");w.writeheader();w.writerows(rows)
 def choose(weights,mean,prior=np.nan):
- mx=max(weights.values());t=sorted(k for k,v in weights.items() if v==mx);rule='NO_TIE'
- if len(t)>1:
-  rule='TIE_WEIGHTED_MEAN';d=min(abs(x-mean) for x in t);t=[x for x in t if abs(x-mean)==d]
-  if len(t)>1 and np.isfinite(prior):rule='TIE_PREVIOUS_VPOC';d=min(abs(x-prior) for x in t);t=[x for x in t if abs(x-prior)==d]
-  if len(t)>1:rule='TIE_LOWER_BIN'
- return min(t),rule
-def prof(q,prior=np.nan):
- q=q[pd.to_numeric(q.px,errors='coerce').notna()&pd.to_numeric(q.w,errors='coerce').gt(0)].copy()
+ maximum=max(weights.values());tied=sorted(k for k,v in weights.items() if v==maximum);rule="NO_TIE"
+ if len(tied)>1:
+  rule="TIE_WEIGHTED_MEAN";distance=min(abs(x-mean) for x in tied);tied=[x for x in tied if abs(x-mean)==distance]
+  if len(tied)>1 and np.isfinite(prior):rule="TIE_PREVIOUS_VPOC";distance=min(abs(x-prior) for x in tied);tied=[x for x in tied if abs(x-prior)==distance]
+  if len(tied)>1:rule="TIE_LOWER_BIN"
+ return min(tied),rule
+def profile(frame,bin_points,prior=np.nan):
+ q=frame[pd.to_numeric(frame.px,errors="coerce").notna()&pd.to_numeric(frame.w,errors="coerce").gt(0)].copy()
  if q.empty:return None
- w=defaultdict(float);sw=sp=0.
- for _,r in q.iterrows():b=round(float(r.px)/BIN)*BIN;v=float(r.w);w[b]+=v;sw+=v;sp+=float(r.px)*v
- if sw<=0:return None
- vp,rule=choose(w,sp/sw,prior);nodes=sorted(w,key=lambda x:(-w[x],x));return {'control_value':vp,'total_weight':sw,'winning_bin_weight':w[vp],'runner_up_bin':nodes[1] if len(nodes)>1 else '','runner_up_weight':w[nodes[1]] if len(nodes)>1 else '','tie_break_reason':rule,'bin_weights':json.dumps({str(k):v for k,v in sorted(w.items())},sort_keys=True),'count':len(q)}
-def price_events(m,date,fut):
- st=pd.Timestamp(date+'T09:15:00+05:30');en=pd.Timestamp(date+'T15:30:00+05:30')
- z=m[(m.symbol==fut)&m.receipt_timestamp.between(st,en,inclusive='left')].sort_values(['receipt_timestamp','source_file','source_row']).copy();v=z.dropna(subset=['receipt_timestamp','cumulative_volume']).copy();v['previous_valid']=v.cumulative_volume.shift();v['w']=v.cumulative_volume-v.previous_valid;v['reject']='';v.loc[v.previous_valid.isna(),'reject']='FIRST_VALID_COUNTER';v.loc[v.w.lt(0),'reject']='COUNTER_RESET';v.loc[v.w.eq(0),'reject']='UNCHANGED_COUNTER';v.loc[v.reject!='','w']=np.nan;v['raw_increment']=v.w
- idx=m[(m.symbol==IDX)&m.receipt_timestamp.between(st,en,inclusive='left')&m.last_price.notna()].sort_values('receipt_timestamp')[['receipt_timestamp','last_price','source_file','source_row']].rename(columns={'receipt_timestamp':'index_timestamp','last_price':'px','source_file':'index_source_file','source_row':'index_source_row'})
- v=pd.merge_asof(v.sort_values('receipt_timestamp'),idx,left_on='receipt_timestamp',right_on='index_timestamp',direction='backward');v['join_age_seconds']=(v.receipt_timestamp-v.index_timestamp).dt.total_seconds();v.loc[v.join_age_seconds.gt(TOL)|v.join_age_seconds.lt(0)|v.px.isna(),'reject']='NO_CAUSAL_INDEX_WITHIN_TOLERANCE';v.loc[v.reject!='','w']=np.nan;v['legacy_px']=v.last_price;v['session_date']=date;return v
-def oi_events(o,m,date,fut,oe):
- st=pd.Timestamp(date+'T09:15:00+05:30');en=pd.Timestamp(date+'T15:30:00+05:30')
- j=moneyness(backward_join(o,m[(m.symbol==IDX)&m.receipt_timestamp.between(st,en,inclusive='left')],tolerance_seconds=TOL));j=j[j.availability_timestamp.between(st,en,inclusive='left')&~j.duplicate_record.fillna(False)].copy();j['family']='';j.loc[(j.instrument_class=='future')&(j.symbol==fut)&j.delta_oi.gt(0),'family']='FUT_POS_OI_VPOC';j.loc[(j.instrument_class=='future')&(j.symbol==fut)&j.delta_oi.lt(0),'family']='FUT_NEG_OI_VPOC';sel=j.expiry_date.astype(str).eq(str(oe))&j.moneyness.isin(['ATM','NEAR_OTM']);j.loc[sel&(j.instrument_class=='call')&j.delta_oi.gt(0),'family']='CE_POS_OI_VPOC';j.loc[sel&(j.instrument_class=='call')&j.delta_oi.lt(0),'family']='CE_NEG_OI_VPOC';j.loc[sel&(j.instrument_class=='put')&j.delta_oi.gt(0),'family']='PE_POS_OI_VPOC';j.loc[sel&(j.instrument_class=='put')&j.delta_oi.lt(0),'family']='PE_NEG_OI_VPOC';j=j[j.family!=''].copy();j['px']=j.matched_underlying_price;j['w']=j.delta_oi.abs();j['receipt_timestamp']=j.availability_timestamp;j['join_age_seconds']=(j.availability_timestamp-j.matched_price_timestamp).dt.total_seconds();j=j[j.px.notna()&j.w.gt(0)&j.join_age_seconds.between(0,TOL)];return j
-def transitions(q,fam,date,contract,expiry,mode):
- q=q[pd.to_numeric(q.px,errors='coerce').notna()&pd.to_numeric(q.w,errors='coerce').gt(0)&q.receipt_timestamp.notna()].copy()
- rows=[];weights=defaultdict(float);sw=sp=0.;prior=np.nan;last=None;seen=0
- for t,g in q.sort_values('receipt_timestamp').groupby('receipt_timestamp',sort=True):
-  for _,r in g.iterrows():b=round(float(r.px)/BIN)*BIN;weights[b]+=float(r.w);sw+=float(r.w);sp+=float(r.px)*float(r.w);seen+=1
-  vp,rule=choose(weights,sp/sw,prior)
-  if vp!=last:
-   nodes=sorted(weights,key=lambda x:(-weights[x],x));rows.append({'evaluation_date':date,'horizon':'ID','family':fam,'sign':'POSITIVE' if '_POS_' in fam else 'NEGATIVE' if '_NEG_' in fam else 'VOLUME','control_value':vp,'source_sessions':date,'control_effective_timestamp':iso(t),'winner_change_timestamp':iso(t),'snapshot_timestamp':'','freshness_receipt_timestamp':iso(t),'last_contributing_change_timestamp':iso(t),'contract':contract,'expiry':expiry,'eligible_observation_count':seen,'excluded_observation_count':0,'winning_bin_weight':weights[vp],'runner_up_bin':nodes[1] if len(nodes)>1 else '','runner_up_weight':weights[nodes[1]] if len(nodes)>1 else '','tie_break_reason':rule,'methodology_version':'INVENTORY_V2_BN_REF_RAW_CAUSAL','raw_input_hashes':'RECORDED_IN_FILE_OPEN_AUDIT','authority_basis':'RAW_CAUSAL_'+mode});last=vp;prior=vp
+ weights=defaultdict(float);total=weighted=0.0
+ for _,row in q.iterrows():price_bin=float(round(float(row.px)/bin_points)*bin_points);weight=float(row.w);weights[price_bin]+=weight;total+=weight;weighted+=float(row.px)*weight
+ winner,rule=choose(weights,weighted/total,prior);nodes=sorted(weights,key=lambda x:(-weights[x],x))
+ return {"control_value":winner,"total_weight":total,"winning_bin_weight":weights[winner],"runner_up_bin":nodes[1] if len(nodes)>1 else "","runner_up_weight":weights[nodes[1]] if len(nodes)>1 else "","tie_break_reason":rule,"count":len(q)}
+def price_events(market,date,futures,index_symbol,tolerance):
+ start=pd.Timestamp(date+"T09:15:00+05:30");end=pd.Timestamp(date+"T15:30:00+05:30")
+ values=market[(market.symbol==futures)&market.receipt_timestamp.between(start,end,inclusive="left")].sort_values(["receipt_timestamp","source_file","source_row"]).dropna(subset=["receipt_timestamp","cumulative_volume"]).copy();values["previous_valid"]=values.cumulative_volume.shift();values["w"]=values.cumulative_volume-values.previous_valid;values["reject"]="";values.loc[values.previous_valid.isna(),"reject"]="FIRST_VALID_COUNTER";values.loc[values.w.lt(0),"reject"]="COUNTER_RESET";values.loc[values.w.eq(0),"reject"]="UNCHANGED_COUNTER";values.loc[values.reject!="","w"]=np.nan
+ index=market[(market.symbol==index_symbol)&market.receipt_timestamp.between(start,end,inclusive="left")&market.last_price.notna()].sort_values(["receipt_timestamp","source_file","source_row"])[["receipt_timestamp","last_price","source_file","source_row"]].rename(columns={"receipt_timestamp":"index_timestamp","last_price":"px","source_file":"index_source_file","source_row":"index_source_row"});values=pd.merge_asof(values.sort_values("receipt_timestamp"),index,left_on="receipt_timestamp",right_on="index_timestamp",direction="backward");values["join_age_seconds"]=(values.receipt_timestamp-values.index_timestamp).dt.total_seconds();invalid=values.join_age_seconds.gt(tolerance)|values.join_age_seconds.lt(0)|values.px.isna();values.loc[invalid,"reject"]="NO_CAUSAL_INDEX_WITHIN_TOLERANCE";values.loc[invalid,"w"]=np.nan;values["session_date"]=date;return values
+def oi_events(oi,market,date,futures,option_expiry,index_symbol,tolerance):
+ start=pd.Timestamp(date+"T09:15:00+05:30");end=pd.Timestamp(date+"T15:30:00+05:30");joined=moneyness(backward_join(oi,market[(market.symbol==index_symbol)&market.receipt_timestamp.between(start,end,inclusive="left")],tolerance_seconds=tolerance));joined=joined[joined.availability_timestamp.between(start,end,inclusive="left")&~joined.duplicate_record.fillna(False)].copy();joined["family"]="";joined.loc[(joined.instrument_class=="future")&(joined.symbol==futures)&joined.delta_oi.gt(0),"family"]="FUT_POS_OI_VPOC";joined.loc[(joined.instrument_class=="future")&(joined.symbol==futures)&joined.delta_oi.lt(0),"family"]="FUT_NEG_OI_VPOC";selected=joined.expiry_date.astype(str).eq(str(option_expiry))&joined.moneyness.isin(["ATM","NEAR_OTM"])
+ for instrument,prefix in (("call","CE"),("put","PE")):
+  joined.loc[selected&(joined.instrument_class==instrument)&joined.delta_oi.gt(0),"family"]=prefix+"_POS_OI_VPOC";joined.loc[selected&(joined.instrument_class==instrument)&joined.delta_oi.lt(0),"family"]=prefix+"_NEG_OI_VPOC"
+ joined=joined[joined.family!=""].copy();joined["px"]=joined.matched_underlying_price;joined["w"]=joined.delta_oi.abs();joined["receipt_timestamp"]=joined.availability_timestamp;joined["join_age_seconds"]=(joined.availability_timestamp-joined.matched_price_timestamp).dt.total_seconds();return joined[joined.px.notna()&joined.w.gt(0)&joined.join_age_seconds.between(0,tolerance)]
+def discover_sessions(data_root,config):
+ raw=data_root/"raw";oi_root=data_root/"oi";common=sorted({p.name for p in raw.iterdir() if p.is_dir()}&{p.name for p in oi_root.iterdir() if p.is_dir()});rows=[];accepted=[];start=pd.Timestamp(config["discovery_start"]).date();end=pd.Timestamp(config["discovery_end"]).date()
+ for date in [d for d in common if start<=pd.Timestamp(d).date()<=end]:
+  market=load_market(raw,date,{config["index_symbol"],config["futures_symbol"]});oi=load_oi(oi_root,date);reasons=[];symbols=set(market.symbol) if len(market) else set();classes=set(oi.instrument_class) if len(oi) else set()
+  if config["index_symbol"] not in symbols:reasons.append("MISSING_INDEX")
+  if config["futures_symbol"] not in symbols:reasons.append("MISSING_FUTURES")
+  for required,code in (("future","MISSING_FUTURES_OI"),("call","MISSING_CE_OI"),("put","MISSING_PE_OI")):
+   if required not in classes:reasons.append(code)
+  minute_coverage=set(pd.to_datetime(oi.availability_timestamp).dt.floor("min")) if len(oi) else set();session_minutes=pd.date_range(date+" 09:15",date+" 15:29",freq="min",tz="Asia/Kolkata");missing=sum(t not in minute_coverage for t in session_minutes)
+  if missing>config["maximum_missing_oi_minutes"]:reasons.append("MATERIAL_CONTINUITY_OUTAGE")
+  futures,fe,oe=select_contracts(oi,date) if len(oi) else ("",None,None)
+  if futures!=config["futures_symbol"]:reasons.append("INCOMPATIBLE_FUTURES")
+  status="ACCEPTED" if not reasons else "REJECTED"
+  if status=="ACCEPTED":accepted.append(date)
+  rows.append({"date":date,"status":status,"reason":"|".join(reasons) if reasons else "RAW_CONTINUITY_VERIFIED","missing_oi_minutes":missing,"futures_symbol":futures,"futures_expiry":fe,"option_expiry":oe})
+ return rows,accepted
+def record(date,horizon,family,value,sources,effective,latest,contract,expiry,count,weight,runner,runner_weight,tie):
+ return {"evaluation_date":date,"horizon":horizon,"family":family,"sign":"POSITIVE" if "_POS_" in family else "NEGATIVE" if "_NEG_" in family else "VOLUME","control_value":value,"source_sessions":sources,"control_effective_timestamp":effective,"winner_change_timestamp":latest,"snapshot_timestamp":"","freshness_receipt_timestamp":latest,"last_contributing_change_timestamp":latest,"contract":contract,"expiry":expiry,"eligible_observation_count":count,"excluded_observation_count":0,"winning_bin_weight":weight,"runner_up_bin":runner,"runner_up_weight":runner_weight,"tie_break_reason":tie,"methodology_version":"INVENTORY_V2_BN_REF_RAW_CAUSAL","raw_input_hashes":"RECORDED_IN_FILE_OPEN_AUDIT","authority_basis":"RAW_CAUSAL_BANKNIFTY_REFERENCE","canonical_control_name":family,"user_facing_label":"BN-REF FUT VOL-VPOC" if family=="BN_REF_FUT_VOLUME_VPOC" else family,"canonical_revision":"INVENTORY_CANONICAL_REVISION_2_BN_REFERENCE_RAW_CAUSAL"}
+def transitions(frame,family,date,contract,expiry,bin_points):
+ q=frame[pd.to_numeric(frame.px,errors="coerce").notna()&pd.to_numeric(frame.w,errors="coerce").gt(0)&frame.receipt_timestamp.notna()].copy();rows=[];weights=defaultdict(float);total=weighted=0.;prior=np.nan;last=None;seen=0
+ for timestamp,group in q.sort_values(["receipt_timestamp","source_file","source_row"]).groupby("receipt_timestamp",sort=True):
+  for _,row in group.iterrows():price_bin=float(round(float(row.px)/bin_points)*bin_points);weight=float(row.w);weights[price_bin]+=weight;total+=weight;weighted+=float(row.px)*weight;seen+=1
+  winner,rule=choose(weights,weighted/total,prior)
+  if winner!=last:
+   nodes=sorted(weights,key=lambda x:(-weights[x],x));rows.append(record(date,"ID",family,winner,date,iso(timestamp),iso(timestamp),contract,expiry,seen,weights[winner],nodes[1] if len(nodes)>1 else "",weights[nodes[1]] if len(nodes)>1 else "",rule));last=winner;prior=winner
  return rows
-def fixed_rows(ev,frames,contracts,mode):
- out=[]
- for h,n in [('1D',1),('2D',2),('3D',3)]:
-  ds=CHAINS[ev][-n:];fut,fe,oe=contracts[ev]
-  for fam in FAMS:
-   q=pd.concat([frames[d]['price'] if fam=='BN_REF_FUT_VOLUME_VPOC' else frames[d]['oi'][frames[d]['oi'].family==fam] for d in ds],ignore_index=True);p=prof(q)
-   if not p:continue
-   latest=q.receipt_timestamp.max();out.append({'evaluation_date':ev,'horizon':h,'family':fam,'sign':'POSITIVE' if '_POS_' in fam else 'NEGATIVE' if '_NEG_' in fam else 'VOLUME','control_value':p['control_value'],'source_sessions':'|'.join(ds),'control_effective_timestamp':ev+'T09:15:00+05:30','winner_change_timestamp':iso(latest),'snapshot_timestamp':'','freshness_receipt_timestamp':iso(latest),'last_contributing_change_timestamp':iso(latest),'contract':fut,'expiry':fe if fam.startswith(('BN_','FUT_')) else oe,'eligible_observation_count':p['count'],'excluded_observation_count':0,'winning_bin_weight':p['winning_bin_weight'],'runner_up_bin':p['runner_up_bin'],'runner_up_weight':p['runner_up_weight'],'tie_break_reason':p['tie_break_reason'],'methodology_version':'INVENTORY_V2_BN_REF_RAW_CAUSAL','raw_input_hashes':'RECORDED_IN_FILE_OPEN_AUDIT','authority_basis':'RAW_CAUSAL_'+mode})
- return out
-def volume_recon(date,p):
- st=pd.Timestamp(date+'T09:15:00+05:30');en=pd.Timestamp(date+'T15:30:00+05:30');r=p[p.receipt_timestamp.between(st,en,inclusive='left')].copy();r['minute']=r.receipt_timestamp.dt.floor('min');a=r.groupby('minute').raw_increment.sum(min_count=1).rename('raw_incremental_futures_volume').reset_index();q=pd.read_csv(MINUTE/date/'market_1m.csv');q=q[q.symbol==p.symbol.iloc[0]].copy();q['minute']=pd.to_datetime(q.minute);q=q[q.minute.between(st,en,inclusive='left')][['minute','minute_volume','volume_total']];z=a.merge(q,on='minute',how='outer',indicator=True);z['absolute_difference']=(z.raw_incremental_futures_volume-z.minute_volume).abs();z['percentage_difference']=z.absolute_difference/z.minute_volume.replace(0,np.nan)*100;z['date']=date;return z
+def generate(mode,data_root,output_root,config):
+ eligibility,accepted=discover_sessions(data_root,config);evaluations=[d for d in accepted if config["evaluation_start"]<=d<=config["evaluation_end"] and len([x for x in accepted if x<d])>=3];chains={d:[x for x in accepted if x<d][-3:] for d in evaluations};needed=sorted(set(evaluations+sum(chains.values(),[])));frames={};contracts={};audit=[]
+ for date in needed:
+  oi=load_oi(data_root/"oi",date);futures,fe,oe=select_contracts(oi,date);market=load_market(data_root/"raw",date,{config["index_symbol"],futures});contracts[date]=(futures,fe,oe);frames[date]={"price":price_events(market,date,futures,config["index_symbol"],config["join_tolerance_seconds"]),"oi":oi_events(oi,market,date,futures,oe,config["index_symbol"],config["join_tolerance_seconds"])}
+  for path in sorted((data_root/"raw"/date).glob("events_*.jsonl"))+sorted((data_root/"oi"/date).glob("oi_*.jsonl")):audit.append({"stage":"RAW_CALCULATION","path":str(path),"sha256":sha(path),"classification":"PERMITTED"})
+ output=[]
+ for date in evaluations:
+  futures,fe,oe=contracts[date]
+  for horizon,count in (("1D",1),("2D",2),("3D",3)):
+   sources=chains[date][-count:]
+   for family in FAMILIES:
+    q=pd.concat([frames[d]["price"] if family=="BN_REF_FUT_VOLUME_VPOC" else frames[d]["oi"][frames[d]["oi"].family==family] for d in sources],ignore_index=True);result=profile(q,config["bin_points"])
+    if result:
+     latest=iso(q.receipt_timestamp.max())
+     output.append(record(date,horizon,family,result["control_value"],"|".join(sources),date+"T09:15:00+05:30",latest,futures,fe if family.startswith(("BN_","FUT_")) else oe,result["count"],result["winning_bin_weight"],result["runner_up_bin"],result["runner_up_weight"],result["tie_break_reason"]))
+  for family in FAMILIES:
+   q=frames[date]["price"] if family=="BN_REF_FUT_VOLUME_VPOC" else frames[date]["oi"][frames[date]["oi"].family==family];output+=transitions(q,family,date,futures,fe if family.startswith(("BN_","FUT_")) else oe,config["bin_points"])
+ output_root.mkdir(parents=True,exist_ok=False);write(output_root/"canonical_inventory.csv",output);write(output_root/"raw_session_eligibility.csv",eligibility);write(output_root/"discovered_source_chains.csv",[{"evaluation_date":d,"source_sessions":"|".join(c),"current_session_excluded":d not in c} for d,c in chains.items()]);write(output_root/"file_open_audit.csv",audit);summary={"mode":mode,"canonical_rows":len(output),"future_joins":sum(int((frames[d]["price"].join_age_seconds<0).sum()) for d in needed),"current_session_leakage":sum(d in c for d,c in chains.items()),"august_17_accepted":"2026-08-17" in accepted,"prohibited_opens":0};(output_root/"summary.json").write_text(json.dumps(summary,indent=2,sort_keys=True)+"\n");return summary
 def main():
- audit=[];dates=sorted(set(EVAL+sum(CHAINS.values(),[])));frames={};contracts={}
- for d in dates:
-  o=load_oi(OI,d);fut,fe,oe=select_contracts(o,d);m=load_market(RAW,d,{IDX,fut});contracts[d]=(fut,fe,oe);frames[d]={'price':price_events(m,d,fut),'oi':oi_events(o,m,d,fut,oe)}
-  for p in sorted((RAW/d).glob('events_*.jsonl'))+sorted((OI/d).glob('oi_*.jsonl')):audit.append({'stage':'RAW_CALCULATION','path':str(p),'sha256':sha(p),'prohibited':False})
- stream=[];batch=[];dual=[];vrecon=[]
- for ev in EVAL:
-  stream+=fixed_rows(ev,frames,contracts,'STREAM');batch+=fixed_rows(ev,frames,contracts,'BATCH')
-  fut,fe,oe=contracts[ev]
-  for fam in FAMS:
-   q=frames[ev]['price'] if fam=='BN_REF_FUT_VOLUME_VPOC' else frames[ev]['oi'][frames[ev]['oi'].family==fam];stream+=transitions(q,fam,ev,fut,fe if fam.startswith(('BN_','FUT_')) else oe,'STREAM');batch+=transitions(q,fam,ev,fut,fe if fam.startswith(('BN_','FUT_')) else oe,'BATCH')
-  # dual coordinate at every canonical price transition cutoff
-  for r in [x for x in stream if x['evaluation_date']==ev and x['family']=='BN_REF_FUT_VOLUME_VPOC']:
-   q=frames[ev]['price'];q=q[q.receipt_timestamp<=pd.Timestamp(r['control_effective_timestamp'])];bn=prof(q);leg=q.rename(columns={'px':'bnpx','legacy_px':'px'});fp=prof(leg);dual.append({'evaluation_date':ev,'horizon':r['horizon'],'timestamp':r['control_effective_timestamp'],'bn_reference_value':bn['control_value'] if bn else '','futures_coordinate_value':fp['control_value'] if fp else '','point_difference':(bn['control_value']-fp['control_value']) if bn and fp else '','bn_winning_weight':bn['winning_bin_weight'] if bn else '','futures_winning_weight':fp['winning_bin_weight'] if fp else '','basis_context':'TIME_VARYING_EVENT_LEVEL_MAPPING'})
-  z=volume_recon(ev,frames[ev]['price']);vrecon+=z.to_dict('records');mp=MINUTE/ev/'market_1m.csv';audit.append({'stage':'VOLUME_VALIDATION','path':str(mp),'sha256':sha(mp),'prohibited':False})
- # mode-independent analytical comparison
- fields=[k for k in stream[0] if k!='authority_basis'];sa=sorted([{k:v for k,v in r.items() if k!='authority_basis'} for r in stream],key=lambda r:tuple(str(r[k]) for k in ['evaluation_date','horizon','family','control_effective_timestamp']));ba=sorted([{k:v for k,v in r.items() if k!='authority_basis'} for r in batch],key=lambda r:tuple(str(r[k]) for k in ['evaluation_date','horizon','family','control_effective_timestamp']));ab=[]
- for i,(a,b) in enumerate(zip(sa,ba)):ab.append({'row':i,'key':'|'.join(str(a[k]) for k in ['evaluation_date','horizon','family','control_effective_timestamp']),'match':a==b})
- write(ROOT/'stream_vs_batch.csv',ab);write(ROOT/'raw_futures_volume_increments.csv',pd.concat([frames[d]['price'] for d in dates]).rename(columns={'px':'causal_index_price'}).to_dict('records'));write(ROOT/'causal_index_reference_joins.csv',pd.concat([frames[d]['price'] for d in dates])[['session_date','symbol','receipt_timestamp','index_timestamp','px','join_age_seconds','w','reject','source_file','source_row','index_source_file','index_source_row']].rename(columns={'px':'causal_index_price','w':'incremental_volume'}).to_dict('records'));write(ROOT/'bn_reference_vs_futures_coordinate.csv',dual);pd.DataFrame(vrecon).to_csv(ROOT/'independent_volume_reconciliation.csv',index=False,lineterminator='\n');write(ROOT/'file_open_audit.csv',audit)
- # gate: exact full-session totals must reconcile; interval boundary differences are descriptive.
- vz=pd.DataFrame(vrecon);tot=vz.groupby('date')[['raw_incremental_futures_volume','minute_volume']].sum();volume_ok=bool(np.allclose(tot.raw_incremental_futures_volume,tot.minute_volume,atol=0,rtol=0));ab_ok=all(x['match'] for x in ab) and len(sa)==len(ba)
- (ROOT/'run_gate.json').write_text(json.dumps({'stream_rows':len(stream),'batch_rows':len(batch),'stream_batch_match':ab_ok,'volume_session_totals':tot.reset_index().to_dict('records'),'volume_totals_exact':volume_ok,'future_joins':int(sum((frames[d]['price'].join_age_seconds<0).sum() for d in dates))},indent=2)+'\n');write(ROOT/'runs_stream.csv',stream);write(ROOT/'runs_batch.csv',batch)
-if __name__=='__main__':main()
+ parser=argparse.ArgumentParser();parser.add_argument("--mode",choices=("stream","batch"),required=True);parser.add_argument("--data-root",type=Path,required=True);parser.add_argument("--output-root",type=Path,required=True);parser.add_argument("--config",type=Path,required=True);args=parser.parse_args();data=args.data_root.resolve();output=args.output_root.resolve()
+ if not data.is_dir():raise SystemExit("data root missing")
+ if "research" in data.parts:raise SystemExit("derived analytical input root refused")
+ if output.exists():raise SystemExit("output root must not exist")
+ if Path(__file__).resolve().parents[3] in output.parents:raise SystemExit("output inside repository refused")
+ if not args.config.is_file():raise SystemExit("configuration missing")
+ print(json.dumps(generate(args.mode,data,output,json.loads(args.config.read_text())),sort_keys=True))
+if __name__=="__main__":main()

@@ -14,3 +14,8 @@
 - Preserved canonical BankNifty-reference inventory semantics.
 - Added repaired raw lifecycle/resolution implementation and causal contracts.
 - Added deterministic local verification tests.
+# R6C0I
+
+- Replaced the inventory wrapper with a repository-native raw-only implementation.
+- Removed hard-coded production roots, research imports, `sys.path` mutation, fixed date/chain dictionaries, minute fallback, and implicit output writes.
+- Added deterministic explicit-root CLI, continuity discovery, causal BN-reference mapping, and provenance tests.

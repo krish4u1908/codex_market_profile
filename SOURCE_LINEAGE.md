@@ -17,3 +17,6 @@ Canonical inventory context is passed as causal in-memory records.
 Every imported file is recorded in `manifests/imported_source_inventory.csv`. Excluded categories and representative paths are recorded in `manifests/excluded_source_inventory.csv`.
 
 No port 8803/8804 deployment is source authority.
+# R6C0I inventory provenance
+
+The canonical inventory implementation reads only explicitly supplied WebSocket market JSONL and REST OI JSONL roots. It discovers eligible sessions chronologically, maps Futures incremental volume and signed OI receipts backward to the latest causal BankNifty Index receipt, and writes only to an explicit new output directory. `market_1m.csv`, research-package imports, implicit collector roots, and source-relative outputs are prohibited at runtime.
