@@ -1,0 +1,7 @@
+{
+  "timezone": "Asia/Kolkata",
+  "index_symbol": "NSE:NIFTYBANK-INDEX",
+  "futures_symbol": "NSE:BANKNIFTY26AUGFUT",
+  "synchronization_tolerance_ms": 2000,
+  "sessions": ["2026-08-11", "2026-08-12", "2026-08-13", "2026-08-18", "2026-08-19", "2026-08-20"]
+}

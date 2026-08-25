@@ -1,5 +1,12 @@
 # Source Lineage
 
+## R6C0 raw-provenance boundary
+
+Runtime authority is physical WebSocket and REST JSONL supplied through an
+explicit external data root. Verified research packages are source-recovery
+and post-generation comparison authorities only, never runtime inputs.
+Canonical inventory context is passed as causal in-memory records.
+
 - R1D supplies trusted/quarantined component lineage only; its archived legacy application is excluded.
 - R6A supplies verified raw parsing, divergence detection, and descriptive participation primitives.
 - Inventory Canonical Revision 2 supplies BankNifty-reference inventory code and semantics.
@@ -10,4 +17,3 @@
 Every imported file is recorded in `manifests/imported_source_inventory.csv`. Excluded categories and representative paths are recorded in `manifests/excluded_source_inventory.csv`.
 
 No port 8803/8804 deployment is source authority.
-

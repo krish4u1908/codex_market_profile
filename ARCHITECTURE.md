@@ -11,5 +11,9 @@ The package is deliberately layered:
 
 Runtime and API implementations are intentionally absent because no verified production implementation was authorized. Dense observations, transition ledger, episode summaries, and replay snapshots are distinct publication views.
 
-Canonical Price VPOC: `BN_REF_FUT_VOLUME_VPOC` (user label: **BN-REF FUT VOL-VPOC**). Legacy Futures-coordinate VPOC is diagnostic-only and disabled by default.
+R6C0 makes the analytical runtime repository-native. Raw market data enters
+only through an explicit caller-provided data root and output persistence only
+through an explicit output root. Divergence and inventory-context modules are
+pure over caller-supplied records and contain no historical research path.
 
+Canonical Price VPOC: `BN_REF_FUT_VOLUME_VPOC` (user label: **BN-REF FUT VOL-VPOC**). Legacy Futures-coordinate VPOC is diagnostic-only and disabled by default.
