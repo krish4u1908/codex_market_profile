@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "R6B3 raw participation record",
+  "type": "object",
+  "required": ["record_id", "episode_id", "observation_timestamp", "receipt_timestamp", "source_file", "source_row"],
+  "properties": {
+    "record_id": {"type": "string", "pattern": "^R6B3-"},
+    "episode_id": {"type": "string", "pattern": "^BDR1-"},
+    "observation_timestamp": {"type": "string"},
+    "receipt_timestamp": {"type": ["string", "null"]},
+    "source_file": {"type": "string"},
+    "source_row": {"type": ["integer", "string"]}
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "timezone": "Asia/Kolkata",
+  "windows_minutes": [1, 3, 5],
+  "volume_window_minutes": 5,
+  "freshness_seconds": 180,
+  "strike_step": 100,
+  "near_strikes_each_side": 3,
+  "volume_spike_percentile": 0.9,
+  "oi_spike_percentile": 0.9,
+  "robust_z_threshold": 3.0,
+  "raw_market_root": "/opt/banknifty-collector/data-prod-v4/raw",
+  "raw_oi_root": "/opt/banknifty-collector/data-prod-v4/oi"
+}
