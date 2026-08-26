@@ -147,3 +147,6 @@ RESULT: PASS; 17/17 configured inside-line splits; 46,550/46,550 records; analyt
 
 2026-08-26 final focused all-nine v8
 RESULT: PASS; exit 0; 9/9 schedules; 21/21 components; 8/8 analytical ledgers; 9/9 causal/GUI invariants; 72/72 checkpoint rows; 2/2 recovery probes; 8/8 source hashes; differences/refusals/prohibited opens/unmeasured opens/source mutations all 0; wall 18m32.32s; parent max RSS 1,584,328 KiB; child max RSS 800,864 KiB; summary cd7381d463261ab3862876dd18db49525267fff90b3caf6225462fda55da969d; state manifest 1ab815ad81ad7305cbbe38c0ab50f8d5f8d5e069cd9d15eb6d010a29c8691fd3; state tree 0e448d257bb3a0b955c0a7a86cd5950ae932e18cce593684b5d3a96fc883a57a
+
+2026-08-27 full six-session pre-parity run
+RESULT: INTERRUPTED AND REJECTED before schedules; fresh 746,890-record/139-file lossless projection completed; incremental A processed and sealed six sessions; clean B inventory completed and stack generation was active; independent R6D comparison found missing live dependency/delta/transition projection. Partial evidence preserved under /tmp/r6e1r_rejected_and_partial_diagnostics_20260826/six_final_v1_pre_gui_parity_*; projection retained at /tmp/r6e1r_six_final_v1_projection; no result promoted.

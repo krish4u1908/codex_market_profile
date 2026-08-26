@@ -46,7 +46,7 @@ EPISODE_FIELDS = (
 )
 DEPENDENCY_FIELDS = (
     "episode_id", "dependency_group_id", "classification", "retrigger_flag",
-    "predecessor_episode_id", "dependency_reason",
+    "previous_episode_id", "reason_code",
 )
 LIFECYCLE_FIELDS = (
     "record_id", "episode_id", "dependency_group_id", "evaluation_date",
@@ -550,6 +550,7 @@ def _chart(
     price = _unpack(gui.get("price", {}))
     inventory = _artifact_rows(snapshot, gui, "inventory")
     episodes = _artifact_rows(snapshot, gui, "episodes")
+    dependencies = _artifact_rows(snapshot, gui, "dependencies")
     lifecycle = _artifact_rows(snapshot, gui, "lifecycle")
     resolution = _material_resolution(_artifact_rows(snapshot, gui, "resolution_mechanisms"))
     availability = _availability_for(
@@ -585,11 +586,13 @@ def _chart(
         "price": _pack(price, PRICE_FIELDS),
         "inventory": _pack(inventory, INVENTORY_FIELDS),
         "episodes": _pack(episodes, EPISODE_FIELDS),
+        "dependencies": _pack(dependencies, DEPENDENCY_FIELDS),
         "lifecycle": _pack(lifecycle, LIFECYCLE_FIELDS),
         "resolution_mechanisms": _pack(resolution, RESOLUTION_FIELDS),
         "counts": {
             "price": len(price), "inventory": len(inventory),
-            "episodes": len(episodes), "lifecycle": len(lifecycle),
+            "episodes": len(episodes), "dependencies": len(dependencies),
+            "lifecycle": len(lifecycle),
             "resolution_mechanisms": len(resolution),
         },
         "projection_hash": _primitive(gui.get("projection_hash")) or "",

@@ -235,7 +235,17 @@
     const result = [];
     let part = [];
     let previous = -Infinity;
-    for (const row of rows) {
+    // Index, Futures and Basis carry different canonical receipt clocks.  Sort
+    // each path on the clock it actually renders instead of relying on the
+    // packed row order (or on the synchronized Basis clock) to order all three.
+    const ordered = [...rows].sort((left, right) => {
+      const leftAt = time(left[timeKey]);
+      const rightAt = time(right[timeKey]);
+      if (!Number.isFinite(leftAt)) return Number.isFinite(rightAt) ? 1 : 0;
+      if (!Number.isFinite(rightAt)) return -1;
+      return leftAt - rightAt;
+    });
+    for (const row of ordered) {
       const at = time(row[timeKey]);
       const value = Number(row[valueKey]);
       if (!Number.isFinite(at) || !Number.isFinite(value)) continue;
@@ -473,8 +483,27 @@
 
   function latestBy(rows, key) {
     let value = null;
-    for (const row of rows) if (!value || time(row[key]) >= time(value[key])) value = row;
+    let latestAt = -Infinity;
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const at = time(row?.[key]);
+      if (!Number.isFinite(at) || at < latestAt) continue;
+      value = row;
+      latestAt = at;
+    }
     return value;
+  }
+
+  function observable(value) {
+    return value !== null && value !== undefined && value !== "";
+  }
+
+  function movement(row, prefix) {
+    return ["1m", "3m", "5m"]
+      .map((window) => {
+        const value = row?.[`${prefix}_${window}`];
+        return observable(value) ? String(value) : "—";
+      })
+      .join(" / ");
   }
 
   function appendCell(table, name, value) {
@@ -486,6 +515,7 @@
 
   function renderDivergence() {
     const episodes = unpack(state.chart?.episodes);
+    const dependencies = unpack(state.chart?.dependencies);
     const lifecycle = unpack(state.chart?.lifecycle);
     const mechanisms = unpack(state.chart?.resolution_mechanisms);
     const episode = latestBy(episodes, "confirmation_timestamp");
@@ -499,12 +529,16 @@
     colour.className = `badge ${episode.colour === "GREEN" ? "green" : "red"}`;
     colour.textContent = episode.colour;
     const identity = document.createElement("b"); identity.textContent = episode.episode_id;
+    const dependency = dependencies.find((row) => row.episode_id === episode.episode_id);
     const life = latestBy(lifecycle.filter((row) => row.episode_id === episode.episode_id), "state_entry_timestamp");
     const mechanism = latestBy(mechanisms.filter((row) => row.episode_id === episode.episode_id), "timestamp");
     const lifecycleBadge = document.createElement("span");
     lifecycleBadge.className = "badge lifecycle-badge";
     lifecycleBadge.textContent = `Lifecycle: ${life?.state || "NOT YET OBSERVABLE"}`;
     const table = document.createElement("table");
+    appendCell(table, "Dependency", dependency
+      ? `${dependency.dependency_group_id || "—"} · ${dependency.classification || "—"}`
+      : "NOT YET OBSERVABLE");
     appendCell(table, "Confirmation", episode.confirmation_timestamp);
     appendCell(table, "Index / Futures / Basis", `${episode.index_at_confirmation ?? "—"} / ${episode.futures_at_confirmation ?? "—"} / ${episode.basis_at_confirmation ?? "—"}`);
     appendCell(table, "Lifecycle reason", life?.reason_code);
@@ -521,7 +555,9 @@
   }
 
   function renderParticipation() {
-    const rows = state.participation?.rows || [];
+    const rows = Array.isArray(state.participation?.rows) ? state.participation.rows : [];
+    const transitions = Array.isArray(state.participation?.transitions)
+      ? state.participation.transitions : [];
     const availability = state.chart?.availability || {};
     const host = $("#participationPanel");
     host.replaceChildren();
@@ -530,6 +566,7 @@
       const latest = latestBy(rows.filter((row) => participationKind(row) === kind), "observation_timestamp");
       const card = document.createElement("div");
       card.className = "participation-card";
+      card.dataset.participationKind = kind;
       const title = document.createElement("b"); title.textContent = kind;
       const badge = document.createElement("span");
       badge.className = `availability ${availabilityClass(states[kind])}`;
@@ -541,8 +578,17 @@
         appendCell(table, "Receipt / age", `${latest.receipt_timestamp || "—"} / ${formatAge(latest.receipt_age_seconds)}`);
         appendCell(table, "5m volume / percentile / z", `${latest.incremental_volume_5m ?? "—"} / ${latest.volume_percentile ?? "—"} / ${latest.volume_robust_z ?? "—"}`);
         appendCell(table, "ΔOI 1m / 3m / 5m", `${latest.delta_oi_1m ?? "—"} / ${latest.delta_oi_3m ?? "—"} / ${latest.delta_oi_5m ?? "—"}`);
+        appendCell(table, kind === "FUTURES" ? "Price Δ 1m / 3m / 5m" : "Premium Δ 1m / 3m / 5m",
+          movement(latest, kind === "FUTURES" ? "price_change" : "premium_change"));
         appendCell(table, "Strike / expiry / moneyness", `${latest.strike ?? "—"} / ${latest.expiry ?? "—"} / ${latest.moneyness ?? "—"}`);
         appendCell(table, "Context", latest.inventory_state || latest.semantic_classification);
+        const transition = latestBy(
+          transitions.filter((row) => row.component === kind),
+          "effective_timestamp",
+        );
+        appendCell(table, "Latest material transition", transition
+          ? `${transition.component} · ${transition.new_state || "—"} · ${transition.effective_timestamp}`
+          : "NOT YET OBSERVABLE");
         card.append(table);
       } else {
         const empty = document.createElement("p"); empty.textContent = "No current constituent evidence."; card.append(empty);

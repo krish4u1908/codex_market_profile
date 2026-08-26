@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+from datetime import datetime
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 import runpy
@@ -41,7 +42,7 @@ def availability(index="AVAILABLE", futures="AVAILABLE"):
         "participation_state": "AVAILABLE",
         "index_state": index, "futures_state": futures,
         "futures_oi_state": "AVAILABLE", "ce_state": "STALE_OR_MISSING",
-        "pe_state": "AVAILABLE", "calculation_timestamp": "2026-08-19T10:00:02+05:30",
+        "pe_state": "AVAILABLE", "calculation_timestamp": "2026-08-19T10:00:03+05:30",
         "layers": {
             "3D": {"state": "MISSING_PRIOR_SESSION", "reason": "INSUFFICIENT_PRIOR_SESSIONS"},
             "2D": {"state": "MISSING_PRIOR_SESSION", "reason": "INSUFFICIENT_PRIOR_SESSIONS"},
@@ -60,15 +61,53 @@ def snapshot(date="2026-08-19", state=None):
             [f"{date}T10:00:01+05:30", 57001, 57082, 81, f"{date}T10:00:00.900000+05:30", f"{date}T10:00:01+05:30", 100, "/opt/private/raw.jsonl"],
         ],
     }
-    inventory = [{
-        "evaluation_date": date, "horizon": horizon, "family": "BN_REF_FUT_VOLUME_VPOC",
-        "control_value": 57000 + index * 10,
-        "control_effective_timestamp": f"{date}T{'10:00:00' if horizon == 'ID' else '09:15:00'}+05:30",
-        "source_file": "/opt/private/raw.jsonl", "raw_input_hashes": "secret-token",
-    } for index, horizon in enumerate(("3D", "2D", "1D", "ID"))]
+    families = (
+        "BN_REF_FUT_VOLUME_VPOC", "FUT_POS_OI_VPOC", "FUT_NEG_OI_VPOC",
+        "CE_POS_OI_VPOC", "CE_NEG_OI_VPOC", "PE_POS_OI_VPOC",
+        "PE_NEG_OI_VPOC",
+    )
+    inventory = [
+        {
+            "evaluation_date": date,
+            "horizon": horizon,
+            "family": family,
+            "sign": "VOLUME" if family == "BN_REF_FUT_VOLUME_VPOC" else (
+                "POSITIVE" if "_POS_" in family else "NEGATIVE"
+            ),
+            "control_value": 57_000 + horizon_index * 20 + family_index * 5,
+            "control_effective_timestamp": (
+                f"{date}T{'10:00:00' if horizon == 'ID' else '09:15:00'}+05:30"
+            ),
+            "contract": "NSE:BANKNIFTY26AUGFUT",
+            "expiry": "2026-08-27",
+            "eligible_observation_count": 12,
+            "excluded_observation_count": 0,
+            "authority_basis": "CAUSAL_BANKNIFTY_INDEX_REFERENCE_PRICE_BIN",
+            "canonical_control_name": family,
+            "user_facing_label": (
+                "BN-REF FUT VOL-VPOC"
+                if family == "BN_REF_FUT_VOLUME_VPOC" else family
+            ),
+            "source_file": "/opt/private/raw.jsonl",
+            "raw_input_hashes": "secret-token",
+        }
+        for horizon_index, horizon in enumerate(("3D", "2D", "1D", "ID"))
+        for family_index, family in enumerate(families)
+    ]
     episodes = [{
         "episode_id": "BDR1-TEST", "evaluation_date": date, "colour": "GREEN",
         "confirmation_timestamp": f"{date}T10:00:01+05:30", "episode_end_timestamp": "",
+        "index_at_confirmation": 57_001, "futures_at_confirmation": 57_082,
+        "basis_at_confirmation": 81,
+        "source_file": "/opt/private/raw.jsonl",
+    }]
+    dependencies = [{
+        "episode_id": "BDR1-TEST",
+        "dependency_group_id": f"HYP-{date}-001-GREEN",
+        "classification": "NEW_INDEPENDENT_HYPOTHESIS",
+        "retrigger_flag": False,
+        "previous_episode_id": "",
+        "reason_code": "FIRST_SESSION_EPISODE",
         "source_file": "/opt/private/raw.jsonl",
     }]
     lifecycle = [{
@@ -76,25 +115,187 @@ def snapshot(date="2026-08-19", state=None):
         "state_entry_timestamp": f"{date}T10:00:01+05:30", "reason_code": "FROZEN_STATE",
         "source_file": "/opt/private/raw.jsonl",
     }]
-    participation = [{
-        "record_id": "PART-1", "view_record_kind": "OPTION", "option_type": "CE",
-        "symbol": "NSE:BANKNIFTY26AUG57000CE", "observation_timestamp": f"{date}T10:00:02+05:30",
-        "receipt_timestamp": f"{date}T10:00:01.900000+05:30", "receipt_age_seconds": 0.1,
-        "incremental_volume_5m": 100, "delta_oi_5m": 50,
-        "source_file": "/opt/private/oi.jsonl", "source_row": 99,
+    resolution = [{
+        "episode_id": "BDR1-TEST",
+        "timestamp": f"{date}T10:00:02+05:30",
+        "availability_timestamp": f"{date}T10:00:02+05:30",
+        "resolution_mechanism_native": "FUTURES_LED_CONVERGENCE",
+        "resolution_mechanism_compatibility": "BASIS_CONVERGENCE",
+        "signed_basis_convergence": 4,
+        "index_contribution": 1,
+        "futures_contribution": 3,
+        "source_file": "/opt/private/raw.jsonl",
     }]
+    participation = [
+        {
+            "record_id": "PART-FUTURES-1",
+            "view_record_kind": "FUTURES",
+            "option_type": "",
+            "symbol": "NSE:BANKNIFTY26AUGFUT",
+            "observation_timestamp": f"{date}T10:00:02+05:30",
+            "receipt_timestamp": f"{date}T10:00:01.900000+05:30",
+            "receipt_age_seconds": 0.1,
+            "price": 57_082,
+            "oi": 1_200_000,
+            "incremental_volume_5m": 1_000,
+            "volume_percentile": 0.92,
+            "volume_robust_z": 2.1,
+            "delta_oi_1m": 10,
+            "delta_oi_3m": 30,
+            "delta_oi_5m": 50,
+            "price_change_1m": 0,
+            "price_change_3m": 6,
+            "price_change_5m": 10,
+            "inventory_state": "LONG_BUILDUP",
+            "source_file": "/opt/private/oi.jsonl",
+            "source_row": 98,
+        },
+        {
+            "record_id": "PART-CE-1",
+            "view_record_kind": "OPTION",
+            "option_type": "CE",
+            "symbol": "NSE:BANKNIFTY26AUG57000CE",
+            "strike": 57_000,
+            "expiry": "2026-08-27",
+            "moneyness": "ATM",
+            "observation_timestamp": f"{date}T10:00:02.100000+05:30",
+            "receipt_timestamp": f"{date}T10:00:02+05:30",
+            "receipt_age_seconds": 0.1,
+            "premium": 240,
+            "oi": 600_000,
+            "incremental_volume_5m": 500,
+            "volume_percentile": 0.85,
+            "volume_robust_z": 1.7,
+            "delta_oi_1m": 5,
+            "delta_oi_3m": 15,
+            "delta_oi_5m": 25,
+            "premium_change_1m": 0,
+            "premium_change_3m": 4,
+            "premium_change_5m": 7,
+            "semantic_classification": "SUPPORTIVE",
+            "source_file": "/opt/private/oi.jsonl",
+            "source_row": 99,
+        },
+        {
+            "record_id": "PART-PE-1",
+            "view_record_kind": "OPTION",
+            "option_type": "PE",
+            "symbol": "NSE:BANKNIFTY26AUG57000PE",
+            "strike": 57_000,
+            "expiry": "2026-08-27",
+            "moneyness": "ATM",
+            "observation_timestamp": f"{date}T10:00:02.200000+05:30",
+            "receipt_timestamp": f"{date}T10:00:02.100000+05:30",
+            "receipt_age_seconds": 0.1,
+            "premium": 220,
+            "oi": 550_000,
+            "incremental_volume_5m": 450,
+            "volume_percentile": 0.81,
+            "volume_robust_z": 1.5,
+            "delta_oi_1m": -4,
+            "delta_oi_3m": -12,
+            "delta_oi_5m": -20,
+            "premium_change_1m": -1,
+            "premium_change_3m": -3,
+            "premium_change_5m": -6,
+            "semantic_classification": "CONTRADICTORY",
+            "source_file": "/opt/private/oi.jsonl",
+            "source_row": 100,
+        },
+    ]
+    participation_transitions = [
+        {
+            "transition_id": "PT-FUTURES-1",
+            "episode_id": "BDR1-TEST",
+            "dependency_group_id": f"HYP-{date}-001-GREEN",
+            "component": "FUTURES",
+            "previous_state": "UNOBSERVED",
+            "new_state": "LONG_BUILDUP",
+            "effective_timestamp": f"{date}T10:00:01.900000+05:30",
+            "evidence_receipt_timestamp": f"{date}T10:00:01.900000+05:30",
+            "calculation_timestamp": f"{date}T10:00:02+05:30",
+            "reason_code": "MATERIAL_FUTURES_STATE_CHANGE",
+            "raw_source_references": "/opt/private/oi.jsonl:98",
+        },
+        {
+            "transition_id": "PT-CE-1",
+            "episode_id": "BDR1-TEST",
+            "dependency_group_id": f"HYP-{date}-001-GREEN",
+            "component": "CE",
+            "previous_state": "UNOBSERVED",
+            "new_state": "NEUTRAL",
+            "effective_timestamp": f"{date}T10:00:01.500000+05:30",
+            "evidence_receipt_timestamp": f"{date}T10:00:01.500000+05:30",
+            "calculation_timestamp": f"{date}T10:00:02+05:30",
+            "reason_code": "MATERIAL_STRIKE_STATE_CHANGE",
+        },
+        {
+            "transition_id": "PT-CE-2",
+            "episode_id": "BDR1-TEST",
+            "dependency_group_id": f"HYP-{date}-001-GREEN",
+            "component": "CE",
+            "previous_state": "NEUTRAL",
+            "new_state": "SUPPORTIVE",
+            "effective_timestamp": f"{date}T10:00:02+05:30",
+            "evidence_receipt_timestamp": f"{date}T10:00:02+05:30",
+            "calculation_timestamp": f"{date}T10:00:02.100000+05:30",
+            "reason_code": "MATERIAL_STRIKE_STATE_CHANGE",
+        },
+        {
+            "transition_id": "PT-PE-1",
+            "episode_id": "BDR1-TEST",
+            "dependency_group_id": f"HYP-{date}-001-GREEN",
+            "component": "PE",
+            "previous_state": "UNOBSERVED",
+            "new_state": "CONTRADICTORY",
+            "effective_timestamp": f"{date}T10:00:02.100000+05:30",
+            "evidence_receipt_timestamp": f"{date}T10:00:02.100000+05:30",
+            "calculation_timestamp": f"{date}T10:00:02.200000+05:30",
+            "reason_code": "MATERIAL_STRIKE_STATE_CHANGE",
+        },
+    ]
     gui = {
         "date": date, "classification": PRODUCT_CLASSIFICATION, "availability": layer_state,
         "price": price, "projection_hash": "a" * 64,
     }
     return {
         "session_date": date, "availability": layer_state, "gui_payload": gui,
-        "inventory": inventory, "episodes": episodes, "dependencies": [],
-        "lifecycle": lifecycle, "resolution": [],
-        "participation_dense": participation, "participation_transitions": [],
+        "inventory": inventory, "episodes": episodes, "dependencies": dependencies,
+        "lifecycle": lifecycle, "resolution": resolution,
+        "participation_dense": participation,
+        "participation_transitions": participation_transitions,
         "participation_summaries": [], "cross_layer_transitions": [],
-        "counts": {"price": 2, "inventory": 1, "participation_dense": 1},
+        "counts": {
+            "price": 2,
+            "inventory": len(inventory),
+            "dependencies": len(dependencies),
+            "participation_dense": len(participation),
+            "participation_transitions": len(participation_transitions),
+        },
     }
+
+
+def crossed_clock_snapshot(date="2026-08-19", state=None):
+    """Two valid backward joins whose Index/Futures path order is crossed."""
+    value = snapshot(date=date, state=state)
+    value["gui_payload"]["price"] = {
+        "fields": ["t", "i", "f", "b", "it", "ft", "a", "source_file"],
+        "rows": [
+            [
+                f"{date}T10:00:01+05:30", 57_000, 57_082, 82,
+                f"{date}T09:59:59.500000+05:30",
+                f"{date}T10:00:01+05:30", 1_500,
+                "/opt/private/raw.jsonl",
+            ],
+            [
+                f"{date}T10:00:00+05:30", 57_001, 57_080, 79,
+                f"{date}T09:59:59.900000+05:30",
+                f"{date}T10:00:00+05:30", 100,
+                "/opt/private/raw.jsonl",
+            ],
+        ],
+    }
+    return value
 
 
 class Orchestrator:
@@ -219,8 +420,78 @@ def test_chart_has_separate_multi_point_clocks_and_canonical_basis(server):
     assert len(chart["price"]["rows"]) == 2
     assert chart["price"]["rows"][0][4] != chart["price"]["rows"][0][5]
     assert chart["price"]["rows"][0][3] == 80
+    for row in chart["price"]["rows"]:
+        basis_clock = datetime.fromisoformat(row[0])
+        index_clock = datetime.fromisoformat(row[4])
+        futures_clock = datetime.fromisoformat(row[5])
+        age_ms = (futures_clock - index_clock).total_seconds() * 1_000
+        assert basis_clock == futures_clock
+        assert 0 <= age_ms <= 2_000
+        assert row[6] == pytest.approx(age_ms)
     assert chart["availability"]["layers"]["3D"]["state"] == "MISSING_PRIOR_SESSION"
     assert chart["availability"]["layers"]["ID"]["state"] == "AVAILABLE"
+
+
+def test_chart_projects_canonical_dependency_and_complete_participation(server):
+    chart = json.loads(request(server, "/api/chart")[2])
+    assert chart["dependencies"]["fields"] == [
+        "episode_id", "dependency_group_id", "classification", "retrigger_flag",
+        "previous_episode_id", "reason_code",
+    ]
+    dependency = dict(zip(
+        chart["dependencies"]["fields"], chart["dependencies"]["rows"][0],
+    ))
+    assert dependency == {
+        "episode_id": "BDR1-TEST",
+        "dependency_group_id": "HYP-2026-08-19-001-GREEN",
+        "classification": "NEW_INDEPENDENT_HYPOTHESIS",
+        "retrigger_flag": False,
+        "previous_episode_id": "",
+        "reason_code": "FIRST_SESSION_EPISODE",
+    }
+    assert chart["counts"]["dependencies"] == 1
+
+    payload = json.loads(request(server, "/api/participation")[2])
+    rows = {row["record_id"]: row for row in payload["rows"]}
+    assert rows["PART-FUTURES-1"]["price_change_1m"] == 0
+    assert [rows["PART-FUTURES-1"][f"price_change_{window}"] for window in ("1m", "3m", "5m")] == [0, 6, 10]
+    assert [rows["PART-CE-1"][f"premium_change_{window}"] for window in ("1m", "3m", "5m")] == [0, 4, 7]
+    assert [rows["PART-PE-1"][f"premium_change_{window}"] for window in ("1m", "3m", "5m")] == [-1, -3, -6]
+    assert {row["component"] for row in payload["transitions"]} == {
+        "FUTURES", "CE", "PE",
+    }
+    assert [
+        row["new_state"] for row in payload["transitions"]
+        if row["component"] == "CE"
+    ] == ["NEUTRAL", "SUPPORTIVE"]
+    assert "raw_source_references" not in json.dumps(payload)
+
+
+def test_api_preserves_crossed_canonical_clocks_without_repairing_them():
+    value = State(crossed_clock_snapshot())
+    service = create_server(value, "127.0.0.1", 0)
+    thread = threading.Thread(target=service.serve_forever)
+    thread.start()
+    base = f"http://127.0.0.1:{service.server_address[1]}"
+    try:
+        chart = json.loads(request(base, "/api/chart")[2])
+        rows = chart["price"]["rows"]
+        # The API preserves the analytical publication order. The browser must
+        # independently sort each rendered path on its own canonical clock.
+        assert [row[0] for row in rows] == [
+            "2026-08-19T10:00:01+05:30",
+            "2026-08-19T10:00:00+05:30",
+        ]
+        for row in rows:
+            basis_clock = datetime.fromisoformat(row[0])
+            index_clock = datetime.fromisoformat(row[4])
+            futures_clock = datetime.fromisoformat(row[5])
+            age_ms = (futures_clock - index_clock).total_seconds() * 1_000
+            assert basis_clock == futures_clock
+            assert 0 <= age_ms <= 2_000
+            assert row[6] == pytest.approx(age_ms)
+    finally:
+        service.shutdown(); thread.join(); service.server_close()
 
 
 def test_verified_replay_selection_and_arbitrary_date_refusal(server):
