@@ -1,0 +1,25 @@
+{
+  "classification": "LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL",
+  "external_fixture": {
+    "committed": false,
+    "manifest_path": "/opt/banknifty/research/sample_fixtures/r6e1r0_aug19_0915_1205/manifest.json",
+    "manifest_sha256": "5bf62dda9b6613e2d6b3000c084a723133c5af01c7e4cb5acff84af84fb610e2",
+    "oi_sha256": "a6aa069abd2a477bee0e28cc18e592ca064e1eea1379cd032bbc44dd61244c98",
+    "raw_sha256": "cbbded304a8b6df50c05683b65a372fbbbbf4a828477e09e57e1b87a4bc7c3a0"
+  },
+  "files": [
+    "scripts/run_r6e1r_equivalence.py",
+    "src/banknifty_profiler/shadow/orchestrator.py",
+    "tests/unit/test_r6e1r_orchestrator.py",
+    "docs/r6e1r0/CALLBACK_WIRING_REPORT.md",
+    "docs/r6e1r0/SAMPLE_PROVENANCE_AND_INVENTORY.md",
+    "docs/r6e1r0/FIELD_PRESERVATION_MATRIX.md",
+    "docs/r6e1r0/INCREMENTAL_VS_BATCH_REPORT.md",
+    "docs/r6e1r0/PARTIAL_CONTEXT_TEST_REPORT.md",
+    "docs/r6e1r0/TEST_REPORT.md",
+    "docs/r6e1r0/GIT_DIFF_SUMMARY.md",
+    "manifests/r6e1r0_package_manifest.json"
+  ],
+  "status": "R6E1R0_CALLBACK_WIRING_VERIFIED_ON_HOSTINGER_SAMPLE",
+  "synchronization_tolerance_ms": 2000
+}

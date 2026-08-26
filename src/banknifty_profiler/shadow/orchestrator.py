@@ -215,6 +215,7 @@ class LiveAnalyticalOrchestrator:
             prepared.append(row)
         prepared.sort(key=self._order_key)
         changed: set[str] = set()
+        staged: dict[str, list[dict]] = {}
         for row in prepared:
             session = row["session_date"]
             if row["instrument_class"] not in KNOWN_CLASSES:
@@ -235,9 +236,11 @@ class LiveAnalyticalOrchestrator:
                 self._quality(row, "OUT_OF_ORDER_ANALYTICAL_RECEIPT", f"previous={prior!r} current={key!r}")
                 continue
             bucket[identity] = row
-            AppendOnlyLedger(self.stage_root / f"{session}.jsonl").append(row)
+            staged.setdefault(session, []).append(row)
             self._last_order_key[session] = key if prior is None or key >= prior else prior
             changed.add(session)
+        for session, values in staged.items():
+            AppendOnlyLedger(self.stage_root / f"{session}.jsonl").append_many(values)
         if changed:
             self._evict_sessions()
             self._dirty_sessions.update(changed)
@@ -370,7 +373,7 @@ class LiveAnalyticalOrchestrator:
                 life.append(row)
             dense_resolution = [row for row in resolution if parse_timestamp(row["availability_timestamp"], field_name="resolution availability timestamp") <= causal_cutoff]
             response_rows = responses
-            participation = self._participation(session, rows, episodes, deps)
+            participation = self._participation(session, rows, episodes, deps, life)
             self.callback_invocations["cross_layer"] += 1
             cross = cross_layer_state.build_material_transitions(inventory, episodes, life, dense_resolution, participation["transitions"])
             availability = self._availability(session, rows, inventory)
@@ -411,6 +414,8 @@ class LiveAnalyticalOrchestrator:
         values = []
         for row in rows:
             if _source_stream(row) != "raw" or row["instrument_class"] not in {"INDEX", "FUTURES"}:
+                continue
+            if row.get("price") is None and row.get("cumulative_volume") is None:
                 continue
             values.append({
                 "session_date": row["session_date"], "symbol": row["canonical_symbol"],
@@ -665,7 +670,6 @@ class LiveAnalyticalOrchestrator:
                 "basis_at_confirmation": _jsonable(current["basis"]),
                 "index_receipt_timestamp": str(current["index_receipt_timestamp"]),
                 "futures_receipt_timestamp": str(current["futures_receipt_timestamp"]),
-                "reason_code": "LOCKED_P60_N5_TWO_OF_1M_3M_5M",
             })
         return _jsonable(basis), frame, candidates
 
@@ -676,7 +680,14 @@ class LiveAnalyticalOrchestrator:
         values = market[(market.symbol == INDEX_SYMBOL) & market.receipt_timestamp.notna() & market.last_price.notna()].sort_values(["receipt_timestamp", "source_file", "source_row"])
         return values[["receipt_timestamp", "last_price"]].rename(columns={"receipt_timestamp": "t", "last_price": "index"})
 
-    def _participation(self, session: str, rows: list[dict], episodes: list[dict], dependencies: list[dict]) -> dict:
+    def _participation(
+        self,
+        session: str,
+        rows: list[dict],
+        episodes: list[dict],
+        dependencies: list[dict],
+        lifecycle: list[dict],
+    ) -> dict:
         self.callback_invocations["participation"] += 1
         store = self._participation_store(rows)
         config = {
@@ -690,12 +701,30 @@ class LiveAnalyticalOrchestrator:
         futures_rows: list[dict] = []
         option_rows: list[dict] = []
         cutoff = max((parse_timestamp(row["receipt_timestamp"]).to_pydatetime() for row in rows), default=None)
+        lifecycle_ends: dict[str, datetime] = {}
+        for row in lifecycle:
+            episode_id = str(row.get("episode_id", ""))
+            if not episode_id:
+                continue
+            instant = parse_timestamp(
+                row["state_entry_timestamp"], field_name="participation lifecycle end"
+            ).to_pydatetime()
+            lifecycle_ends[episode_id] = max(
+                lifecycle_ends.get(episode_id, instant), instant
+            )
         for episode in episodes:
             confirmation = parse_timestamp(episode["confirmation_timestamp"]).to_pydatetime()
-            anchor = {**episode, "confirmation": confirmation, "end": cutoff or confirmation}
-            times = [confirmation]
+            end = lifecycle_ends.get(str(episode["episode_id"]), confirmation)
             if cutoff is not None:
-                times.extend(sorted({item["receipt"] for values in store.oi.values() for item in values if confirmation < item["receipt"] <= cutoff}))
+                end = min(end, cutoff)
+            anchor = {**episode, "confirmation": confirmation, "end": end}
+            times = [confirmation]
+            times.extend(sorted({
+                item["receipt"]
+                for values in store.oi.values()
+                for item in values
+                if confirmation < item["receipt"] <= end
+            }))
             for at in times:
                 futures, options = participation_engine.participation_at(store, anchor, at, config)
                 futures_rows.append(futures)
@@ -709,10 +738,19 @@ class LiveAnalyticalOrchestrator:
         for row in rows:
             receipt = parse_timestamp(row["receipt_timestamp"], field_name="participation receipt").to_pydatetime()
             common = {"receipt": receipt, "price": row.get("price"), "volume": row.get("cumulative_volume"), "source_file": row.get("source_file", ""), "source_row": row.get("source_row_number", 0)}
-            if _source_stream(row) == "raw" and row["instrument_class"] in KNOWN_CLASSES:
+            if (
+                _source_stream(row) == "raw"
+                and row["instrument_class"] in KNOWN_CLASSES
+                and (row.get("price") is not None or row.get("cumulative_volume") is not None)
+            ):
                 store.market.setdefault(row["canonical_symbol"], []).append(common)
             elif _source_stream(row) == "oi" and row["instrument_class"] in {"FUTURES_OI", "CE", "PE"}:
-                store.oi.setdefault(row["canonical_symbol"], []).append({**common, "oi": row.get("open_interest"), "strike": row.get("strike"), "option_type": row.get("option_type"), "expiry": str(row.get("expiry") or "")})
+                expiry = str(row.get("expiry") or "")
+                if row["instrument_class"] in {"CE", "PE"} and expiry:
+                    parsed_expiry = _expiry(expiry)
+                    if parsed_expiry is not None:
+                        expiry = parsed_expiry.strftime("%d-%m-%Y")
+                store.oi.setdefault(row["canonical_symbol"], []).append({**common, "oi": row.get("open_interest"), "strike": row.get("strike"), "option_type": row.get("option_type"), "expiry": expiry})
         store.finalize()
         return store
 
