@@ -53,7 +53,7 @@ The following facts were independently recorded before this draft:
 - The sample selected `NSE:BANKNIFTY26AUGFUT` through repository contract-discovery logic; eight authoritative source files retained identical hashes, sizes, and mtimes.
 - The source-hour-preserving sample manifest SHA-256 is `31077f42ae1bf639f746e5980aba028b1369b8d44ba9a15973b2a517cc8a8382`; the authoritative focused A/B input is its eight-file `collector/` tree.
 - A correctly provisioned repository regression invocation passed 289 tests with zero failures and zero skips in 62.29 seconds at that checkpoint. Current-source final rerun: `PENDING_FINAL_EVIDENCE`.
-- Deployment-package/static operational verification passed at an earlier source checkpoint. That package identity is now deliberately stale; current package regeneration and verification remain pending. No R6E service was installed by the earlier verification.
+- The final 34-file deployment package is sealed: manifest SHA-256 `ebaf193dca7f3cce82974906e05693864db087a60c7f7e3f028a6d1e7dc80ae3`, package hash `cecb7638566fae1a3831e1ef3fdb94559dce897aa54d89db12c882550c8dbc41`, runtime configuration hash `b733ea5cc3538b41b8bdc7fcf7a7171b98a41cb0c131968c0e26596bdab93d50`; 98/98 deployment and live GUI/API tests pass. No R6E service has yet been installed because analytics remain gated.
 
 ## Diagnostic evidence that is not final evidence
 
@@ -93,7 +93,7 @@ The replacement focused v12 is accepted for focused scope on pushed repair commi
 | Duplicate analytical IDs | `PENDING_FINAL_EVIDENCE` |
 | Prohibited runtime opens | `PENDING_FINAL_EVIDENCE` |
 | Source mutations | `PENDING_FINAL_EVIDENCE` |
-| Package manifest result | `PENDING_FINAL_EVIDENCE` |
+| Package manifest result | PASS — 34/34 files, companion and package aggregate exact; manifest `ebaf193dca7f3cce82974906e05693864db087a60c7f7e3f028a6d1e7dc80ae3` |
 | Service status | `PENDING_FINAL_EVIDENCE` |
 | Exact deployed URL | `PENDING_FINAL_EVIDENCE` |
 | Remaining limitations | `PENDING_FINAL_EVIDENCE` |

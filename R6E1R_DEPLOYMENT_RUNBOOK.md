@@ -31,9 +31,9 @@ Verified deployed URL: `PENDING_FINAL_EVIDENCE`
 | Engine source files | 26/26 verified |
 | Engine manifest SHA-256 | `7c13b44c9ae4fbc9c3317900866ddaf68800abe7b2c4d7a9f4e1749e41abc3b3` |
 | Engine hash | `980b6af26e9ca5957b97bafb235474e13d268c691f2cbf3797f1d53fff011602` |
-| Deployment package manifest | `PENDING_FINAL_EVIDENCE` — deliberately stale until final source/service freeze |
+| Deployment package manifest | PASS — 34 files; manifest `ebaf193dca7f3cce82974906e05693864db087a60c7f7e3f028a6d1e7dc80ae3`; package `cecb7638566fae1a3831e1ef3fdb94559dce897aa54d89db12c882550c8dbc41` |
 
-The current committed but uninstalled backend unit uses `MemoryHigh=8G`, `MemoryMax=10G`, `TimeoutStartSec=900s`, and a 250 ms per-attempt health-probe timeout. These are prepared values only; current-source unit verification and package resealing remain mandatory before installation.
+The current committed but uninstalled backend unit uses `MemoryHigh=8G`, `MemoryMax=10G`, `TimeoutStartSec=900s`, and a 250 ms per-attempt health-probe timeout. Static current-source unit verification and package resealing pass; analytical preload and live installation evidence remain mandatory before acceptance.
 
 ## Gate before any install
 

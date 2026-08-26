@@ -416,6 +416,56 @@ def test_reference_availability_uses_historical_material_surface() -> None:
     ] == "PASS"
     assert next(row for row in rows if row["target"] == "batch_b")["status"] == "FAIL"
 
+    with pytest.raises(
+        ValueError, match="canonical reference availability must be a nonempty"
+    ):
+        harness.compare_reference_snapshot(
+            a_snapshot=incremental,
+            b_snapshot={**batch, "availability": []},
+            reference_snapshot=reference,
+            reference_name="R6C2R_REFERENCE_C",
+            components=("availability_states",),
+        )
+
+    with pytest.raises(
+        ValueError, match="canonical reference availability must be a nonempty"
+    ):
+        harness.compare_reference_snapshot(
+            a_snapshot=incremental,
+            b_snapshot={
+                **batch,
+                "availability": [*canonical_availability, operational_stale],
+            },
+            reference_snapshot=reference,
+            reference_name="R6C2R_REFERENCE_C",
+            components=("availability_states",),
+        )
+
+    with pytest.raises(
+        ValueError, match="incremental reference availability must be a nonempty"
+    ):
+        harness.compare_reference_snapshot(
+            a_snapshot={
+                **incremental,
+                "availability": [operational_stale, canonical_availability[0]],
+            },
+            b_snapshot=batch,
+            reference_snapshot=reference,
+            reference_name="R6C2R_REFERENCE_C",
+            components=("availability_states",),
+        )
+
+    with pytest.raises(
+        ValueError, match="canonical reference availability must be a nonempty"
+    ):
+        harness.compare_reference_snapshot(
+            a_snapshot=incremental,
+            b_snapshot=batch,
+            reference_snapshot={"availability": []},
+            reference_name="R6C2R_REFERENCE_C",
+            components=("availability_states",),
+        )
+
 
 def test_frozen_six_session_counts_and_gate_are_mandatory() -> None:
     assert harness.EXPECTED_COUNTS == {

@@ -61,6 +61,7 @@ All rows above are accepted targeted/focused evidence. The complete current-sour
 | Equivalence harness targeted | 29 | 0 | Not separately reported | Current comparator gate recorded | Not separately recorded | Historical-availability comparator at pushed head `89f1350` |
 | Engine/API/runtime/cross-layer targeted portion | 68 | 0 | Not separately reported | Recorded within 216/216 gate | Not separately recorded | Exact final command rerun `PENDING_FINAL_EVIDENCE` |
 | R6D-parity engine/GUI/API/browser targeted | 135 | 0 | Not separately reported | GUI milestone gate recorded | Not separately recorded | Three tracked fixtures visually inspected; GUI/browser bytes unchanged afterward |
+| Deployment package plus live GUI/API | 98 | 0 | 0 | 19.50 s | 135,972 KiB | Current 34-file package, systemd/bubblewrap, readiness, redaction, API contract |
 | Browser acceptance | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` |
 | Complete repository regression | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` |
 | `git diff --check` | `PENDING_FINAL_EVIDENCE` | — | — | — | — | `PENDING_FINAL_EVIDENCE` |

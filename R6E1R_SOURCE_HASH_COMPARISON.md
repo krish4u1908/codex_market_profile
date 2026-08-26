@@ -53,7 +53,7 @@ Final source-hash comparison CSV path/SHA-256: `PENDING_FINAL_EVIDENCE`
 
 ## Runtime package allowlist
 
-The current 26-file engine-source allowlist is sealed and verified. The separate deployment package manifest remains deliberately stale and must be regenerated only after final service/package bytes freeze.
+The current 26-file engine-source allowlist and its 34-file deployment superset are sealed and verified after the final service-template hardening.
 
 | Item | Final value |
 |---|---|
@@ -65,5 +65,10 @@ The current 26-file engine-source allowlist is sealed and verified. The separate
 | Engine hash | `980b6af26e9ca5957b97bafb235474e13d268c691f2cbf3797f1d53fff011602` |
 | Allowlisted file mismatches | 0 — 26/26 PASS |
 | Prohibited runtime source opens | 0 in accepted focused v12; final six `PENDING_FINAL_EVIDENCE` |
+| Deployment package file count | 34 |
+| Deployment manifest SHA-256 | `ebaf193dca7f3cce82974906e05693864db087a60c7f7e3f028a6d1e7dc80ae3` |
+| Deployment package hash | `cecb7638566fae1a3831e1ef3fdb94559dce897aa54d89db12c882550c8dbc41` |
+| Runtime configuration hash | `b733ea5cc3538b41b8bdc7fcf7a7171b98a41cb0c131968c0e26596bdab93d50` |
+| Deployment file mismatches | 0 — 34/34 PASS |
 
 The deployed configuration copy must pin the final checked-in manifest with an explicit 64-hex digest; reading a mutable companion beside mutable runtime sources is not sufficient production trust.

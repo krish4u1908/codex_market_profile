@@ -56,16 +56,16 @@ Prepared deployment verification previously recorded:
 
 Additional code changes occurred afterward. Current-source final results are therefore required:
 
-Current source identity is pushed head `4d160bcc61bcebd88135ce270c17926830022deb`. Its 26-file engine allowlist passes with manifest SHA-256 `7c13b44c9ae4fbc9c3317900866ddaf68800abe7b2c4d7a9f4e1749e41abc3b3` and engine hash `980b6af26e9ca5957b97bafb235474e13d268c691f2cbf3797f1d53fff011602`. The R6D-parity engine/GUI/API/browser gate passed 135/135 at pushed GUI milestone `5efe70e9685b98556ae1ad9a860912c7bb1513fc`, after which no tracked GUI/browser bytes changed; the later repaired-engine targeted gate passed 216/216 for the current runtime path. Neither result substitutes for current service-template/package verification after final freeze.
+The 26-file engine allowlist passes with manifest SHA-256 `7c13b44c9ae4fbc9c3317900866ddaf68800abe7b2c4d7a9f4e1749e41abc3b3` and engine hash `980b6af26e9ca5957b97bafb235474e13d268c691f2cbf3797f1d53fff011602`. The final service-template/package gate then passed 98/98 against the 34-file deployment manifest `ebaf193dca7f3cce82974906e05693864db087a60c7f7e3f028a6d1e7dc80ae3`. The R6D-parity engine/GUI/API/browser gate passed 135/135 at pushed GUI milestone `5efe70e9685b98556ae1ad9a860912c7bb1513fc`, after which no tracked GUI/browser bytes changed; the later repaired-engine targeted gate passed 216/216 for the current runtime path. Live process evidence still requires the gated installation.
 
 | Gate | Final result |
 |---|---|
-| Deployment tests | `PENDING_FINAL_EVIDENCE` |
-| Live GUI/API unit tests | PASS — 135/135 at unchanged GUI/browser milestone bytes; final consolidated rerun `PENDING_FINAL_EVIDENCE` |
-| Exact systemd verification | `PENDING_FINAL_EVIDENCE` |
-| Bubblewrap runtime self-test | `PENDING_FINAL_EVIDENCE` |
-| Credential-redaction failure test | `PENDING_FINAL_EVIDENCE` |
-| Fatal readiness-503 test | `PENDING_FINAL_EVIDENCE` |
+| Deployment plus live GUI/API tests | PASS — 98/98 in 19.50 s; 135,972 KiB peak RSS |
+| Live GUI/API unit tests | PASS — included in current 98/98; 135/135 R6D parity at unchanged GUI/browser bytes |
+| Exact systemd verification | PASS — `systemd-analyze --user verify` exit 0 |
+| Bubblewrap runtime self-test | PASS — same-UID collector/state/runtime paths hidden |
+| Credential-redaction failure test | PASS — unsafe origin refused without credential echo |
+| Fatal readiness-503 test | PASS — non-benign 503 and failed integrity fields refused |
 
 ## Live evidence matrix
 

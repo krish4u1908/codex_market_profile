@@ -189,3 +189,12 @@ RESULT: PASS; batch-B layer_availability.csv byte-identical to R6C2 Reference C,
 
 2026-08-27 deployment startup-gate preflight and repair
 RESULT: PASS; removed health-only post-start probes; full health/readiness now gates checkpoint_valid, zero causal violations and manifest_verified while accepting only allowlisted after-hours 503; 14 focused deployment tests plus 1 GUI template regression passed; systemd-analyze --user verify and git diff --check passed; no service operation or install; 8805/18805 free; protected 8803 PID380743, 8804 PID465394 and collector PID667736 unchanged; package manifest intentionally stale pending final freeze.
+
+2026-08-27 final deployment package reseal and static gate
+RESULT: PASS; 34/34 allowlisted files and companion exact; manifest SHA-256 ebaf193dca7f3cce82974906e05693864db087a60c7f7e3f028a6d1e7dc80ae3; package hash cecb7638566fae1a3831e1ef3fdb94559dce897aa54d89db12c882550c8dbc41; runtime configuration hash b733ea5cc3538b41b8bdc7fcf7a7171b98a41cb0c131968c0e26596bdab93d50; engine hash 980b6af26e9ca5957b97bafb235474e13d268c691f2cbf3797f1d53fff011602; deployment plus live GUI/API 98/98 in 19.50s, max RSS 135,972 KiB; no install/service operation.
+
+2026-08-27 reference-availability fail-closed review and hardening
+RESULT: PASS; preserved real A/B/Reference historical projection hash e819692a870674bd3826eaedab97a393a94f7046961b08b783b76bc244e826cb, both targets 24/24 exact; primary operational A/B hash 70b38e28fcfbcc359e8e97e74b5b8b628b9435582e7cdacac8663a2008c495a4 exact; mixed/missing/unknown/role-swapped availability schemas now refuse; harness 29/29 PASS.
+
+2026-08-27 full six-session v4 pre-hardening diagnostic
+RESULT: INTERRUPTED AND REJECTED before baseline seal because the running process had loaded pre-hardening harness bytes; signal 2 after 20m02.30s, max RSS 4,832,816 KiB; analytical input itself was pure/unaffected, but no result promoted; partial output/work/timing preserved at /tmp/r6e1r_rejected_and_partial_diagnostics_20260826/six_final_v4_pre_reference_schema_hardening_*.

@@ -906,6 +906,8 @@ def _availability_projection(value: Any) -> list[dict[str, Any]]:
 
 def _historical_reference_availability_projection(
     snapshot: Mapping[str, Any],
+    *,
+    mode: str,
 ) -> list[dict[str, Any]]:
     """Project the frozen R6C2 historical-eligibility availability surface.
 
@@ -922,14 +924,29 @@ def _historical_reference_availability_projection(
     material publications (inventory, synchronized basis and participation),
     never from B or Reference C.
     """
+    if mode not in {"incremental", "canonical"}:
+        raise ValueError(f"unknown reference availability mode: {mode!r}")
     raw_rows = _as_rows(snapshot.get("availability", []))
-    if raw_rows and all(
-        row.get("horizon")
+    flat_schema = [
+        bool(row.get("horizon"))
         and ("availability_state" in row or "state" in row)
         and not isinstance(row.get("layers"), Mapping)
         for row in raw_rows
-    ):
+    ]
+    nested_schema = [
+        not row.get("horizon") and isinstance(row.get("layers"), Mapping)
+        for row in raw_rows
+    ]
+    if mode == "canonical":
+        if not raw_rows or not all(flat_schema):
+            raise ValueError(
+                "canonical reference availability must be a nonempty uniform flat table"
+            )
         return _availability_projection(raw_rows)
+    if not raw_rows or not all(nested_schema):
+        raise ValueError(
+            "incremental reference availability must be a nonempty uniform nested table"
+        )
 
     inventory = [
         *_as_rows(snapshot.get("inventory", [])),
@@ -1073,12 +1090,17 @@ def component_rows(snapshot: Mapping[str, Any]) -> dict[str, list[dict[str, Any]
 
 def reference_component_rows(
     snapshot: Mapping[str, Any],
+    *,
+    availability_mode: str | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """Return like-for-like historical surfaces for post-seal references."""
     result = component_rows(snapshot)
-    result["availability_states"] = _historical_reference_availability_projection(
-        snapshot
-    )
+    if availability_mode is not None:
+        result["availability_states"] = (
+            _historical_reference_availability_projection(
+                snapshot, mode=availability_mode
+            )
+        )
     return result
 
 
@@ -4170,13 +4192,24 @@ def compare_reference_snapshot(
     components: Iterable[str] = REFERENCE_COMPONENTS,
 ) -> list[dict[str, Any]]:
     """Compare target rows on every canonical field published by the reference."""
+    component_names = tuple(components)
+    compare_availability = "availability_states" in component_names
     targets = {
-        "incremental_a": reference_component_rows(a_snapshot),
-        "batch_b": reference_component_rows(b_snapshot),
+        "incremental_a": reference_component_rows(
+            a_snapshot,
+            availability_mode="incremental" if compare_availability else None,
+        ),
+        "batch_b": reference_component_rows(
+            b_snapshot,
+            availability_mode="canonical" if compare_availability else None,
+        ),
     }
-    reference = reference_component_rows(reference_snapshot)
+    reference = reference_component_rows(
+        reference_snapshot,
+        availability_mode="canonical" if compare_availability else None,
+    )
     rows = []
-    for component in components:
+    for component in component_names:
         reference_rows = reference.get(component, [])
         fields = {field for row in reference_rows for field in row}
         for target_name, target_components in targets.items():
