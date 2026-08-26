@@ -904,6 +904,121 @@ def _availability_projection(value: Any) -> list[dict[str, Any]]:
     return output
 
 
+def _historical_reference_availability_projection(
+    snapshot: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """Project the frozen R6C2 historical-eligibility availability surface.
+
+    Live R6E availability is an as-of operational contract: a historical
+    session can correctly finish ``STALE_DATA`` after its last synchronized
+    quote while retaining a usable chart.  R6C2's ``layer_availability.csv``
+    is a different, session-level audit surface recording whether each layer
+    was materially produced from the accepted raw chain.  Reference C must be
+    compared against that historical surface, while primary A/B equivalence
+    continues to compare the independently rebuilt operational contract.
+
+    Canonical batch/reference snapshots already carry the flat R6C2 table.
+    Incremental A derives the same compatibility view solely from its sealed
+    material publications (inventory, synchronized basis and participation),
+    never from B or Reference C.
+    """
+    raw_rows = _as_rows(snapshot.get("availability", []))
+    if raw_rows and all(
+        row.get("horizon")
+        and ("availability_state" in row or "state" in row)
+        and not isinstance(row.get("layers"), Mapping)
+        for row in raw_rows
+    ):
+        return _availability_projection(raw_rows)
+
+    inventory = [
+        *_as_rows(snapshot.get("inventory", [])),
+        *_as_rows(snapshot.get("partial_fixed_inventory", [])),
+        *_as_rows(snapshot.get("intraday_inventory", [])),
+    ]
+    basis = _as_rows(snapshot.get("basis", []))
+    participation = [
+        *_as_rows(snapshot.get("participation_dense", [])),
+        *_as_rows(snapshot.get("participation_transitions", [])),
+        *_as_rows(snapshot.get("participation_summaries", [])),
+    ]
+    sessions = sorted(
+        {
+            date
+            for rows in (raw_rows, inventory, basis, participation)
+            for row in rows
+            if (date := _evaluation_date(row))
+        }
+    )
+    horizons = context_availability.HORIZONS
+    output: list[dict[str, Any]] = []
+    for session in sessions:
+        material_horizons = {
+            str(row.get("horizon"))
+            for row in inventory
+            if _evaluation_date(row) == session
+        }
+        synchronized_market = any(
+            _evaluation_date(row) == session
+            and str(row.get("validity_status")) == "VALID"
+            for row in basis
+        )
+        if not synchronized_market:
+            # A sealed GUI price row is itself a calculation-free projection
+            # of a valid synchronized basis row and is acceptable corroboration
+            # for compact unit/reference fixtures.
+            payloads = snapshot.get("gui_payload", {})
+            payload = payloads.get(session, {}) if isinstance(payloads, Mapping) else {}
+            synchronized_market = bool(
+                _as_rows(payload.get("price", []))
+                if isinstance(payload, Mapping)
+                else []
+            )
+        participation_available = any(
+            _evaluation_date(row) == session for row in participation
+        )
+        layers: dict[str, context_availability.LayerAvailability] = {}
+        for horizon in horizons:
+            present = (
+                horizon in material_horizons
+                and (horizon != "ID" or synchronized_market)
+            )
+            if horizon == "ID":
+                state = "AVAILABLE" if present else "STALE_DATA"
+                reason = (
+                    "RAW_CONTINUITY_VERIFIED"
+                    if present
+                    else "SYNCHRONIZED_MARKET_OR_INTRADAY_MATERIAL_MISSING"
+                )
+            else:
+                state = "AVAILABLE" if present else "MISSING_PRIOR_SESSION"
+                reason = (
+                    "RAW_ACCEPTED_SOURCE_CHAIN"
+                    if present
+                    else f"REQUIRES_{horizon[0]}_PRIOR_ACCEPTED_SESSION(S)"
+                )
+            layers[horizon] = context_availability.LayerAvailability(
+                horizon, state, reason
+            )
+        classified = context_availability.classify_context(
+            layers,
+            divergence_inputs_available=synchronized_market,
+            participation_inputs_available=participation_available,
+        )
+        for horizon in horizons:
+            layer = layers[horizon]
+            output.append(
+                {
+                    "evaluation_date": session,
+                    "horizon": horizon,
+                    "availability_state": layer.state,
+                    "availability_reason": layer.reason,
+                    **classified,
+                }
+            )
+    return _availability_projection(output)
+
+
 def component_rows(snapshot: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
     """Project the public orchestrator snapshot into the frozen count contract."""
     result = {}
@@ -952,6 +1067,17 @@ def component_rows(snapshot: Mapping[str, Any]) -> dict[str, list[dict[str, Any]
         ]
         if isinstance(gui, Mapping)
         else []
+    )
+    return result
+
+
+def reference_component_rows(
+    snapshot: Mapping[str, Any],
+) -> dict[str, list[dict[str, Any]]]:
+    """Return like-for-like historical surfaces for post-seal references."""
+    result = component_rows(snapshot)
+    result["availability_states"] = _historical_reference_availability_projection(
+        snapshot
     )
     return result
 
@@ -4045,10 +4171,10 @@ def compare_reference_snapshot(
 ) -> list[dict[str, Any]]:
     """Compare target rows on every canonical field published by the reference."""
     targets = {
-        "incremental_a": component_rows(a_snapshot),
-        "batch_b": component_rows(b_snapshot),
+        "incremental_a": reference_component_rows(a_snapshot),
+        "batch_b": reference_component_rows(b_snapshot),
     }
-    reference = component_rows(reference_snapshot)
+    reference = reference_component_rows(reference_snapshot)
     rows = []
     for component in components:
         reference_rows = reference.get(component, [])

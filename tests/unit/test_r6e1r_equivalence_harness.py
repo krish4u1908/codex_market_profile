@@ -300,6 +300,123 @@ def test_availability_comparison_uses_post_fallback_public_contract() -> None:
     assert availability["status"] == "FAIL"
 
 
+def test_reference_availability_uses_historical_material_surface() -> None:
+    session = "2026-08-20"
+    common = {
+        "evaluation_date": session,
+        "overall_state": "LIVE_FULL_CONTEXT",
+        "market_display_enabled": True,
+        "divergence_state": "AVAILABLE",
+        "participation_state": "AVAILABLE",
+        "available_horizons": "1D|2D|3D|ID",
+        "unavailable_horizons": "",
+    }
+    canonical_availability = [
+        {
+            **common,
+            "horizon": horizon,
+            "availability_state": "AVAILABLE",
+            "availability_reason": (
+                "RAW_CONTINUITY_VERIFIED"
+                if horizon == "ID"
+                else "RAW_ACCEPTED_SOURCE_CHAIN"
+            ),
+        }
+        for horizon in ("1D", "2D", "3D", "ID")
+    ]
+    operational_stale = {
+        "session_date": session,
+        "overall_state": "STALE_PARTIAL",
+        "market_display_enabled": True,
+        "divergence_state": "STALE_DATA",
+        "participation_state": "SUSPENDED_REQUIRED_INPUT_UNAVAILABLE",
+        "available_horizons": "1D|2D|3D",
+        "unavailable_horizons": "ID",
+        "layers": {
+            "1D": {"state": "AVAILABLE", "reason": "CACHED_RAW_PRIOR_CONTEXT"},
+            "2D": {"state": "AVAILABLE", "reason": "CACHED_RAW_PRIOR_CONTEXT"},
+            "3D": {"state": "AVAILABLE", "reason": "CACHED_RAW_PRIOR_CONTEXT"},
+            "ID": {"state": "STALE_DATA", "reason": "MARKET_INPUT_STALE_OR_MISSING"},
+        },
+    }
+    incremental = {
+        "availability": [operational_stale],
+        "inventory": [
+            {"evaluation_date": session, "horizon": horizon}
+            for horizon in ("1D", "2D", "3D", "ID")
+        ],
+        "basis": [{"evaluation_date": session, "validity_status": "VALID"}],
+        "participation_dense": [{"evaluation_date": session}],
+    }
+    batch = {
+        "availability": canonical_availability,
+        # Reference comparison must ignore this operational auxiliary; primary
+        # compare_snapshots coverage above proves that it remains authoritative
+        # for live A/B equivalence.
+        "availability_detail": {session: operational_stale},
+    }
+    reference = {"availability": canonical_availability}
+
+    rows = harness.compare_reference_snapshot(
+        a_snapshot=incremental,
+        b_snapshot=batch,
+        reference_snapshot=reference,
+        reference_name="R6C2R_REFERENCE_C",
+        components=("availability_states",),
+    )
+    assert len(rows) == 2
+    assert all(row["status"] == "PASS" for row in rows)
+
+    incremental["participation_dense"] = []
+    rows = harness.compare_reference_snapshot(
+        a_snapshot=incremental,
+        b_snapshot=batch,
+        reference_snapshot=reference,
+        reference_name="R6C2R_REFERENCE_C",
+        components=("availability_states",),
+    )
+    assert next(row for row in rows if row["target"] == "incremental_a")[
+        "status"
+    ] == "FAIL"
+    assert next(row for row in rows if row["target"] == "batch_b")["status"] == "PASS"
+
+    incremental["participation_dense"] = [{"evaluation_date": session}]
+    incremental["inventory"] = [
+        row for row in incremental["inventory"] if row["horizon"] != "ID"
+    ]
+    rows = harness.compare_reference_snapshot(
+        a_snapshot=incremental,
+        b_snapshot=batch,
+        reference_snapshot=reference,
+        reference_name="R6C2R_REFERENCE_C",
+        components=("availability_states",),
+    )
+    assert next(row for row in rows if row["target"] == "incremental_a")[
+        "status"
+    ] == "FAIL"
+    assert next(row for row in rows if row["target"] == "batch_b")["status"] == "PASS"
+
+    incremental["inventory"].append(
+        {"evaluation_date": session, "horizon": "ID"}
+    )
+    changed_batch = {
+        **batch,
+        "availability": json.loads(json.dumps(canonical_availability)),
+    }
+    changed_batch["availability"][0]["availability_state"] = "INCOMPLETE_RAW_DATA"
+    rows = harness.compare_reference_snapshot(
+        a_snapshot=incremental,
+        b_snapshot=changed_batch,
+        reference_snapshot=reference,
+        reference_name="R6C2R_REFERENCE_C",
+        components=("availability_states",),
+    )
+    assert next(row for row in rows if row["target"] == "incremental_a")[
+        "status"
+    ] == "PASS"
+    assert next(row for row in rows if row["target"] == "batch_b")["status"] == "FAIL"
+
+
 def test_frozen_six_session_counts_and_gate_are_mandatory() -> None:
     assert harness.EXPECTED_COUNTS == {
         "inventory": 255,

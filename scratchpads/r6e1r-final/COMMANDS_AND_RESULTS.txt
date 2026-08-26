@@ -180,3 +180,9 @@ RESULT: TWO PRE-ACCEPTANCE INVOCATION FAILURES RETAINED; wrong authorized-root l
 
 2026-08-27 final focused all-nine v12
 RESULT: PASS; exit 0; 21/21 components; 8/8 analytical ledgers; 9/9 schedules; 9/9 causal/GUI invariants; 72/72 checkpoint rows; 2/2 recovery probes; 8/8 source hashes; 2,340 measured runtime-open rows; all differences/refusals/future joins/backdating/duplicate IDs/prohibited or unmeasured opens/checkpoint failures/source mutations zero; 7/7 nonempty ledger crash boundaries exactly once; wall 22m09.73s; harness 1,328.957s; parent max RSS 1,586,204 KiB; child max RSS 803,968 KiB; summary 19b6c15f426b925fa6ec018d65477f4364242d65cfaaa5425423098d3861de15; state manifest d38ca5e40e60d87d117894df84386fb19b5e1c08347392838a86eef832d92fb3; state tree ece5d41515f182761e397b2bf06e1545daab6a91b6d313af18505fd01932a37f; evidence /opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_evidence/focused_nine_final_v12.
+
+2026-08-27 full six-session v3 baseline/reference diagnostic
+RESULT: INTERRUPTED AND REJECTED before schedules; fresh A/B 21/21 components, 8/8 ledgers and 9/9 invariants exact; frozen rows exact through cross-layer 60,659; all A/B differences/future joins/backdating/duplicate IDs zero. Reference C 28/30 PASS, with only incremental-A and batch-B availability failing because operational freshness was compared against historical eligibility. Preserved at /tmp/r6e1r_rejected_and_partial_diagnostics_20260826/six_final_v3_reference_availability_scope_*.
+
+2026-08-27 reference availability surface repair
+RESULT: PASS; batch-B layer_availability.csv byte-identical to R6C2 Reference C, SHA-256 ed70b601360a866a03789d1039316b8d59ace773494311603a57b94bca7fdd9a; 29/29 equivalence-harness tests; preserved real v3 A and B each 24/24 rows exact against Reference C; target/reference-only/remainder all zero; primary operational A/B comparator unchanged.
