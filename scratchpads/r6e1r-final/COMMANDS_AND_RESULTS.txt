@@ -138,3 +138,9 @@ RESULT: REJECTED; baseline components/ledgers/invariants exact and all generated
 
 2026-08-26 focused one-record v5 after sparse-row accounting repair
 RESULT: PASS; status PASS; 46,550 JSON records; 46,550 one-record increments; 46,550 production polls; 2,060,715 checkpoint rows exact; component/ledger/schedule differences 0; causality violations 0; analytical refusals 0; prohibited opens 0; source mutations 0; wall 5m45.06s; max RSS 1,487,424 KiB
+
+2026-08-26 focused all-nine v6
+RESULT: REJECTED; 8/9 schedules and all baseline equivalence gates exact; boundaries_inside_jsonl_lines manufactured 30,452 OUT_OF_ORDER refusals by polling the fragmented path ahead of already visible chronological peer paths; wall 18m26.92s; max RSS 1,589,576 KiB; no production clock or analytical rule changed
+
+2026-08-26 focused boundary-only v7 after causal-prefix polling repair
+RESULT: PASS; 17/17 configured inside-line splits; 46,550/46,550 records; analytical refusals 0; semantic differences 0; ledger differences 0; source mutations 0; prohibited opens 0; wall 5m01.98s; max RSS 1,477,200 KiB

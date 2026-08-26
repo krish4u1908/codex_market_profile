@@ -1257,6 +1257,17 @@ def test_real_live_path_chunk_split_and_restart_equivalence(tmp_path: Path) -> N
         sessions=sessions,
         context_sources=context_sources,
     )
+    middle_split, middle_split_accounting, middle_split_metrics = harness.run_schedule(
+        schedule=harness.Schedule(
+            "middle_split_fixture", (8192,), split_inside_lines=True, split_events=1
+        ),
+        sources=sources,
+        staging_root=tmp_path / "middle_split_collector",
+        state_root=tmp_path / "middle_split_state",
+        config_path=config,
+        sessions=sessions,
+        context_sources=context_sources,
+    )
     restarted, restart_accounting, restart_metrics = harness.run_schedule(
         schedule=harness.Schedule("restart_fixture", (1,), restart_every=2),
         sources=sources,
@@ -1278,9 +1289,12 @@ def test_real_live_path_chunk_split_and_restart_equivalence(tmp_path: Path) -> N
 
     assert all(row["status"] == "PASS" for row in chunked_accounting)
     assert all(row["status"] == "PASS" for row in split_accounting)
+    assert all(row["status"] == "PASS" for row in middle_split_accounting)
     assert all(row["status"] == "PASS" for row in restart_accounting)
     assert all(row["status"] == "PASS" for row in boundary_accounting)
     assert split_metrics["split_line_boundary_count"] > 0
+    assert middle_split_metrics["split_line_boundary_count"] == 1
+    assert middle_split_metrics["analytical_refusals"] == 0
     assert chunked["session_snapshots"][sessions[0]]["session_date"] == sessions[0]
     assert boundary_metrics["unexpected_staged_sessions"] == []
     assert boundary_metrics["dirty_sessions_after_seal"] == []
@@ -1293,6 +1307,10 @@ def test_real_live_path_chunk_split_and_restart_equivalence(tmp_path: Path) -> N
     assert all(
         row["status"] == "PASS"
         for row in harness.compare_snapshots(chunked, split, expected=None)
+    )
+    assert all(
+        row["status"] == "PASS"
+        for row in harness.compare_snapshots(chunked, middle_split, expected=None)
     )
     assert all(
         row["status"] == "PASS"

@@ -2566,7 +2566,14 @@ def run_schedule(
                 ):
                     for part in _line_parts(pending_line):
                         _append(destination, part)
-                        poll_for_schedule((destination,))
+                        # Every complete record earlier in this chronological
+                        # group is already visible on its own source path.  A
+                        # partial-line probe must poll that complete causal
+                        # prefix too; polling only the fragmented destination
+                        # would invent a future observation ahead of unpolled
+                        # peer files and turn a chunk test into an ordering
+                        # mutation.
+                        poll_for_schedule(changed_paths)
                     split_line_boundary_count += 1
                 else:
                     _append(destination, pending_line)
