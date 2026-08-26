@@ -1,28 +1,50 @@
 [Unit]
-Description=R6E1R sanitized read-only gateway
-After=network-online.target r6e1r-shadow.service
-Wants=network-online.target r6e1r-shadow.service
+Description=R6E1R sanitized read-only gateway (user service)
+Documentation=file:///opt/banknifty/repositories/banknifty-market-profiler/deploy/r6e1r/README.md
+After=r6e1r-shadow.service
+Requires=r6e1r-shadow.service
+StartLimitIntervalSec=5min
+StartLimitBurst=10
 
 [Service]
 Type=simple
-User=banknifty-profiler
-Group=banknifty-profiler
 WorkingDirectory=/opt/banknifty/repositories/banknifty-market-profiler
-ExecStart=/opt/banknifty/research/.venv/bin/python -B deploy/r6e1r/read_only_gateway.py --bind 0.0.0.0 --port 8805 --backend http://127.0.0.1:18805
+UMask=0077
+UnsetEnvironment=SSH_AUTH_SOCK DBUS_SESSION_BUS_ADDRESS
+KeyringMode=private
+ExecStart=/usr/bin/bwrap --unshare-all --unshare-user --share-net --disable-userns --assert-userns-disabled --die-with-parent --new-session --cap-drop ALL --clearenv --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 --ro-bind /opt/banknifty/repositories/banknifty-market-profiler/deploy/r6e1r /app/deploy/r6e1r --dev /dev --proc /proc --tmpfs /tmp --dir /run --chdir /app /usr/bin/python3 -I -B /app/deploy/r6e1r/read_only_gateway.py --bind 0.0.0.0 --port 8805 --backend http://127.0.0.1:18805 --require-isolation
+ExecStartPost=/usr/bin/bwrap --unshare-all --unshare-user --share-net --disable-userns --assert-userns-disabled --die-with-parent --new-session --cap-drop ALL --clearenv --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 --ro-bind /opt/banknifty/repositories/banknifty-market-profiler/deploy/r6e1r /app/deploy/r6e1r --dev /dev --proc /proc --tmpfs /tmp --dir /run --chdir /app /usr/bin/python3 -I -B /app/deploy/r6e1r/health_readiness_check.py --base-url http://127.0.0.1:8805 --health-only --attempts 30 --delay-seconds 1
 Restart=on-failure
 RestartSec=3s
+TimeoutStartSec=75s
+TimeoutStopSec=30s
+MemoryHigh=192M
 MemoryMax=256M
+MemorySwapMax=0
 CPUQuota=50%
+TasksMax=128
+LimitNOFILE=4096
+OOMPolicy=stop
 NoNewPrivileges=true
 PrivateTmp=true
+PrivateDevices=true
 ProtectHome=true
 ProtectSystem=strict
 ReadOnlyPaths=/opt/banknifty/repositories/banknifty-market-profiler
+InaccessiblePaths=-/opt/banknifty-collector/data-prod-v4 -/opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow/state -/opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow/config -%t/gnupg
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectClock=true
 RestrictSUIDSGID=true
+RestrictNamespaces=~net
 LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=r6e1r-readonly-gateway
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=2000
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

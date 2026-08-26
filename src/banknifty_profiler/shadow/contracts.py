@@ -13,6 +13,10 @@ from banknifty_profiler.shadow.symbols import CANONICAL_INDEX_SYMBOL, SymbolRegi
 
 
 CLASSIFICATION = "LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL"
+ENGINE_SOURCE_MANIFEST_PATH = "manifests/r6e1r_engine_source_manifest.json"
+ENGINE_SOURCE_MANIFEST_SHA256_PATH = (
+    "manifests/r6e1r_engine_source_manifest.sha256"
+)
 
 # Runtime source identity is intentionally explicit. The verified R6D source
 # manifest remains immutable historical evidence and cannot identify R6E code.
@@ -24,6 +28,9 @@ ENGINE_SOURCE_ALLOWLIST = (
     "src/banknifty_profiler/divergence/dependency.py",
     "src/banknifty_profiler/divergence/detector.py",
     "src/banknifty_profiler/gui/adapter.py",
+    "src/banknifty_profiler/gui/static/live.js",
+    "src/banknifty_profiler/gui/static/live_page.template",
+    "src/banknifty_profiler/gui/static/style.css",
     "src/banknifty_profiler/inventory/engine.py",
     "src/banknifty_profiler/lifecycle/raw_engine.py",
     "src/banknifty_profiler/participation/raw_engine.py",
@@ -39,6 +46,8 @@ ENGINE_SOURCE_ALLOWLIST = (
     "src/banknifty_profiler/shadow/orchestrator.py",
     "src/banknifty_profiler/shadow/state.py",
     "src/banknifty_profiler/shadow/symbols.py",
+    "deploy/r6e1r/health_readiness_check.py",
+    "deploy/r6e1r/read_only_gateway.py",
 )
 
 
@@ -83,6 +92,67 @@ def engine_hash(
     return hashlib.sha256(canonical).hexdigest()
 
 
+def verify_engine_source_manifest(
+    repo: Path,
+    manifest_path: str,
+    expected_manifest_sha256: str,
+    allowlist: Iterable[str] = ENGINE_SOURCE_ALLOWLIST,
+) -> dict[str, object]:
+    """Compare current allowlisted runtime bytes with an expected manifest.
+
+    The expected manifest digest is supplied independently (the deployed
+    configuration uses the checked-in ``.sha256`` companion), so successfully
+    hashing whatever happens to be present cannot self-assert verification.
+    """
+    expected = str(expected_manifest_sha256).strip().lower()
+    if len(expected) != 64 or any(character not in "0123456789abcdef" for character in expected):
+        raise ValueError("engine source manifest SHA-256 must be 64 lowercase hex characters")
+    path = _source_path(repo, manifest_path)
+    payload = path.read_bytes()
+    actual_manifest_sha256 = hashlib.sha256(payload).hexdigest()
+    if actual_manifest_sha256 != expected:
+        raise ValueError("engine source manifest identity mismatch")
+    try:
+        manifest = json.loads(payload)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"engine source manifest is not valid JSON: {error}") from error
+    current = engine_source_inventory(repo, allowlist)
+    expected_paths = sorted(set(map(str, allowlist)))
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("schema") != "R6E1R_ENGINE_SOURCE_MANIFEST_V1"
+        or manifest.get("classification") != CLASSIFICATION
+        or manifest.get("allowlist") != expected_paths
+        or manifest.get("file_count") != len(current)
+        or manifest.get("files") != current
+        or manifest.get("engine_hash") != engine_hash(repo, allowlist)
+    ):
+        raise ValueError("current engine sources do not match expected manifest")
+    opened = set(expected_paths) | {str(manifest_path)}
+    allowed = set(expected_paths) | {str(manifest_path)}
+    return {
+        "verified": actual_manifest_sha256 == expected,
+        "manifest_path": str(manifest_path),
+        "manifest_sha256": actual_manifest_sha256,
+        "engine_hash": str(manifest["engine_hash"]),
+        "file_count": len(current),
+        "runtime_open_audit": {
+            "observed_open_count": len(opened),
+            "allowlisted_open_count": len(opened & allowed),
+            "prohibited_open_count": len(opened - allowed),
+        },
+    }
+
+
+def checked_in_engine_source_manifest_sha256(repo: Path) -> str:
+    """Read the independent checked-in expected digest for default configs."""
+    path = _source_path(repo, ENGINE_SOURCE_MANIFEST_SHA256_PATH)
+    value = path.read_text().strip().split()[0]
+    if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+        raise ValueError("checked-in engine source manifest digest is invalid")
+    return value
+
+
 def validate_shadow_contract(
     data_root: Path,
     state_root: Path,
@@ -119,6 +189,12 @@ def validate_shadow_contract(
     )
     raw_config.setdefault("selected_futures_by_session", {})
     raw_config.setdefault("analytical_refresh_seconds", 30.0)
+    raw_config.setdefault("max_live_sessions", 32)
+    raw_config.setdefault("engine_source_manifest_path", ENGINE_SOURCE_MANIFEST_PATH)
+    if "engine_source_manifest_sha256" not in raw_config:
+        raw_config["engine_source_manifest_sha256"] = (
+            checked_in_engine_source_manifest_sha256(repo)
+        )
     config = validate_canonical_runtime_config(raw_config)
     if config.get("index_symbol") != CANONICAL_INDEX_SYMBOL:
         raise ValueError(f"index_symbol must be exactly {CANONICAL_INDEX_SYMBOL}")
@@ -140,18 +216,31 @@ def validate_shadow_contract(
     refresh = config.get("analytical_refresh_seconds")
     if type(refresh) not in (int, float) or not 1 <= refresh <= 300:
         raise ValueError("analytical_refresh_seconds must be between 1 and 300")
+    max_sessions = config.get("max_live_sessions")
+    if type(max_sessions) is not int or not 6 <= max_sessions <= 32:
+        raise ValueError("max_live_sessions must be an integer between 6 and 32")
 
+    manifest_path = config.get("engine_source_manifest_path")
+    if manifest_path != ENGINE_SOURCE_MANIFEST_PATH:
+        raise ValueError(
+            f"engine_source_manifest_path must be exactly {ENGINE_SOURCE_MANIFEST_PATH}"
+        )
+    verification = verify_engine_source_manifest(
+        repo,
+        str(manifest_path),
+        str(config.get("engine_source_manifest_sha256", "")),
+    )
     source_inventory = engine_source_inventory(repo)
-    canonical_sources = (
-        json.dumps(source_inventory, sort_keys=True, separators=(",", ":")) + "\n"
-    ).encode()
     return {
         "data_root": data,
         "state_root": state,
         "config_path": config_file,
         "config": config,
         "configuration_hash": canonical_configuration_sha256(config),
-        "engine_hash": hashlib.sha256(canonical_sources).hexdigest(),
+        "engine_hash": verification["engine_hash"],
         "engine_source_inventory": source_inventory,
-        "engine_source_verified": True,
+        "engine_source_manifest_path": verification["manifest_path"],
+        "engine_source_manifest_sha256": verification["manifest_sha256"],
+        "engine_source_verified": verification["verified"],
+        "runtime_source_open_audit": verification["runtime_open_audit"],
     }

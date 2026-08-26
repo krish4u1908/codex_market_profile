@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import os
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
@@ -32,15 +34,60 @@ SECURITY_HEADERS = {
         "base-uri 'none'; frame-ancestors 'none'"
     ),
 }
+QUERY_KEYS = {
+    "/api/status": frozenset({"date"}),
+    "/api/session": frozenset({"date"}),
+    "/api/chart": frozenset({"date"}),
+    "/api/inventory": frozenset({"date", "limit"}),
+    "/api/divergence": frozenset({"date", "limit"}),
+    "/api/lifecycle": frozenset({"date", "limit"}),
+    "/api/participation": frozenset({"date", "limit"}),
+    "/api/transitions": frozenset({"date", "limit"}),
+    "/api/availability": frozenset({"date"}),
+    "/api/audit": frozenset({"date", "limit"}),
+}
+HIDDEN_RUNTIME_PATHS = (
+    "/opt/banknifty-collector/data-prod-v4",
+    "/opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow/state",
+    "/opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow/config",
+)
+
+
+def verify_runtime_isolation() -> dict[str, object]:
+    """Refuse service startup unless the minimal bwrap root is effective."""
+    hidden = all(not Path(path).exists() for path in HIDDEN_RUNTIME_PATHS)
+    user_runtime_hidden = not Path(f"/run/user/{os.getuid()}").exists()
+    try:
+        visible_pids = [
+            item.name for item in Path("/proc").iterdir() if item.name.isdigit()
+        ]
+    except OSError:
+        visible_pids = []
+    process_namespace_private = 1 <= len(visible_pids) <= 2
+    if not (hidden and user_runtime_hidden and process_namespace_private):
+        raise RuntimeError("gateway runtime isolation contract unavailable")
+    return {
+        "collector_state_config_hidden": hidden,
+        "user_runtime_hidden": user_runtime_hidden,
+        "visible_pid_count": len(visible_pids),
+        "process_namespace_private": process_namespace_private,
+    }
 
 
 def safe_query(path: str, raw: str) -> str | None:
     if not raw:
         return ""
-    if not path.startswith("/api/"):
+    if path not in QUERY_KEYS or len(raw) > 2048:
         return None
-    values = parse_qs(raw, keep_blank_values=False)
-    if not set(values).issubset({"date", "limit"}):
+    try:
+        values = parse_qs(
+            raw, keep_blank_values=True, strict_parsing=True, max_num_fields=8,
+        )
+    except ValueError:
+        return None
+    if not set(values).issubset(QUERY_KEYS[path]):
+        return None
+    if any(len(items) != 1 or items[0] == "" for items in values.values()):
         return None
     date = values.get("date", [""])[0]
     if date and date != "latest" and date not in REPLAY_DATES:
@@ -48,7 +95,9 @@ def safe_query(path: str, raw: str) -> str | None:
     limit = values.get("limit", [""])[0]
     if limit and (not limit.isdigit() or not 1 <= int(limit) <= 5000):
         return None
-    return urlencode({key: items[0] for key, items in values.items()})
+    return urlencode(
+        [(key, values[key][0]) for key in sorted(values)]
+    )
 
 
 def handler_for(backend: str) -> type[BaseHTTPRequestHandler]:
@@ -109,14 +158,29 @@ def handler_for(backend: str) -> type[BaseHTTPRequestHandler]:
         do_PATCH = _read_only
         do_DELETE = _read_only
 
-        def log_message(self, format_: str, *args: object) -> None:
-            # One structured record per request; journald handles rotation.
+        def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
+            # Never persist attacker-controlled request lines, path/query
+            # values, or parser diagnostics. Journald receives only normalized
+            # method/allowlisted-route/query-key/status metadata.
+            parsed = urlparse(self.path)
+            query = safe_query(parsed.path, parsed.query)
+            route = parsed.path if parsed.path in ROUTES else "UNRECOGNIZED"
+            query_keys = []
+            if query is not None and query:
+                query_keys = sorted(parse_qs(query, keep_blank_values=True))
+            method = self.command if self.command in {
+                "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE",
+            } else "OTHER"
             print(json.dumps({
                 "component": "r6e1r-readonly-gateway",
-                "client": self.client_address[0],
-                "request": self.requestline,
-                "message": format_ % args,
+                "method": method,
+                "route": route,
+                "query_keys": query_keys,
+                "status": int(code) if str(code).isdigit() else 0,
             }, separators=(",", ":")), flush=True)
+
+        def log_message(self, *_: object) -> None:
+            pass
 
     return Gateway
 
@@ -126,9 +190,16 @@ def main() -> None:
     parser.add_argument("--bind", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8805)
     parser.add_argument("--backend", default="http://127.0.0.1:18805")
+    parser.add_argument("--require-isolation", action="store_true")
+    parser.add_argument("--isolation-self-test", action="store_true")
     args = parser.parse_args()
     if args.backend != "http://127.0.0.1:18805":
         raise ValueError("backend must remain http://127.0.0.1:18805")
+    if args.require_isolation or args.isolation_self_test:
+        result = verify_runtime_isolation()
+        if args.isolation_self_test:
+            print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+            return
     ThreadingHTTPServer((args.bind, args.port), handler_for(args.backend)).serve_forever()
 
 

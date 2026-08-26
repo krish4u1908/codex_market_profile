@@ -172,6 +172,12 @@ class LiveAnalyticalOrchestrator:
             self.ledgers.setdefault(name, AppendOnlyLedger(self.state_root / "ledgers" / f"{name}.jsonl"))
         self._ledger_seen = {name: self._existing_ids(name) for name in LEDGER_NAMES}
         self._sessions: dict[str, dict[str, dict]] = {}
+        # Identities in the fsynced observation-stage ledgers.  This cache is
+        # populated once at startup and updated only after an acknowledged
+        # ledger append (or an exceptional append has been reconciled from
+        # disk).  It keeps the normal callback path O(1) without weakening the
+        # callback-before-ACK durability boundary.
+        self._stage_seen: dict[str, set[str]] = {}
         self._outputs: dict[str, dict] = {}
         self._last_order_key: dict[str, tuple] = {}
         self._dirty_sessions: set[str] = set()
@@ -237,35 +243,111 @@ class LiveAnalyticalOrchestrator:
         prepared.sort(key=self._order_key)
         changed: set[str] = set()
         staged: dict[str, list[dict]] = {}
+        staged_ids: dict[str, set[str]] = {}
+        # Do not advance the live high-water marks while merely validating a
+        # batch.  They become authoritative only as each per-session append is
+        # durably accepted below.
+        provisional_order = dict(self._last_order_key)
         for row in prepared:
             session = row["session_date"]
             if row["instrument_class"] not in KNOWN_CLASSES:
                 self._quality(row, "UNKNOWN_SYMBOL", row.get("source_symbol", ""))
                 continue
+            identity = row["observation_id"]
+            # A checkpoint rewind or callback retry is idempotent, not a late
+            # analytical receipt.  Test both recovered durable stage identity
+            # and live memory before finalization or the high-water mark.
+            if (
+                identity in self._sessions.get(session, {})
+                or identity in self._stage_seen.get(session, set())
+                or identity in staged_ids.get(session, set())
+            ):
+                continue
             if session in self._finalized_sessions:
                 self._quality(row, "FINALIZED_SESSION_RECEIPT", session)
                 continue
-            bucket = self._sessions.setdefault(session, {})
-            identity = row["observation_id"]
-            # A checkpoint rewind or callback retry is idempotent, not a late
-            # analytical receipt.  Test identity before the high-water mark.
-            if identity in bucket:
-                continue
             key = self._order_key(row)
-            prior = self._last_order_key.get(session)
+            prior = provisional_order.get(session)
             if _truth(row.get("out_of_order")) or (prior is not None and key < prior):
                 self._quality(row, "OUT_OF_ORDER_ANALYTICAL_RECEIPT", f"previous={prior!r} current={key!r}")
                 continue
-            bucket[identity] = row
             staged.setdefault(session, []).append(row)
-            self._last_order_key[session] = key if prior is None or key >= prior else prior
-            changed.add(session)
+            staged_ids.setdefault(session, set()).add(identity)
+            provisional_order[session] = key if prior is None or key >= prior else prior
         for session, values in staged.items():
-            AppendOnlyLedger(self.stage_root / f"{session}.jsonl").append_many(values)
+            ledger = self._stage_ledger(session)
+            try:
+                ledger.append_many(values)
+            except Exception:
+                # The append contract may fail either before writing or after
+                # the bytes and fsync completed.  Re-read only on this
+                # exceptional path so a completed ambiguous append is accepted
+                # exactly once, while a pre-write failure leaves no in-memory
+                # identity that could incorrectly allow the retry to ACK.
+                self._reconcile_staged_session(session)
+                self._evict_sessions()
+                raise
+            if self._accept_durable_stage_rows(session, values):
+                changed.add(session)
         if changed:
             self._evict_sessions()
-            self._dirty_sessions.update(changed)
         return changed
+
+    def _stage_ledger(self, session: str) -> AppendOnlyLedger:
+        return AppendOnlyLedger(self.stage_root / f"{session}.jsonl")
+
+    def _read_unique_staged_rows(self, session: str) -> list[dict]:
+        """Read one durable stage and reject duplicate/corrupt identities."""
+        try:
+            rows = self._stage_ledger(session).rows()
+        except (OSError, json.JSONDecodeError) as error:
+            raise ValueError(
+                f"analytical observation stage corrupt for {session}: {error}"
+            ) from error
+        identities: set[str] = set()
+        for row in rows:
+            identity = str(row.get("observation_id", ""))
+            if not identity:
+                raise ValueError(
+                    f"analytical observation stage missing identity for {session}"
+                )
+            if identity in identities:
+                raise ValueError(
+                    f"duplicate analytical observation stage identity for "
+                    f"{session}: {identity}"
+                )
+            identities.add(identity)
+        return rows
+
+    def _accept_durable_stage_rows(
+        self, session: str, rows: Iterable[Mapping[str, object]]
+    ) -> bool:
+        """Make already-fsynced stage rows visible to analytical memory."""
+        values = [dict(row) for row in rows]
+        if not values:
+            return False
+        identities = {str(row["observation_id"]) for row in values}
+        self._stage_seen.setdefault(session, set()).update(identities)
+        bucket = self._sessions.setdefault(session, {})
+        added = False
+        for row in sorted(values, key=self._order_key):
+            identity = str(row["observation_id"])
+            if identity not in bucket:
+                bucket[identity] = row
+                added = True
+        if bucket:
+            self._last_order_key[session] = max(
+                self._order_key(row) for row in bucket.values()
+            )
+        if added:
+            self._dirty_sessions.add(session)
+        return added
+
+    def _reconcile_staged_session(self, session: str) -> bool:
+        """Resolve an ambiguous append from the durable ledger on disk."""
+        return self._accept_durable_stage_rows(
+            session, self._read_unique_staged_rows(session)
+        )
 
     def flush(self, session_dates: Iterable[str] | None = None) -> dict[str, dict]:
         """Run canonical batch primitives once for each dirty live session."""
@@ -285,6 +367,15 @@ class LiveAnalyticalOrchestrator:
         """Flush and close one session against subsequent late callbacks."""
         self.flush([session_date])
         self._finalized_sessions.add(session_date)
+        # The sealed output and append-only stage are the durable authorities
+        # after finalization.  Raw normalized observations no longer need to
+        # remain in the JSON state blob or process memory, and finalized-stage
+        # recovery explicitly refuses to reload them on restart.
+        self._sessions.pop(session_date, None)
+        self._last_order_key.pop(session_date, None)
+        self._dirty_sessions.discard(session_date)
+        self._stage_seen.pop(session_date, None)
+        self._evict_sessions()
         self._persist()
         return self.snapshot(session_date)
 
@@ -324,10 +415,44 @@ class LiveAnalyticalOrchestrator:
             at if at is not None else datetime.now(IST),
             field_name="operational availability clock",
         )
-        # Historical replay availability is evaluated at its causal receipt
-        # frontier.  Wall-clock staleness applies only to today's live session.
-        if session != reference.date().isoformat() or session not in self._sessions:
-            return json.loads(json.dumps(current, default=str))
+        # This method is used only for live/latest operational projection.
+        # Explicit historical replay reads the sealed snapshot directly, so a
+        # historical latest output must still age against the current wall
+        # clock instead of making the live readiness endpoint appear fresh.
+        if session not in self._sessions:
+            # A verified preload may contain a sealed GUI/output without its
+            # mutable observation cache.  Such historical-only evidence can
+            # keep the last chart visible, but it can never establish current
+            # live readiness.
+            stale = json.loads(json.dumps(current, default=str))
+            layers = stale.setdefault("layers", {})
+            intraday = layers.setdefault("ID", {})
+            intraday.update({
+                "state": "STALE_DATA",
+                "reason": "HISTORICAL_SEALED_OUTPUT_ONLY",
+            })
+            stale.update({
+                "overall_state": "STALE_PARTIAL",
+                "market_display_enabled": True,
+                "divergence_state": "STALE_DATA",
+                "index_state": "STALE_OR_MISSING",
+                "futures_state": "STALE_OR_MISSING",
+                "reference_timestamp": reference.isoformat(),
+                "calculation_timestamp": reference.isoformat(),
+            })
+            cutoff = stale.get("evidence_cutoff_timestamp")
+            if cutoff:
+                try:
+                    age = max(
+                        0.0,
+                        (reference - parse_timestamp(cutoff)).total_seconds(),
+                    )
+                    stale["receipt_ages_seconds"] = {
+                        "INDEX": age, "FUTURES": age,
+                    }
+                except ValueError:
+                    stale["receipt_ages_seconds"] = {}
+            return stale
         output = self._outputs[session]
         return self._availability(
             session,
@@ -959,6 +1084,7 @@ class LiveAnalyticalOrchestrator:
             if reference_time is not None
             else evidence_cutoff
         )
+        calculation = reference if reference_time is not None else datetime.now(IST)
         latest = {}
         for row in rows:
             kind = row["instrument_class"]
@@ -987,6 +1113,11 @@ class LiveAnalyticalOrchestrator:
         layers["ID"] = context_availability.LayerAvailability("ID", id_state, "FRESH_SYNCHRONIZED_MARKET" if market else "MARKET_INPUT_STALE_OR_MISSING")
         participation_available = fresh("FUTURES_OI", float(limits.get("futures_oi", 180))) or fresh("CE", float(limits.get("ce", 180))) or fresh("PE", float(limits.get("pe", 180)))
         classified = context_availability.classify_context(layers, divergence_inputs_available=market, participation_inputs_available=participation_available)
+        # Required market inputs that have arrived but are stale/invalid are a
+        # distinct operational state, not a generic missing-input suspension.
+        # This exact label is consumed by the live GUI/readiness projection.
+        if not market and any(kind in latest for kind in ("INDEX", "FUTURES")):
+            classified["divergence_state"] = "STALE_DATA"
         return {
             **classified,
             "layers": {horizon: {"state": layer.state, "reason": layer.reason} for horizon, layer in layers.items()},
@@ -996,7 +1127,7 @@ class LiveAnalyticalOrchestrator:
             "ce_state": "AVAILABLE" if fresh("CE", float(limits.get("ce", 180))) else "STALE_OR_MISSING",
             "pe_state": "AVAILABLE" if fresh("PE", float(limits.get("pe", 180))) else "STALE_OR_MISSING",
             "evidence_cutoff_timestamp": evidence_cutoff.isoformat() if evidence_cutoff is not None else "",
-            "calculation_timestamp": datetime.now(IST).isoformat(),
+            "calculation_timestamp": calculation.isoformat(),
             "reference_timestamp": reference.isoformat() if reference is not None else "",
             "receipt_ages_seconds": {
                 kind: (reference - instant).total_seconds()
@@ -1110,7 +1241,16 @@ class LiveAnalyticalOrchestrator:
         value.setdefault("engine_hash", self.c.get("engine_hash", ""))
         value.setdefault("configuration_hash", self.c.get("configuration_hash", ""))
         value.setdefault("raw_run_id", self.c.get("raw_run_id", ""))
-        self.ledgers[ledger_name].append(value)
+        try:
+            self.ledgers[ledger_name].append(value)
+        except Exception:
+            # An append wrapper can report an error after the underlying
+            # fsynced write completed.  Reconcile the deterministic identity
+            # before propagating the error so a dirty-session retry cannot
+            # publish a duplicate.
+            if event_id in self._existing_ids(ledger_name):
+                self._ledger_seen[ledger_name].add(event_id)
+            raise
         self._ledger_seen[ledger_name].add(event_id)
 
     def _quality(self, row: Mapping[str, object], reason: str, detail: str) -> None:
@@ -1145,10 +1285,20 @@ class LiveAnalyticalOrchestrator:
         return result
 
     def _evict_sessions(self) -> None:
-        for session in sorted(self._sessions)[:-self.max_sessions]:
+        # Dirty sessions cannot be discarded before an explicit analytical
+        # seal.  Retain them in addition to the bounded newest live buckets.
+        newest_live = set(sorted(self._sessions)[-self.max_sessions:])
+        keep_live = newest_live | set(self._dirty_sessions)
+        for session in sorted(set(self._sessions) - keep_live):
             self._sessions.pop(session, None)
-            self._outputs.pop(session, None)
             self._last_order_key.pop(session, None)
+        # Verified replay outputs are independently protected from rolling live
+        # retention.  Other sealed outputs retain only the newest live window.
+        verified_replays = set(gui_adapter.SESSIONS)
+        newest_outputs = set(sorted(self._outputs)[-self.max_sessions:])
+        keep_outputs = verified_replays | newest_outputs | set(self._sessions)
+        for session in sorted(set(self._outputs) - keep_outputs):
+            self._outputs.pop(session, None)
 
     def _persist(self) -> None:
         atomic_json(self.state_path, {
@@ -1181,19 +1331,16 @@ class LiveAnalyticalOrchestrator:
         paths = sorted(self.stage_root.glob("????-??-??.jsonl"))[-self.max_sessions:]
         for path in paths:
             session = path.stem
+            # A finalized output plus the durable finalized marker is enough
+            # to refuse any later replay without rehydrating every normalized
+            # observation or identity from its append-only stage.
             if session in self._finalized_sessions and session not in self._sessions:
                 continue
-            bucket = self._sessions.setdefault(session, {})
-            recovered = False
-            for row in AppendOnlyLedger(path).rows():
-                identity = str(row["observation_id"])
-                if identity not in bucket:
-                    bucket[identity] = row
-                    recovered = True
-            if bucket:
-                self._last_order_key[session] = max(self._order_key(row) for row in bucket.values())
-            if recovered:
-                self._dirty_sessions.add(session)
+            rows = self._read_unique_staged_rows(session)
+            self._stage_seen[session] = {
+                str(row["observation_id"]) for row in rows
+            }
+            self._accept_durable_stage_rows(session, rows)
         self._evict_sessions()
 
     @staticmethod

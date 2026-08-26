@@ -1,0 +1,166 @@
+{
+  "allowlist": [
+    "deploy/r6e1r/health_readiness_check.py",
+    "deploy/r6e1r/read_only_gateway.py",
+    "scripts/run_r6e_shadow.py",
+    "src/banknifty_profiler/context/availability.py",
+    "src/banknifty_profiler/cross_layer/state.py",
+    "src/banknifty_profiler/divergence/dependency.py",
+    "src/banknifty_profiler/divergence/detector.py",
+    "src/banknifty_profiler/gui/adapter.py",
+    "src/banknifty_profiler/gui/static/live.js",
+    "src/banknifty_profiler/gui/static/live_page.template",
+    "src/banknifty_profiler/gui/static/style.css",
+    "src/banknifty_profiler/inventory/engine.py",
+    "src/banknifty_profiler/lifecycle/raw_engine.py",
+    "src/banknifty_profiler/participation/raw_engine.py",
+    "src/banknifty_profiler/participation/views.py",
+    "src/banknifty_profiler/raw_io/reader.py",
+    "src/banknifty_profiler/runtime/configuration.py",
+    "src/banknifty_profiler/runtime/timestamps.py",
+    "src/banknifty_profiler/shadow/api.py",
+    "src/banknifty_profiler/shadow/contracts.py",
+    "src/banknifty_profiler/shadow/ingest.py",
+    "src/banknifty_profiler/shadow/ledger.py",
+    "src/banknifty_profiler/shadow/observation.py",
+    "src/banknifty_profiler/shadow/orchestrator.py",
+    "src/banknifty_profiler/shadow/state.py",
+    "src/banknifty_profiler/shadow/symbols.py"
+  ],
+  "classification": "LIVE MARKET-PROFILING DIAGNOSTIC \u2014 NOT A BUY/SELL SIGNAL",
+  "engine_hash": "200cd84e3e26049494653b1f349a9c87938f9c0c731c59718a80a4df128e0629",
+  "file_count": 26,
+  "files": [
+    {
+      "path": "deploy/r6e1r/health_readiness_check.py",
+      "sha256": "42ea7f0312fdca5a542ca99dc4c738d263e0f12f15f0135a02c790bb0b39a67b",
+      "size": 6686
+    },
+    {
+      "path": "deploy/r6e1r/read_only_gateway.py",
+      "sha256": "af0ca7bd02206ed3a2a96abb5336a27e8b5ba220bd90e90d7e09bb0068f17509",
+      "size": 8549
+    },
+    {
+      "path": "scripts/run_r6e_shadow.py",
+      "sha256": "4e2cff426cfb97bf4edc9cf8d5490f8a4c8ee645797dd2575cae99a04d613ff8",
+      "size": 2566
+    },
+    {
+      "path": "src/banknifty_profiler/context/availability.py",
+      "sha256": "31b6a4108c2059e8b04619079c458db70b30ff102303716401262b4183bf0e36",
+      "size": 2757
+    },
+    {
+      "path": "src/banknifty_profiler/cross_layer/state.py",
+      "sha256": "64c44eb783211d42185b3acf2e89e7afe151707f284ced90edc9be6edab31244",
+      "size": 7126
+    },
+    {
+      "path": "src/banknifty_profiler/divergence/dependency.py",
+      "sha256": "ffbb7f30bcb55701ba603072b93e422bbc2d25d471dbf37669097374a4418939",
+      "size": 2886
+    },
+    {
+      "path": "src/banknifty_profiler/divergence/detector.py",
+      "sha256": "9a9b333add9992dbd7421ffe23d359145d848bcd5951acee4e4672b7c4d4947a",
+      "size": 7444
+    },
+    {
+      "path": "src/banknifty_profiler/gui/adapter.py",
+      "sha256": "efbb6a06506dc7c60e3012e04136b7ff8e5fb1fc613d4d80b8f3299bf8138b6b",
+      "size": 8626
+    },
+    {
+      "path": "src/banknifty_profiler/gui/static/live.js",
+      "sha256": "a098efab3a7640550f9f5f7bb870a7e7296e8f28766b805ed96c587a4c816274",
+      "size": 27528
+    },
+    {
+      "path": "src/banknifty_profiler/gui/static/live_page.template",
+      "sha256": "203f898868dcbe7984587dca8549490b8170fa21ff2dda9da2e6b53bb11694dd",
+      "size": 3958
+    },
+    {
+      "path": "src/banknifty_profiler/gui/static/style.css",
+      "sha256": "8edc4e25b5ca9b2ac17d23630b25f02875ee4ca3f9e81ce4c594bee5aaa49899",
+      "size": 3631
+    },
+    {
+      "path": "src/banknifty_profiler/inventory/engine.py",
+      "sha256": "543b20e86be6773541f355534a584f70b43a9fe6aa4d4609cc4169e57d33a493",
+      "size": 12721
+    },
+    {
+      "path": "src/banknifty_profiler/lifecycle/raw_engine.py",
+      "sha256": "b637fc9b2d4d7e98d038c40feb59ddbd8a406603f44d252aea1be5277500becb",
+      "size": 7331
+    },
+    {
+      "path": "src/banknifty_profiler/participation/raw_engine.py",
+      "sha256": "1e50183869b72e704adb4c3c1c3431bb6749a35d800b57784f2948065900456f",
+      "size": 17565
+    },
+    {
+      "path": "src/banknifty_profiler/participation/views.py",
+      "sha256": "366330aefaafabdb7f5b74009634ae1320b7db599d7189e8d9efe8ce41993d1d",
+      "size": 16229
+    },
+    {
+      "path": "src/banknifty_profiler/raw_io/reader.py",
+      "sha256": "9873d578e4238193067d4d883ae9f279d8a86afcb6d529d6eae182358e949d2e",
+      "size": 6636
+    },
+    {
+      "path": "src/banknifty_profiler/runtime/configuration.py",
+      "sha256": "cc20deff032b3af6ce3b732815a6f81e3227f4fc6f47915dc085f3d147577cbe",
+      "size": 1559
+    },
+    {
+      "path": "src/banknifty_profiler/runtime/timestamps.py",
+      "sha256": "794b730e0b1f3c8e6bc7714e6524d14eb049057c813f0e377e2a32f9bde352b7",
+      "size": 3256
+    },
+    {
+      "path": "src/banknifty_profiler/shadow/api.py",
+      "sha256": "7c582e8ca355daa19922caf52c7bebc09dcfdcfbbc7e2a7d47ecc81144a61d25",
+      "size": 35578
+    },
+    {
+      "path": "src/banknifty_profiler/shadow/contracts.py",
+      "sha256": "6c3042b432abd97f4ed84cd75db4d8db79f15978dcad90d4d9743d274fa6e867",
+      "size": 10829
+    },
+    {
+      "path": "src/banknifty_profiler/shadow/ingest.py",
+      "sha256": "fda915f26c82dd7169a228962ec542bd3ecb699547bfd0eeaa45a7b095b06b41",
+      "size": 60782
+    },
+    {
+      "path": "src/banknifty_profiler/shadow/ledger.py",
+      "sha256": "59510756983acb498707c904f0ccf2110e4f240b36b3e1089de4154e89ad95c4",
+      "size": 2094
+    },
+    {
+      "path": "src/banknifty_profiler/shadow/observation.py",
+      "sha256": "0d62b319a7ecd4f43511591956694325262499eb9ad4bff2a5e67327e9fd8fa5",
+      "size": 3438
+    },
+    {
+      "path": "src/banknifty_profiler/shadow/orchestrator.py",
+      "sha256": "ed1eb6b78f04b299f6088c94561ff965b25a7b60c2dea245f5cc9e3bdf1cf652",
+      "size": 76097
+    },
+    {
+      "path": "src/banknifty_profiler/shadow/state.py",
+      "sha256": "33c060435a7ae0aa217901eae55e555ef0d6adee0dc59f58d7e26af26c330931",
+      "size": 5928
+    },
+    {
+      "path": "src/banknifty_profiler/shadow/symbols.py",
+      "sha256": "5a04780a74b56472424c333b75304d3e1e9f474a2600c17bd4cf540a739d35fc",
+      "size": 10039
+    }
+  ],
+  "schema": "R6E1R_ENGINE_SOURCE_MANIFEST_V1"
+}

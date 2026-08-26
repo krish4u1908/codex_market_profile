@@ -53,7 +53,7 @@ def test_checkpoint_corruption_refused(tmp_path):
 def test_file_truncation_refused(tmp_path):
  data,state,c=setup(tmp_path);p=data/'raw/2099-01-01/events_09.jsonl';p.write_text(market(ts())+'\n');i=IncrementalJSONLIngestor(c);i.poll();p.write_text('');i.poll();assert i.ledgers['refusals_data_quality'].rows()[-1]['reason']=='FILE_TRUNCATED';i.close()
 def test_hourly_rotation_discovered(tmp_path):
- data,state,c=setup(tmp_path);a=data/'raw/2099-01-01/events_09.jsonl';b=data/'raw/2099-01-01/events_10.jsonl';a.write_text(market(ts())+'\n');b.write_text(market(ts(0.1),'NSE:BANKNIFTY26AUGFUT')+'\n');i=IncrementalJSONLIngestor(c);assert len(i.poll())==2;assert len(i.checkpoints)==2;i.close()
+ data,state,c=setup(tmp_path);a=data/'raw/2099-01-01/events_09.jsonl';b=data/'raw/2099-01-01/events_10.jsonl';a.write_text(market(ts(-0.2))+'\n');b.write_text(market(ts(-0.1),'NSE:BANKNIFTY26AUGFUT')+'\n');i=IncrementalJSONLIngestor(c);assert len(i.poll())==2;assert len(i.checkpoints)==2;i.close()
 def test_exact_and_fractional_timestamps(tmp_path):
  data,state,c=setup(tmp_path);p=data/'raw/2099-01-01/events_09.jsonl';p.write_text(market(ts(exact=True))+'\n'+market(ts(), 'NSE:BANKNIFTY26AUGFUT')+'\n');i=IncrementalJSONLIngestor(c);assert len(i.poll())==2;i.close()
 def test_naive_timestamp_refused(tmp_path):

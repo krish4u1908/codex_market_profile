@@ -111,7 +111,11 @@
       state.sessionInfo = sessionInfo;
       state.lastPoll = new Date();
       state.requestError = "";
-      setConnection(state.settings.session === "latest" ? "LIVE POLLING" : "HISTORICAL REPLAY", "available");
+      if (state.settings.session === "latest" && chart.stale_warning) {
+        setConnection("STALE DATA · LAST VALID CHART", "stale");
+      } else {
+        setConnection(state.settings.session === "latest" ? "LIVE POLLING" : "HISTORICAL REPLAY", "available");
+      }
       render();
     } catch (error) {
       state.requestError = String(error && error.message ? error.message : "DATA_UNAVAILABLE");
@@ -558,6 +562,8 @@
       dense_participation_total: state.participation?.count || 0,
       dense_participation_returned: state.participation?.returned_count || 0,
       projection_hash: state.chart?.projection_hash || null,
+      stale_warning: Boolean(state.chart?.stale_warning),
+      display_state: state.chart?.display_state || null,
       request_state: state.requestError || "AVAILABLE",
       read_only: true,
     };

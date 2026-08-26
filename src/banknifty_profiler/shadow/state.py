@@ -141,6 +141,7 @@ class ShadowState:
             "checkpoint": checkpoint,
             **causality,
             "runtime_source_identity_verified": source_identity_verified,
+            "manifest_verified": source_identity_verified,
         }
 
     def status(self):

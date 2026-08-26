@@ -16,6 +16,7 @@ from inspect import signature
 from urllib.parse import parse_qs, urlparse
 
 from banknifty_profiler.gui.adapter import PRODUCT_CLASSIFICATION, SESSIONS
+from banknifty_profiler.runtime.timestamps import parse_timestamp
 
 
 STATIC_ROOT = Path(__file__).resolve().parents[1] / "gui" / "static"
@@ -206,7 +207,8 @@ def _safe_availability(value: object) -> dict[str, object]:
         "overall_state", "market_display_enabled", "divergence_state",
         "participation_state", "available_horizons", "unavailable_horizons",
         "index_state", "futures_state", "futures_oi_state", "ce_state",
-        "pe_state", "calculation_timestamp",
+        "pe_state", "calculation_timestamp", "reference_timestamp",
+        "evidence_cutoff_timestamp",
     )
     for field in scalar_fields:
         if field in value:
@@ -242,12 +244,27 @@ def _safe_availability(value: object) -> dict[str, object]:
     safe.setdefault(
         "market_display_enabled", safe["overall_state"] != "NO_VALID_MARKET_DATA",
     )
+    receipt_ages = value.get("receipt_ages_seconds", {})
+    if isinstance(receipt_ages, Mapping):
+        safe["receipt_ages_seconds"] = {
+            key: _primitive(receipt_ages.get(key))
+            for key in ("INDEX", "FUTURES", "FUTURES_OI", "CE", "PE")
+            if key in receipt_ages
+        }
     return safe
 
 
 def _availability_for(
     state: object, snapshot: Mapping[str, object], gui: Mapping[str, object],
+    *, operational: bool = False,
 ) -> dict[str, object]:
+    if operational:
+        try:
+            current = state.availability()
+        except (AttributeError, TypeError, ValueError):
+            current = {}
+        if current:
+            return _safe_availability(current)
     value = snapshot.get("availability") or gui.get("availability")
     if value:
         return _safe_availability(value)
@@ -291,16 +308,128 @@ def _counts(value: object) -> dict[str, int | float]:
     return result
 
 
+def _timestamp(value: object):
+    if value in (None, ""):
+        return None
+    try:
+        return parse_timestamp(value, field_name="public audit clock")
+    except (TypeError, ValueError):
+        return None
+
+
+def _audit_measurements(
+    state: object, snapshot: Mapping[str, object],
+) -> dict[str, object]:
+    """Measure public audit counters from current/persisted runtime artifacts."""
+    orchestrator = getattr(state, "orchestrator", None)
+    causality_method = getattr(orchestrator, "causality_metrics", None)
+    try:
+        causality = causality_method() if callable(causality_method) else {}
+    except (TypeError, ValueError, OSError):
+        causality = {}
+    causality = causality if isinstance(causality, Mapping) else {}
+
+    ingestor = getattr(state, "ingestor", None)
+    ledgers = getattr(ingestor, "ledgers", {})
+    ledgers = ledgers if isinstance(ledgers, Mapping) else {}
+    duplicate_ids = 0
+    timestamp_backdating = 0
+    measured_ledger_rows = 0
+    identity_fields = ("event_id", "transition_id", "record_id", "episode_id")
+    evidence_fields = (
+        "effective_timestamp", "confirmation_timestamp",
+        "state_entry_timestamp", "observation_timestamp",
+        "receipt_timestamp", "evidence_receipt_timestamp",
+        "availability_timestamp", "control_effective_timestamp",
+        "index_receipt_timestamp", "futures_receipt_timestamp",
+    )
+    for ledger in ledgers.values():
+        try:
+            rows = ledger.rows() if hasattr(ledger, "rows") else []
+        except (OSError, ValueError, json.JSONDecodeError):
+            rows = []
+        identities = []
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            measured_ledger_rows += 1
+            identity = next(
+                (str(row[field]) for field in identity_fields if row.get(field)),
+                "",
+            )
+            if identity:
+                identities.append(identity)
+            publication = _timestamp(row.get("publication_timestamp"))
+            if publication is not None and any(
+                evidence is not None and evidence > publication
+                for evidence in (_timestamp(row.get(field)) for field in evidence_fields)
+            ):
+                timestamp_backdating += 1
+        duplicate_ids += len(identities) - len(set(identities))
+
+    calculation = _timestamp(
+        (snapshot.get("availability") or {}).get("calculation_timestamp")
+        if isinstance(snapshot.get("availability"), Mapping) else None
+    )
+    snapshot_identities = {
+        "episodes": "episode_id", "dependencies": "episode_id",
+        "lifecycle": "record_id", "participation_dense": "record_id",
+        "participation_transitions": "transition_id",
+        "participation_summaries": "episode_id",
+        "compatibility_snapshots": "episode_id",
+        "cross_layer_transitions": "transition_id",
+    }
+    measured_snapshot_rows = 0
+    for artifact, identity_field in snapshot_identities.items():
+        rows = snapshot.get(artifact, [])
+        if not isinstance(rows, list):
+            continue
+        identities = []
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            measured_snapshot_rows += 1
+            if row.get(identity_field):
+                identities.append(str(row[identity_field]))
+            if calculation is not None and any(
+                evidence is not None and evidence > calculation
+                for evidence in (_timestamp(row.get(field)) for field in evidence_fields)
+            ):
+                timestamp_backdating += 1
+        duplicate_ids += len(identities) - len(set(identities))
+
+    contract = getattr(ingestor, "c", {})
+    contract = contract if isinstance(contract, Mapping) else {}
+    open_audit = contract.get("runtime_source_open_audit", {})
+    prohibited_opens = (
+        _primitive(open_audit.get("prohibited_open_count"))
+        if isinstance(open_audit, Mapping) else None
+    )
+    return {
+        "future_joins": _primitive(causality.get("future_joins")),
+        "synchronization_tolerance_violations": _primitive(
+            causality.get("synchronization_tolerance_violations")
+        ),
+        "timestamp_backdating": timestamp_backdating,
+        "duplicate_analytical_ids": duplicate_ids,
+        "prohibited_runtime_opens": prohibited_opens,
+        "manifest_verified": bool(contract.get("engine_source_verified", False)),
+        "measured_ledger_rows": measured_ledger_rows,
+        "measured_snapshot_rows": measured_snapshot_rows,
+    }
+
+
 def _readiness(state: object) -> dict[str, object]:
     orchestrator = getattr(state, "orchestrator", None)
     snapshot = _snapshot(state)
-    availability = _availability_for(state, snapshot, _gui(snapshot))
-    if orchestrator is None:
-        try:
-            source = state.readiness()
-        except (AttributeError, TypeError, ValueError):
-            source = {}
-    else:
+    availability = _availability_for(
+        state, snapshot, _gui(snapshot), operational=True,
+    )
+    try:
+        source = state.readiness()
+    except (AttributeError, TypeError, ValueError):
+        source = {}
+    if (not isinstance(source, Mapping) or not source) and orchestrator is not None:
         ingestor = getattr(state, "ingestor", None)
         checkpoint_health = getattr(ingestor, "checkpoint_health", None)
         checkpoint = checkpoint_health() if callable(checkpoint_health) else {"valid": True}
@@ -316,7 +445,7 @@ def _readiness(state: object) -> dict[str, object]:
             reasons.append("FUTURE_JOIN_DETECTED")
         if causality.get("synchronization_tolerance_violations"):
             reasons.append("SYNCHRONIZATION_TOLERANCE_VIOLATION")
-        source_verified = bool(config.get("engine_source_verified", True))
+        source_verified = bool(config.get("engine_source_verified", False))
         if not source_verified:
             reasons.append("ENGINE_SOURCE_IDENTITY_UNVERIFIED")
         source = {
@@ -325,6 +454,9 @@ def _readiness(state: object) -> dict[str, object]:
             "configuration_hash": config.get("configuration_hash", ""),
             "checkpoint_valid": bool(checkpoint.get("valid", False)),
             "future_joins": int(causality.get("future_joins", 0)),
+            "synchronization_tolerance_violations": int(
+                causality.get("synchronization_tolerance_violations", 0)
+            ),
             "manifest_verified": source_verified,
         }
     source = source if isinstance(source, Mapping) else {}
@@ -338,7 +470,12 @@ def _readiness(state: object) -> dict[str, object]:
     index_state = availability.get("index_state")
     futures_state = availability.get("futures_state")
     receipts = _latest_receipts(state)
-    market_seen = bool(receipts.get("INDEX") or receipts.get("FUTURES"))
+    id_layer = availability.get("layers", {}).get("ID", {})
+    market_seen = bool(
+        receipts.get("INDEX")
+        or receipts.get("FUTURES")
+        or (isinstance(id_layer, Mapping) and id_layer.get("state") == "STALE_DATA")
+    )
     if index_state not in (None, "AVAILABLE") or futures_state not in (None, "AVAILABLE"):
         reasons.append("STALE_DATA" if market_seen else "REQUIRED_MARKET_INPUTS_UNAVAILABLE")
     if availability.get("overall_state") == "NO_VALID_MARKET_DATA":
@@ -352,10 +489,16 @@ def _readiness(state: object) -> dict[str, object]:
     }
     for field in (
         "engine_hash", "configuration_hash", "checkpoint_valid",
-        "future_joins", "manifest_verified",
+        "future_joins", "synchronization_tolerance_violations",
+        "manifest_verified",
     ):
-        if field in source:
-            result[field] = _primitive(source[field])
+        source_field = (
+            "runtime_source_identity_verified"
+            if field == "manifest_verified" and field not in source
+            else field
+        )
+        if source_field in source:
+            result[field] = _primitive(source[source_field])
     return result
 
 
@@ -397,14 +540,30 @@ def _material_resolution(rows: Iterable[Mapping[str, object]]) -> list[dict[str,
     return result
 
 
-def _chart(state: object, snapshot: Mapping[str, object], gui: Mapping[str, object]) -> dict[str, object]:
+def _chart(
+    state: object,
+    snapshot: Mapping[str, object],
+    gui: Mapping[str, object],
+    *,
+    operational: bool,
+) -> dict[str, object]:
     price = _unpack(gui.get("price", {}))
     inventory = _artifact_rows(snapshot, gui, "inventory")
     episodes = _artifact_rows(snapshot, gui, "episodes")
     lifecycle = _artifact_rows(snapshot, gui, "lifecycle")
     resolution = _material_resolution(_artifact_rows(snapshot, gui, "resolution_mechanisms"))
-    availability = _availability_for(state, snapshot, gui)
+    availability = _availability_for(
+        state, snapshot, gui, operational=operational,
+    )
     date = _session(snapshot, gui)
+    stale_warning = operational and (
+        availability.get("divergence_state") == "STALE_DATA"
+        or availability.get("index_state") not in (None, "AVAILABLE")
+        or availability.get("futures_state") not in (None, "AVAILABLE")
+    )
+    receipt_ages = availability.get("receipt_ages_seconds")
+    if not isinstance(receipt_ages, Mapping) or not receipt_ages:
+        receipt_ages = _ages(state) if operational else {}
     return {
         "schema": "R6E1R_SANITIZED_CHART_V1",
         "classification": _classification(state),
@@ -415,7 +574,13 @@ def _chart(state: object, snapshot: Mapping[str, object], gui: Mapping[str, obje
         },
         "as_of": availability.get("calculation_timestamp") or "",
         "availability": availability,
-        "receipt_ages_seconds": _ages(state),
+        "stale_warning": bool(stale_warning),
+        "warning_reason": "STALE_DATA" if stale_warning else "",
+        "display_state": (
+            "LAST_VALID_CHART_WITH_STALE_WARNING"
+            if stale_warning else "CURRENT_OR_REPLAY_PROJECTION"
+        ),
+        "receipt_ages_seconds": dict(receipt_ages),
         "latest_receipts": _latest_receipts(state),
         "price": _pack(price, PRICE_FIELDS),
         "inventory": _pack(inventory, INVENTORY_FIELDS),
@@ -441,6 +606,15 @@ def _selected_session(query: Mapping[str, list[str]]) -> tuple[str | None, bool]
 
 def _available_replays(state: object) -> list[str]:
     orchestrator = getattr(state, "orchestrator", None)
+    outputs = getattr(orchestrator, "_outputs", None)
+    if not isinstance(outputs, Mapping):
+        outputs = getattr(orchestrator, "outputs", None)
+    if isinstance(outputs, Mapping):
+        return [
+            date for date in SESSIONS
+            if isinstance(outputs.get(date), Mapping)
+            and str(outputs[date].get("session_date", "")) == date
+        ]
     snapshot_all = getattr(orchestrator, "snapshot_all", None)
     if not callable(snapshot_all):
         return []
@@ -449,7 +623,13 @@ def _available_replays(state: object) -> list[str]:
         values = snapshot_all(**({"flush_dirty": False} if "flush_dirty" in parameters else {}))
     except (TypeError, ValueError, OSError):
         return []
-    return [date for date in SESSIONS if isinstance(values, Mapping) and date in values]
+    return [
+        date for date in SESSIONS
+        if isinstance(values, Mapping)
+        and isinstance(values.get(date), Mapping)
+        and str(values[date].get("session_date", "")) == date
+        and bool(values[date].get("gui_payload"))
+    ]
 
 
 def _response_for(state: object, path: str, query: Mapping[str, list[str]]) -> tuple[dict[str, object], int]:
@@ -467,10 +647,18 @@ def _response_for(state: object, path: str, query: Mapping[str, list[str]]) -> t
     selected, invalid_session = _selected_session(query)
     if invalid_session:
         return {"error": "UNVERIFIED_SESSION"}, 400
+    if selected and selected not in _available_replays(state):
+        return {
+            "error": "REPLAY_SESSION_UNAVAILABLE",
+            "session_date": selected,
+        }, 404
     snapshot = _snapshot(state, selected)
     gui = _gui(snapshot)
     session = _session(snapshot, gui)
-    availability = _availability_for(state, snapshot, gui)
+    operational = selected is None
+    availability = _availability_for(
+        state, snapshot, gui, operational=operational,
+    )
 
     if path == "/api/status":
         analytical_counts = _counts(snapshot.get("counts", {}))
@@ -506,7 +694,9 @@ def _response_for(state: object, path: str, query: Mapping[str, list[str]]) -> t
             ],
         }, 200
     if path == "/api/chart":
-        return _chart(state, snapshot, gui), 200
+        return _chart(
+            state, snapshot, gui, operational=operational,
+        ), 200
     if path == "/api/availability":
         return {
             "session_date": session,
@@ -569,12 +759,14 @@ def _response_for(state: object, path: str, query: Mapping[str, list[str]]) -> t
             "event_id", "session_date", "effective_timestamp",
             "publication_timestamp", "status", "reason",
         )
+        measurements = _audit_measurements(state, snapshot)
         return {
             "session_date": session,
             "classification": _classification(state),
             "refusals": [_project(row, allowed) for row in rows[-limit:]],
             "refusal_count": len(rows),
-            "future_joins": 0,
+            **measurements,
+            "measurement_source": "PERSISTED_AND_CURRENT_RUNTIME_ARTIFACTS",
             "lineage_redacted": True,
             "filesystem_identifiers_redacted": True,
         }, 200

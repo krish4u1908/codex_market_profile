@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 import runpy
@@ -12,6 +13,12 @@ import pytest
 
 from banknifty_profiler.gui.adapter import PRODUCT_CLASSIFICATION, SESSIONS
 from banknifty_profiler.shadow.api import create_server
+from banknifty_profiler.shadow.contracts import (
+    CLASSIFICATION,
+    engine_hash,
+    engine_source_inventory,
+    verify_engine_source_manifest,
+)
 
 
 class Ledger:
@@ -94,6 +101,11 @@ class Orchestrator:
     def __init__(self, latest):
         self.outputs = {date: snapshot(date) for date in SESSIONS}
         self.latest = latest
+        self.causality = {
+            "valid_basis_pairs": 2,
+            "future_joins": 0,
+            "synchronization_tolerance_violations": 0,
+        }
 
     def snapshot(self, date=None, *, flush_dirty=False):
         assert flush_dirty is False
@@ -103,9 +115,18 @@ class Orchestrator:
         assert flush_dirty is False
         return self.outputs
 
+    def causality_metrics(self):
+        return dict(self.causality)
+
 
 class Ingestor:
-    c = {"config": {"classification": PRODUCT_CLASSIFICATION}}
+    c = {
+        "config": {"classification": PRODUCT_CLASSIFICATION},
+        "engine_hash": "b" * 64,
+        "configuration_hash": "c" * 64,
+        "engine_source_verified": True,
+        "runtime_source_open_audit": {"prohibited_open_count": 0},
+    }
     metrics = {"polls": 10, "bytes": 2000}
     latest = {
         "INDEX": "2026-08-19T10:00:01+05:30",
@@ -114,6 +135,9 @@ class Ingestor:
         "raw_path": "/opt/private/raw.jsonl",
     }
     ledgers = {"refusals_data_quality": Ledger()}
+
+    def checkpoint_health(self):
+        return {"valid": True}
 
 
 class State:
@@ -137,7 +161,8 @@ class State:
         return {
             "ready": True, "reasons": [], "engine_hash": "b" * 64,
             "configuration_hash": "c" * 64, "checkpoint_valid": True,
-            "future_joins": 0, "manifest_verified": True,
+            "future_joins": 0, "synchronization_tolerance_violations": 0,
+            "manifest_verified": True,
         }
 
 
@@ -209,6 +234,60 @@ def test_verified_replay_selection_and_arbitrary_date_refusal(server):
     assert json.loads(body)["error"] == "UNVERIFIED_SESSION"
 
 
+def test_verified_but_absent_replay_is_explicitly_unavailable():
+    value = State()
+    missing = SESSIONS[0]
+    del value.orchestrator.outputs[missing]
+    service = create_server(value, "127.0.0.1", 0)
+    thread = threading.Thread(target=service.serve_forever)
+    thread.start()
+    base = f"http://127.0.0.1:{service.server_address[1]}"
+    try:
+        for endpoint in ("session", "chart", "inventory"):
+            status, _, body = request(
+                base, f"/api/{endpoint}?date={missing}"
+            )
+            assert status == 404
+            assert json.loads(body)["error"] == "REPLAY_SESSION_UNAVAILABLE"
+    finally:
+        service.shutdown(); thread.join(); service.server_close()
+
+
+def test_live_latest_uses_wall_clock_staleness_but_replay_remains_sealed():
+    class OperationallyStale(State):
+        def availability(self):
+            stale = availability("STALE_OR_MISSING", "STALE_OR_MISSING")
+            stale["overall_state"] = "STALE_PARTIAL"
+            stale["divergence_state"] = "STALE_DATA"
+            stale["layers"]["ID"] = {
+                "state": "STALE_DATA", "reason": "MARKET_INPUT_STALE_OR_MISSING",
+            }
+            stale["receipt_ages_seconds"] = {"INDEX": 600, "FUTURES": 600}
+            return stale
+
+    value = OperationallyStale()
+    service = create_server(value, "127.0.0.1", 0)
+    thread = threading.Thread(target=service.serve_forever)
+    thread.start()
+    base = f"http://127.0.0.1:{service.server_address[1]}"
+    try:
+        status, _, body = request(base, "/api/readiness")
+        assert status == 503
+        assert "STALE_DATA" in json.loads(body)["reasons"]
+        latest = json.loads(request(base, "/api/chart")[2])
+        assert latest["stale_warning"] is True
+        assert latest["warning_reason"] == "STALE_DATA"
+        assert latest["display_state"] == "LAST_VALID_CHART_WITH_STALE_WARNING"
+        assert len(latest["price"]["rows"]) == 2
+        replay = json.loads(
+            request(base, f"/api/chart?date={SESSIONS[-1]}")[2]
+        )
+        assert replay["stale_warning"] is False
+        assert replay["availability"]["index_state"] == "AVAILABLE"
+    finally:
+        service.shutdown(); thread.join(); service.server_close()
+
+
 def test_health_stays_up_while_stale_readiness_is_503():
     stale = availability("STALE_OR_MISSING", "STALE_OR_MISSING")
     value = State(snapshot(state=stale))
@@ -258,6 +337,7 @@ def test_live_gui_has_persistent_master_child_controls_and_no_analytics():
     assert "synchronization_tolerance_ms" not in source
     assert "SUCCESS" not in page + source and "FAILURE" not in page + source
     assert page.index('data-market="index"') < page.index('data-market="futures"')
+    assert "STALE DATA · LAST VALID CHART" in source
 
 
 def test_offline_replay_also_persists_toggle_selection():
@@ -304,9 +384,13 @@ def test_repeated_api_reads_never_trigger_analytical_flush():
 def test_external_gateway_query_allowlist_is_exact():
     gateway = runpy.run_path("deploy/r6e1r/read_only_gateway.py")
     safe_query = gateway["safe_query"]
-    assert safe_query("/api/chart", "date=2026-08-19&limit=100") == "date=2026-08-19&limit=100"
+    assert safe_query("/api/chart", "date=2026-08-19") == "date=2026-08-19"
+    assert safe_query("/api/inventory", "limit=100&date=2026-08-19") == "date=2026-08-19&limit=100"
     assert safe_query("/api/chart", "date=2026-08-17") is None
     assert safe_query("/api/chart", "target=http://example.invalid") is None
+    assert safe_query("/api/chart", "target=") is None
+    assert safe_query("/api/chart", "date=2026-08-19&date=2026-08-20") is None
+    assert safe_query("/api/chart", "date=2026-08-19&limit=100") is None
     assert safe_query("/assets/live.js", "date=2026-08-19") is None
     assert "/api/order" not in gateway["ROUTES"]
 
@@ -319,7 +403,7 @@ def test_external_gateway_proxies_only_allowlisted_get_and_head(server):
     base = f"http://127.0.0.1:{gateway.server_address[1]}"
     try:
         assert request(base, "/")[0] == 200
-        assert request(base, "/api/chart?date=2026-08-19&limit=10")[0] == 200
+        assert request(base, "/api/chart?date=2026-08-19")[0] == 200
         assert request(base, "/api/chart?upstream=http://example.invalid")[0] == 404
         assert request(base, "/api/order")[0] == 404
         status, _, body = request(base, "/api/health", "HEAD")
@@ -327,6 +411,36 @@ def test_external_gateway_proxies_only_allowlisted_get_and_head(server):
         assert request(base, "/api/status", "POST")[0] == 405
     finally:
         gateway.shutdown(); thread.join(); gateway.server_close()
+
+
+def test_gateway_logs_only_normalized_metadata(server, capsys):
+    module = runpy.run_path("deploy/r6e1r/read_only_gateway.py")
+    gateway = ThreadingHTTPServer(
+        ("127.0.0.1", 0), module["handler_for"](server)
+    )
+    thread = threading.Thread(target=gateway.serve_forever)
+    thread.start()
+    base = f"http://127.0.0.1:{gateway.server_address[1]}"
+    attacker_value = "do-not-log-secret-value"
+    try:
+        assert request(
+            base, f"/api/chart?target={attacker_value}"
+        )[0] == 404
+        assert request(base, "/api/inventory?date=2026-08-19&limit=10")[0] == 200
+    finally:
+        gateway.shutdown(); thread.join(); gateway.server_close()
+    output = capsys.readouterr().out
+    assert attacker_value not in output
+    assert "target" not in output
+    records = [json.loads(line) for line in output.splitlines() if line]
+    assert records
+    assert all(set(record) == {
+        "component", "method", "route", "query_keys", "status",
+    } for record in records)
+    assert records[0]["route"] == "/api/chart"
+    assert records[0]["query_keys"] == []
+    assert records[0]["status"] == 404
+    assert records[1]["query_keys"] == ["date", "limit"]
 
 
 def test_service_templates_keep_backend_local_and_ports_isolated():
@@ -337,4 +451,79 @@ def test_service_templates_keep_backend_local_and_ports_isolated():
     assert "--bind 127.0.0.1 --port 18805" in backend
     assert "--port 8805 --backend http://127.0.0.1:18805" in gateway
     assert "8803" not in combined and "8804" not in combined
-    assert ".env" not in combined and "Environment=" not in combined
+    assert ".env" not in combined
+    assert not any(
+        line.startswith("Environment=") for line in combined.splitlines()
+    )
+
+
+def test_audit_reports_measured_nonzero_runtime_values():
+    class AuditLedger:
+        def rows(self):
+            return [
+                {
+                    "event_id": "DUPLICATE", "session_date": "2026-08-19",
+                    "effective_timestamp": "2026-08-19T10:00:02+05:30",
+                    "publication_timestamp": "2026-08-19T10:00:01+05:30",
+                },
+                {
+                    "event_id": "DUPLICATE", "session_date": "2026-08-19",
+                    "effective_timestamp": "2026-08-19T10:00:00+05:30",
+                    "publication_timestamp": "2026-08-19T10:00:01+05:30",
+                },
+            ]
+
+    value = State()
+    value.orchestrator.causality = {
+        "valid_basis_pairs": 1,
+        "future_joins": 2,
+        "synchronization_tolerance_violations": 3,
+    }
+    value.ingestor.ledgers = {"material": AuditLedger()}
+    value.ingestor.c = {
+        **value.ingestor.c,
+        "engine_source_verified": False,
+        "runtime_source_open_audit": {"prohibited_open_count": 4},
+    }
+    service = create_server(value, "127.0.0.1", 0)
+    thread = threading.Thread(target=service.serve_forever)
+    thread.start()
+    base = f"http://127.0.0.1:{service.server_address[1]}"
+    try:
+        audit = json.loads(request(base, "/api/audit")[2])
+        assert audit["future_joins"] == 2
+        assert audit["synchronization_tolerance_violations"] == 3
+        assert audit["timestamp_backdating"] == 1
+        assert audit["duplicate_analytical_ids"] == 1
+        assert audit["prohibited_runtime_opens"] == 4
+        assert audit["manifest_verified"] is False
+        assert audit["measured_ledger_rows"] == 2
+    finally:
+        service.shutdown(); thread.join(); service.server_close()
+
+
+def test_expected_source_manifest_detects_current_source_mutation(tmp_path):
+    (tmp_path / "a.py").write_text("A\n")
+    (tmp_path / "b.py").write_text("B\n")
+    allowlist = ("a.py", "b.py")
+    inventory = engine_source_inventory(tmp_path, allowlist)
+    manifest = {
+        "schema": "R6E1R_ENGINE_SOURCE_MANIFEST_V1",
+        "classification": CLASSIFICATION,
+        "allowlist": list(allowlist),
+        "file_count": len(inventory),
+        "files": inventory,
+        "engine_hash": engine_hash(tmp_path, allowlist),
+    }
+    path = tmp_path / "manifest.json"
+    payload = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
+    path.write_bytes(payload)
+    expected = hashlib.sha256(payload).hexdigest()
+    assert verify_engine_source_manifest(
+        tmp_path, "manifest.json", expected, allowlist,
+    )["verified"] is True
+    (tmp_path / "b.py").write_text("MUTATED\n")
+    with pytest.raises(ValueError, match="current engine sources"):
+        verify_engine_source_manifest(
+            tmp_path, "manifest.json", expected, allowlist,
+        )

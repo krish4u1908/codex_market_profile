@@ -36,3 +36,39 @@ RESULT: PASS; 79 passed in 48.82s; zero browser console/page errors
 
 2026-08-26 GUI screenshot inspection
 RESULT: PASS; 3 PNG files, each 1600x1705; complete horizons, Intraday-only degradation, live/latest operational projection
+
+2026-08-26 focused manifest A/B v2
+RESULT: REPAIR REQUIRED; elapsed 3m11.34s; max RSS 1,063,876 KiB; all core analytics/causality matched; 25 required live Intraday rows and 25 corresponding cross-layer rows absent from legacy batch eligibility output
+
+2026-08-26 callback/ingestion durability regression
+RESULT: PASS; 69 passed in 2.77s; git diff --check PASS
+
+2026-08-26 post-extraction authoritative August 19 source rehash
+RESULT: PASS; 8/8 SHA-256 values equal manifest; elapsed 1.08s; max RSS 3,712 KiB; sample manifest SHA-256 5bf62dda9b6613e2d6b3000c084a723133c5af01c7e4cb5acff84af84fb610e2
+
+2026-08-26 focused manifest A/B v4 rehearsal
+RESULT: RE-RUN REQUIRED; 3m49.54s; max RSS 1,113,236 KiB; every analytical component and causality invariant matches under current comparator, but the running process loaded a pre-edit GUI comparator and reported one stale GUI comparison failure
+
+2026-08-26 rootless gateway namespace capability probe
+RESULT: PASS; bubblewrap user/PID/IPC/UTS/cgroup namespaces; collector=false; deployment_state=false; user_runtime=false; only namespace PIDs 1/2 visible; gateway script=true
+
+2026-08-26 external R6C2R/R6D package-manifest verification
+RESULT: PASS; R6C2R 74/74 files; R6D 40/40 files; elapsed 0.96s; max RSS 18,668 KiB
+
+2026-08-26 final runtime source allowlist verification
+RESULT: PASS; manifest cc92e8a07c4a78e0b0aa8ecbe0114ebde08da2c73892875c2c333cd4e5ef9481; engine 200cd84e3e26049494653b1f349a9c87938f9c0c731c59718a80a4df128e0629; 26/26 files; prohibited opens 0
+
+2026-08-26 systemd/bubblewrap deployment-package verification
+RESULT: PASS; systemd-analyze user-unit verification; exact transient user-systemd ExecStart and ExecStartPost probes; deployment 17/17 tests; consolidated operational/API/retention 45/45 tests; no bind or service action
+
+2026-08-26 final-engine focused manifest A/B v8
+RESULT: PASS; exit 0; 21/21 components exact; differences 0; future joins 0; synchronization violations 0; backdating 0; duplicate analytical IDs 0; prohibited opens 0; source mutations 0; wall 3m58.44s; parent max RSS 1,121,076 KiB; child max RSS 696,360 KiB; output /tmp/r6e1r_focused_manifest_ab_v8
+
+2026-08-26 complete repository pytest (environment-incomplete first invocation)
+RESULT: INVOCATION FAILURE RETAINED; 261 passed, 8 failed, 20 skipped; missing explicit PYTHON and sealed R6C0I/R6B3 evidence-root environment; no test changed, skipped, or reclassified
+
+2026-08-26 complete repository pytest with required sealed evidence inputs
+RESULT: PASS; 289 passed, 0 failed, 0 skipped in 62.29s; max RSS 663,256 KiB
+
+2026-08-26 live browser acceptance screenshot refresh
+RESULT: PASS; 3/3 screenshots regenerated and visually inspected; complete=edd2df7bebee95c2a51d4e0f316881170f680a9b1c6d45d7befc374d1ddd8e53; intraday=bd738cbaabe086d39fa37d36f6069681e03d853b9009e2e2378bf623eb3c0ebe; latest=2b9ddf8c7e79264d772470bdd3637440e307f0e3a3aa8277d17620a2281264ba

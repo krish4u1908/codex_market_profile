@@ -1,31 +1,57 @@
 [Unit]
-Description=R6E1R localhost analytical shadow
-After=network-online.target
-Wants=network-online.target
+Description=R6E1R localhost analytical live shadow (user service)
+Documentation=file:///opt/banknifty/repositories/banknifty-market-profiler/deploy/r6e1r/README.md
+StartLimitIntervalSec=5min
+StartLimitBurst=10
 
 [Service]
 Type=simple
-User=banknifty-profiler
-Group=banknifty-profiler
 WorkingDirectory=/opt/banknifty/repositories/banknifty-market-profiler
-ExecStart=/opt/banknifty/research/.venv/bin/python -B scripts/run_r6e_shadow.py --data-root /opt/banknifty-collector/data-prod-v4 --state-root /var/lib/banknifty-profiler/r6e1r --config configs/r6e_shadow.json --bind 127.0.0.1 --port 18805 --mode shadow --activation /etc/banknifty-profiler/r6e1r-activation.json
+UMask=0077
+UnsetEnvironment=SSH_AUTH_SOCK DBUS_SESSION_BUS_ADDRESS
+KeyringMode=private
+ExecStartPre=/usr/bin/test -r /opt/banknifty-collector/data-prod-v4/raw
+ExecStartPre=/usr/bin/test -r /opt/banknifty-collector/data-prod-v4/oi
+ExecStartPre=/usr/bin/test -w /opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow/state
+ExecStartPre=/usr/bin/test -r /opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow/config/r6e1r-runtime-config.json
+ExecStartPre=/usr/bin/test -r /opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow/config/r6e1r-activation.json
+ExecStart=/usr/bin/env PYTHONPATH=/opt/banknifty/repositories/banknifty-market-profiler/src PYTHONUNBUFFERED=1 /opt/banknifty/research/.venv/bin/python -B scripts/run_r6e_shadow.py --data-root /opt/banknifty-collector/data-prod-v4 --state-root /opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow/state --config /opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow/config/r6e1r-runtime-config.json --bind 127.0.0.1 --port 18805 --mode shadow --activation /opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow/config/r6e1r-activation.json
+ExecStartPost=/opt/banknifty/research/.venv/bin/python -B deploy/r6e1r/health_readiness_check.py --base-url http://127.0.0.1:18805 --health-only --attempts 30 --delay-seconds 1
 Restart=on-failure
 RestartSec=5s
-TimeoutStopSec=45s
+TimeoutStartSec=75s
+TimeoutStopSec=60s
+KillSignal=SIGTERM
 MemoryHigh=5G
 MemoryMax=6G
+MemorySwapMax=1G
 CPUQuota=200%
+TasksMax=512
+LimitNOFILE=65536
+OOMPolicy=stop
 NoNewPrivileges=true
 PrivateTmp=true
+PrivateDevices=true
 ProtectHome=true
 ProtectSystem=strict
-ReadOnlyPaths=/opt/banknifty-collector/data-prod-v4 /opt/banknifty/repositories/banknifty-market-profiler /etc/banknifty-profiler
-ReadWritePaths=/var/lib/banknifty-profiler/r6e1r
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+ReadOnlyPaths=/opt/banknifty-collector/data-prod-v4 /opt/banknifty/repositories/banknifty-market-profiler /opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow/config
+ReadWritePaths=/opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow/state
 RestrictSUIDSGID=true
+RestrictNamespaces=true
 LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=r6e1r-shadow
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=2000
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

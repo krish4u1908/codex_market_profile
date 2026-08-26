@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import json
+import os
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -103,6 +104,140 @@ def test_market_envelope_is_lossless_and_files_merge_by_receipt(tmp_path):
     assert "access_token" not in rows[1].canonical_payload
     assert "secret" not in rows[1].canonical_payload
     assert rows[0]["observation_id"] == rows[0].event_id
+    ingestor.close()
+
+
+def test_projection_padding_advances_physical_row_without_refusal(tmp_path):
+    data, contract = _contract(tmp_path)
+    receipt = _timestamp(-0.1)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    valid = (_market(receipt, CANONICAL_INDEX_SYMBOL, 57_100.45, 98_765) + "\n").encode()
+    malformed = b'{"received_at":\n'
+    payload = b"\n \t\r\n" + valid + malformed
+    path.write_bytes(payload)
+
+    ingestor = IncrementalJSONLIngestor(contract)
+    rows = ingestor.poll()
+
+    assert len(rows) == 1
+    assert rows[0].source_row_number == 3
+    assert ingestor.metrics["projection_padding_lines"] == 2
+    assert ingestor.metrics["malformed"] == 1
+    refusals = ingestor.ledgers["refusals_data_quality"].rows()
+    assert [row["reason"] for row in refusals] == ["MALFORMED_JSONL"]
+    assert len(ingestor.ledgers["normalized_raw_events"].rows()) == 1
+    checkpoint = ingestor.checkpoints[str(path.relative_to(data))]
+    assert checkpoint["offset"] == len(payload)
+    assert checkpoint["row"] == 4
+    assert ingestor.db.execute("select count(*) from observation_outbox").fetchone()[0] == 1
+    ingestor.close()
+
+
+def test_same_inode_same_size_rewrite_is_refused_replayably(tmp_path):
+    data, contract = _contract(tmp_path)
+    receipt = _timestamp(-0.2)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    original = (_market(receipt, CANONICAL_INDEX_SYMBOL, 57_100, 100) + "\n").encode()
+    replacement = (_market(receipt, CANONICAL_INDEX_SYMBOL, 57_101, 100) + "\n").encode()
+    assert len(original) == len(replacement)
+    path.write_bytes(original)
+
+    ingestor = IncrementalJSONLIngestor(contract, lambda _row: None)
+    assert len(ingestor.poll()) == 1
+    checkpoint = dict(ingestor.checkpoints[str(path.relative_to(data))])
+    inode = path.stat().st_ino
+    with path.open("r+b") as handle:
+        handle.write(replacement)
+        handle.flush()
+        os.fsync(handle.fileno())
+    if path.stat().st_mtime_ns == checkpoint["mtime_ns_at_commit"]:
+        os.utime(
+            path,
+            ns=(path.stat().st_atime_ns, checkpoint["mtime_ns_at_commit"] + 1),
+        )
+    assert path.stat().st_ino == inode
+    assert path.stat().st_size == checkpoint["offset"]
+
+    assert ingestor.poll(source_paths=[path]) == []
+    assert ingestor.checkpoints[str(path.relative_to(data))]["offset"] == checkpoint["offset"]
+    assert any(
+        row["reason"] == "FILE_REPLACED_IN_PLACE"
+        for row in ingestor.ledgers["refusals_data_quality"].rows()
+    )
+    ingestor.close()
+
+    restarted = IncrementalJSONLIngestor(contract)
+    assert restarted.poll(source_paths=[path]) == []
+    assert len(restarted.ledgers["normalized_raw_events"].rows()) == 1
+    restarted.close()
+
+
+def test_same_inode_committed_prefix_rewrite_with_growth_is_refused(tmp_path):
+    data, contract = _contract(tmp_path)
+    receipt = _timestamp(-0.3)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    original = (_market(receipt, CANONICAL_INDEX_SYMBOL, 57_100, 100) + "\n").encode()
+    replacement = (_market(receipt, CANONICAL_INDEX_SYMBOL, 57_101, 100) + "\n").encode()
+    appended = (
+        _market(_timestamp(-0.1), "NSE:BANKNIFTY26AUGFUT", 57_125, 200) + "\n"
+    ).encode()
+    assert len(original) == len(replacement)
+    path.write_bytes(original)
+
+    ingestor = IncrementalJSONLIngestor(contract, lambda _row: None)
+    assert len(ingestor.poll(source_paths=[path])) == 1
+    checkpoint = dict(ingestor.checkpoints[str(path.relative_to(data))])
+    inode = path.stat().st_ino
+    with path.open("r+b") as handle:
+        handle.seek(0)
+        handle.write(replacement)
+        handle.seek(0, os.SEEK_END)
+        handle.write(appended)
+        handle.flush()
+        os.fsync(handle.fileno())
+    assert path.stat().st_ino == inode
+    assert path.stat().st_size > checkpoint["offset"]
+
+    assert ingestor.poll(source_paths=[path]) == []
+    assert ingestor.checkpoints[str(path.relative_to(data))]["offset"] == checkpoint["offset"]
+    assert len(ingestor.ledgers["normalized_raw_events"].rows()) == 1
+    assert any(
+        row["reason"] == "FILE_REPLACED_IN_PLACE"
+        for row in ingestor.ledgers["refusals_data_quality"].rows()
+    )
+    ingestor.close()
+
+    restarted = IncrementalJSONLIngestor(contract)
+    assert restarted.poll(source_paths=[path]) == []
+    assert len(restarted.ledgers["normalized_raw_events"].rows()) == 1
+    restarted.close()
+
+
+def test_future_receipt_is_strictly_refused_and_publication_never_backdates(tmp_path):
+    data, contract = _contract(tmp_path)
+    future_path = data / "raw/2099-01-01/events_09.jsonl"
+    future_path.write_text(
+        _market(_timestamp(1.0), CANONICAL_INDEX_SYMBOL, 57_100, 100) + "\n"
+    )
+    ingestor = IncrementalJSONLIngestor(contract)
+
+    assert ingestor.poll(source_paths=[future_path]) == []
+    assert not ingestor.ledgers["normalized_raw_events"].rows()
+    assert any(
+        row["reason"] == "TIMESTAMP_REFUSED"
+        and "future live receipt timestamp" in row["detail"]
+        for row in ingestor.ledgers["refusals_data_quality"].rows()
+    )
+
+    accepted_path = data / "raw/2099-01-01/events_10.jsonl"
+    accepted_path.write_text(
+        _market(_timestamp(-0.1), CANONICAL_INDEX_SYMBOL, 57_101, 101) + "\n"
+    )
+    rows = ingestor.poll(source_paths=[accepted_path])
+    assert len(rows) == 1
+    assert datetime.fromisoformat(rows[0].publication_timestamp) >= datetime.fromisoformat(
+        rows[0].receipt_timestamp
+    )
     ingestor.close()
 
 

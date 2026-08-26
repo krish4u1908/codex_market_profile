@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import datetime
 import hashlib
 import json
 import math
@@ -48,6 +48,27 @@ def now() -> str:
 def event_id(kind: str, *parts: object) -> str:
     digest = hashlib.sha256("|".join(map(str, parts)).encode()).hexdigest()[:24].upper()
     return f"{kind}-{digest}"
+
+
+def _committed_prefix_fingerprint(path: Path, offset: int) -> str:
+    """Bounded fingerprint for an already committed immutable prefix.
+
+    The persisted mtime detects ordinary same-inode rewrites.  Head/tail
+    content makes that identity independently content-backed without rescanning
+    a multi-GB growing file on every poll.
+    """
+    window = 4096
+    digest = hashlib.sha256()
+    digest.update(str(offset).encode())
+    if offset <= 0:
+        return digest.hexdigest()
+    with path.open("rb") as handle:
+        head = handle.read(min(window, offset))
+        digest.update(head)
+        if offset > window:
+            handle.seek(max(0, offset - window))
+            digest.update(handle.read(min(window, offset)))
+    return digest.hexdigest()
 
 
 def _number(value: object) -> int | float | None:
@@ -177,15 +198,31 @@ class IncrementalJSONLIngestor:
             "create table if not exists file_checkpoint("
             "source_file text primary key,offset integer not null,row_number integer not null,"
             "identity text not null,size_at_commit integer not null,updated_at text not null,"
-            "frontier text)"
+            "frontier text,prefix_fingerprint text not null default '',"
+            "mtime_ns_at_commit integer not null default 0)"
         )
+        checkpoint_columns = {
+            row[1] for row in self.db.execute("pragma table_info(file_checkpoint)")
+        }
+        if "prefix_fingerprint" not in checkpoint_columns:
+            self.db.execute(
+                "alter table file_checkpoint add column prefix_fingerprint text not null default ''"
+            )
+        if "mtime_ns_at_commit" not in checkpoint_columns:
+            self.db.execute(
+                "alter table file_checkpoint add column mtime_ns_at_commit integer not null default 0"
+            )
         for rel, checkpoint in self.checkpoints.items():
             self.db.execute(
-                "insert or ignore into file_checkpoint values (?,?,?,?,?,?,?)",
+                "insert or ignore into file_checkpoint("
+                "source_file,offset,row_number,identity,size_at_commit,updated_at,frontier,"
+                "prefix_fingerprint,mtime_ns_at_commit) values (?,?,?,?,?,?,?,?,?)",
                 (
                     rel, checkpoint.get("offset", 0), checkpoint.get("row", 0),
                     checkpoint.get("identity", ""), checkpoint.get("size_at_commit", 0),
                     checkpoint.get("updated_at", now()), None,
+                    checkpoint.get("prefix_fingerprint", ""),
+                    checkpoint.get("mtime_ns_at_commit", 0),
                 ),
             )
         self.db.commit()
@@ -193,9 +230,11 @@ class IncrementalJSONLIngestor:
             row[0]: {
                 "offset": row[1], "row": row[2], "identity": row[3],
                 "size_at_commit": row[4], "updated_at": row[5],
+                "prefix_fingerprint": row[6], "mtime_ns_at_commit": row[7],
             }
             for row in self.db.execute(
-                "select source_file,offset,row_number,identity,size_at_commit,updated_at "
+                "select source_file,offset,row_number,identity,size_at_commit,updated_at,"
+                "prefix_fingerprint,mtime_ns_at_commit "
                 "from file_checkpoint"
             )
         }
@@ -241,6 +280,7 @@ class IncrementalJSONLIngestor:
         self.metrics = {
             "records": 0, "observations": 0, "duplicates": 0, "malformed": 0,
             "unknown_observations": 0, "deferred_lines": 0, "bytes": 0, "polls": 0,
+            "projection_padding_lines": 0,
             "started": time.monotonic(), "max_buffer": 0,
         }
 
@@ -578,7 +618,8 @@ class IncrementalJSONLIngestor:
         identity = f"{stat.st_dev}:{stat.st_ino}"
         checkpoint = self.checkpoints.get(rel, {"offset": 0, "identity": identity, "row": 0})
         canonical = self.db.execute(
-            "select offset,row_number,identity,size_at_commit,updated_at,frontier "
+            "select offset,row_number,identity,size_at_commit,updated_at,frontier,"
+            "prefix_fingerprint,mtime_ns_at_commit "
             "from file_checkpoint where source_file=?", (rel,),
         ).fetchone()
         if canonical is not None:
@@ -589,6 +630,7 @@ class IncrementalJSONLIngestor:
             checkpoint = {
                 "offset": canonical[0], "row": canonical[1], "identity": canonical[2],
                 "size_at_commit": canonical[3], "updated_at": canonical[4],
+                "prefix_fingerprint": canonical[6], "mtime_ns_at_commit": canonical[7],
             }
             self.checkpoints[rel] = checkpoint
             if canonical[5] is not None:
@@ -601,6 +643,24 @@ class IncrementalJSONLIngestor:
             self._poll_incomplete[rel] = True
             self._refuse("FILE_TRUNCATED", rel, checkpoint, stat)
             return []
+        if checkpoint["offset"] > 0:
+            expected_fingerprint = str(checkpoint.get("prefix_fingerprint", ""))
+            expected_mtime = int(checkpoint.get("mtime_ns_at_commit", 0) or 0)
+            current_fingerprint = _committed_prefix_fingerprint(path, checkpoint["offset"])
+            if (
+                expected_fingerprint
+                and (
+                    current_fingerprint != expected_fingerprint
+                    or (
+                        stat.st_size == checkpoint["offset"]
+                        and expected_mtime
+                        and stat.st_mtime_ns != expected_mtime
+                    )
+                )
+            ):
+                self._poll_incomplete[rel] = True
+                self._refuse("FILE_REPLACED_IN_PLACE", rel, checkpoint, stat)
+                return []
         if stat.st_size == checkpoint["offset"]:
             # A discovered but never-initialized growing stream is a causal
             # barrier: another file must not publish past an unknown first
@@ -636,6 +696,14 @@ class IncrementalJSONLIngestor:
             line_start = offset
             offset += len(line)
             row_number += 1
+            # R6E1R's byte-exact raw projection leaves whitespace-only padding
+            # rows so selected records retain their authoritative physical row
+            # coordinate.  Production files are never modified; ordinary blank
+            # JSONL rows are harmless no-record rows.  They advance the durable
+            # checkpoint but never create a refusal, normalized row, or outbox.
+            if not line.strip():
+                self.metrics["projection_padding_lines"] += 1
+                continue
             raw_id = event_id("RAW", rel, line_start, hashlib.sha256(line).hexdigest())
             try:
                 record = json.loads(line)
@@ -680,6 +748,8 @@ class IncrementalJSONLIngestor:
         checkpoint = {
             "offset": offset, "identity": identity, "row": row_number,
             "size_at_commit": stat.st_size, "updated_at": committed_at,
+            "prefix_fingerprint": _committed_prefix_fingerprint(path, offset),
+            "mtime_ns_at_commit": stat.st_mtime_ns,
         }
         self._persist_raw_batch(
             staged, rel=rel, stream_frontier=frontier, checkpoint=checkpoint,
@@ -753,14 +823,18 @@ class IncrementalJSONLIngestor:
                     (f"stream_frontier:{rel}", stream_frontier),
                 )
             self.db.execute(
-                "insert into file_checkpoint values (?,?,?,?,?,?,?) "
+                "insert into file_checkpoint("
+                "source_file,offset,row_number,identity,size_at_commit,updated_at,frontier,"
+                "prefix_fingerprint,mtime_ns_at_commit) values (?,?,?,?,?,?,?,?,?) "
                 "on conflict(source_file) do update set offset=excluded.offset,"
                 "row_number=excluded.row_number,identity=excluded.identity,"
                 "size_at_commit=excluded.size_at_commit,updated_at=excluded.updated_at,"
-                "frontier=excluded.frontier",
+                "frontier=excluded.frontier,prefix_fingerprint=excluded.prefix_fingerprint,"
+                "mtime_ns_at_commit=excluded.mtime_ns_at_commit",
                 (
                     rel, checkpoint["offset"], checkpoint["row"], checkpoint["identity"],
                     checkpoint["size_at_commit"], checkpoint["updated_at"], stream_frontier,
+                    checkpoint["prefix_fingerprint"], checkpoint["mtime_ns_at_commit"],
                 ),
             )
             unknown = [
@@ -943,10 +1017,14 @@ class IncrementalJSONLIngestor:
     ) -> list[TypedObservation]:
         receipt = self._timestamp(record.get("received_at"), "live receipt timestamp", required=True)
         assert receipt is not None
-        if parse_timestamp(receipt, field_name="live receipt timestamp").to_pydatetime() > datetime.now(IST) + timedelta(seconds=2):
+        receipt_clock = parse_timestamp(
+            receipt, field_name="live receipt timestamp"
+        ).to_pydatetime()
+        publication_clock = datetime.now(IST)
+        if receipt_clock > publication_clock:
             raise ValueError("future live receipt timestamp")
         session_date = rel.split("/")[1]
-        publication = now()
+        publication = publication_clock.isoformat()
         if "/raw/" in str(path):
             event_timestamp = self._timestamp(record.get("event_time"), "exchange/event timestamp")
             message = record.get("message") if isinstance(record.get("message"), dict) else {}
