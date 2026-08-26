@@ -909,6 +909,19 @@ def component_rows(snapshot: Mapping[str, Any]) -> dict[str, list[dict[str, Any]
     result = {}
     for component, key in COMPONENT_KEYS.items():
         value = snapshot.get(key, [])
+        if component == "availability_states":
+            # Clean B retains the canonical inventory engine's raw eligibility
+            # table for audit, but partial-context availability is rebuilt
+            # independently from the exact chronological market/OI bytes after
+            # the Intraday fallback is added.  Compare that operational public
+            # contract, never the pre-fallback eligibility table.
+            details = snapshot.get("availability_detail")
+            if isinstance(details, Mapping) and details:
+                value = [
+                    {"session_date": str(session), **dict(detail)}
+                    for session, detail in sorted(details.items())
+                    if isinstance(detail, Mapping)
+                ]
         if component == "compatibility_snapshots" and not value:
             value = snapshot.get("compatibility", [])
         result[component] = (
@@ -2394,6 +2407,7 @@ def analytical_transition_boundary_probe(
     reconciles every deterministic identity before continuing.  Empty ledger
     types are reported but cannot manufacture a transition boundary.
     """
+    sessions = tuple(sessions)
     assert context.orchestrator is not None and context.ingestor is not None
     excluded = {
         "raw_file_checkpoints",

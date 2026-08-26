@@ -232,6 +232,74 @@ def test_compare_snapshots_is_order_independent_but_value_exact() -> None:
     assert episode["unexplained_remainder"] > 0
 
 
+def test_availability_comparison_uses_post_fallback_public_contract() -> None:
+    session = "2026-08-19"
+    detail = {
+        "overall_state": "LIVE_INTRADAY_ONLY",
+        "market_display_enabled": True,
+        "divergence_state": "AVAILABLE",
+        "participation_state": "AVAILABLE",
+        "available_horizons": ["ID"],
+        "unavailable_horizons": ["1D", "2D", "3D"],
+        "layers": {
+            "ID": {"state": "AVAILABLE", "reason": "FRESH_SYNCHRONIZED_MARKET"},
+            "1D": {
+                "state": "INSUFFICIENT_PRIOR_SESSIONS",
+                "reason": "INSUFFICIENT_PRIOR_SESSIONS",
+            },
+        },
+    }
+    live = {
+        # This is the real incremental-A shape: its public operational contract
+        # is already stored in ``availability`` and has no clean-B auxiliary.
+        "availability": [{"session_date": session, **detail}],
+    }
+    clean_batch = {
+        # The frozen inventory engine keeps this pre-fallback eligibility table
+        # for audit.  It must not override the rebuilt public availability.
+        "availability": [
+            {
+                "evaluation_date": session,
+                "horizon": "ID",
+                "state": "INCOMPLETE_SESSION",
+                "reason": "NO_MARKET_DATA",
+            }
+        ],
+        "availability_detail": {session: detail},
+    }
+
+    comparison = harness.compare_snapshots(live, clean_batch, expected=None)
+    availability = next(
+        row for row in comparison if row["component"] == "availability_states"
+    )
+    assert availability["status"] == "PASS"
+    assert availability["incremental_a_count"] == availability["batch_b_count"] == 2
+
+    clean_batch["availability_detail"] = {
+        session: {**detail, "overall_state": "UNAVAILABLE"}
+    }
+    comparison = harness.compare_snapshots(live, clean_batch, expected=None)
+    availability = next(
+        row for row in comparison if row["component"] == "availability_states"
+    )
+    assert availability["status"] == "FAIL"
+
+    clean_batch["availability_detail"] = {
+        session: {
+            **detail,
+            "layers": {
+                **detail["layers"],
+                "1D": {"state": "AVAILABLE", "reason": "RAW_ACCEPTED_SOURCE_CHAIN"},
+            },
+        }
+    }
+    comparison = harness.compare_snapshots(live, clean_batch, expected=None)
+    availability = next(
+        row for row in comparison if row["component"] == "availability_states"
+    )
+    assert availability["status"] == "FAIL"
+
+
 def test_frozen_six_session_counts_and_gate_are_mandatory() -> None:
     assert harness.EXPECTED_COUNTS == {
         "inventory": 255,

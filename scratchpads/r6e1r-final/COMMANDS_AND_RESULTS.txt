@@ -156,3 +156,9 @@ RESULT: PASS; 135/135 targeted engine/GUI/API/browser tests; 3 fixture screensho
 
 2026-08-27 first post-parity focused v9 attempt
 RESULT: INTERRUPTED AND REJECTED before schedules; adversarial mapping found single-ledger-only end-to-end boundary restart coverage. Partial roots preserved under /tmp/r6e1r_rejected_and_partial_diagnostics_20260826/focused_nine_v9_pre_all_ledger_boundary*; harness now injects and verifies one durable post-append crash/restart for every nonempty material ledger type; asymmetric Index-stale/Futures-fresh test added; targeted 2/2 PASS.
+
+2026-08-27 focused all-nine v10
+RESULT: REJECTED BY ONE HARNESS COMPARATOR; all 9/9 schedules PASS; every semantic and ledger hash exact; 8/8 analytical ledger comparisons PASS; all causal/file-open/source/checkpoint/refusal gates zero; 7/7 nonempty material ledger crash/restart boundaries exercised exactly once; stale_recovery_transitions empty; component_failures=1 solely because availability_states used clean-B pre-fallback inventory eligibility rather than the independently rebuilt post-fallback operational contract; wall 21m52.68s; parent max RSS 1,587,568 KiB; child max RSS 802,032 KiB.
+
+2026-08-27 availability comparator regression
+RESULT: PASS; py_compile PASS; equivalence-harness plus orchestrator 57/57 tests in 11.34s; contradictory raw eligibility ignored only when independent post-fallback public availability is identical; a public availability mismatch remains FAIL.
