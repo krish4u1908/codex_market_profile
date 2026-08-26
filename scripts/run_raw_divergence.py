@@ -11,6 +11,7 @@ from banknifty_profiler.raw_io.reader import load_market
 from banknifty_profiler.divergence.detector import causal_basis,derive,episodes
 from banknifty_profiler.divergence.dependency import group_episodes
 from banknifty_profiler.lifecycle.raw_engine import build_lifecycle
+from banknifty_profiler.runtime.configuration import validate_canonical_runtime_config
 
 
 def sha(path):
@@ -42,7 +43,11 @@ def main():
     args=parser.parse_args()
     data_root=require_external_root(args.data_root,"data root")
     if not args.config.is_file():raise SystemExit(f"configuration missing: {args.config}")
-    config=json.loads(args.config.read_text()); raw_root=data_root/"raw"
+    try:
+        config=validate_canonical_runtime_config(json.loads(args.config.read_text()))
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
+    raw_root=data_root/"raw"
     if not raw_root.is_dir():raise SystemExit(f"raw market root missing: {raw_root}")
     args.output_root.mkdir(parents=True,exist_ok=False)
     all_episodes=[];series={};index_series={};opened=[]

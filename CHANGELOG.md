@@ -1,5 +1,13 @@
 # Changelog
 
+## R6C0V — frozen runtime-invariant repair
+
+- Canonical divergence and participation entrypoints now require timezone
+  `Asia/Kolkata` and integer synchronization tolerance `2000` exactly.
+- Invalid aliases, offsets, missing values, alternate types, and runtime
+  tolerance values are refused before raw processing.
+- Analytical calculations and frozen outputs are unchanged.
+
 ## R6C0
 
 - Removed historical research, replay, manifest, and derived-table reads from

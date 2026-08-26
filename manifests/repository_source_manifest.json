@@ -1,5 +1,5 @@
 {
-  "branch": "fix/r6c0t-participation-portability",
+  "branch": "fix/r6c0v-runtime-invariants",
   "excludes": [
     ".git",
     "manifests/repository_source_manifest.json",
@@ -8,7 +8,7 @@
     "*.egg-info",
     ".pytest_cache"
   ],
-  "file_count": 78,
+  "file_count": 81,
   "files": [
     {
       "path": ".gitignore",
@@ -22,8 +22,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "sha256": "89a961f49ff4671055f2ec5b7b633afcd1323233f8179f87e07e50d4b5203faf",
-      "size": 1313
+      "sha256": "69f1526d09acca847bfc85e7adaa3f24710dd3cfb481bc051e227d047f6444a3",
+      "size": 1692
     },
     {
       "path": "CONTRIBUTING.md",
@@ -74,6 +74,11 @@
       "path": "docs/causality/R6B3_CAUSALITY_CONTRACT.md",
       "sha256": "4ad0923e8843cd969be2e975e9e79856eae322134708171f2f2008a46953c142",
       "size": 528
+    },
+    {
+      "path": "docs/causality/R6C0V_RUNTIME_INVARIANTS.md",
+      "sha256": "bd2e7c8df0855d23108c4f45eba8e8ad4ce2712517612da5c7fc471a3cb158ee",
+      "size": 579
     },
     {
       "path": "docs/causality/inventory_publication_clock.md",
@@ -202,13 +207,13 @@
     },
     {
       "path": "scripts/run_r6b3.py",
-      "sha256": "a33d7cdd366a6ccf5c80e00e4796b26df668c7fd2e766b9a0534199ef3c01a69",
-      "size": 10047
+      "sha256": "191a80572c6a2dd5c38312e20d22fb06f7392744c33eccc4f5d04fe081de7261",
+      "size": 10241
     },
     {
       "path": "scripts/run_raw_divergence.py",
-      "sha256": "c08ae61011f74823cdcf63f060829d980799998288b7af91575b383e0603f8e2",
-      "size": 5443
+      "sha256": "699193c7d88cf47728644f8ed42df25dbad3c84aa34c3412f2df0ecb81300420",
+      "size": 5661
     },
     {
       "path": "src/banknifty_profiler/__init__.py",
@@ -306,6 +311,11 @@
       "size": 2987
     },
     {
+      "path": "src/banknifty_profiler/runtime/configuration.py",
+      "sha256": "cc20deff032b3af6ce3b732815a6f81e3227f4fc6f47915dc085f3d147577cbe",
+      "size": 1559
+    },
+    {
       "path": "tests/__init__.py",
       "sha256": "91475348ad91468854fd8b5b58588bdd7e46b856c46b4f514a2203aee0d31fc0",
       "size": 37
@@ -376,6 +386,11 @@
       "size": 2030
     },
     {
+      "path": "tests/unit/test_r6c0v_runtime_invariants.py",
+      "sha256": "ca605ab9a73109db510acfb8a6b876816f5269c3d46ac07b0da9975473800a32",
+      "size": 3491
+    },
+    {
       "path": "tests/unit/test_raw_participation.py",
       "sha256": "39a7c792fa9adfc4356373081adc63ac7b007ad84537299284fb4c319f9bc329",
       "size": 2741
@@ -402,5 +417,5 @@
     }
   ],
   "repository": "/opt/banknifty/repositories/banknifty-market-profiler",
-  "verification_status": "R6C0T_SOURCE_MANIFEST_VERIFIED"
+  "verification_status": "PASS"
 }

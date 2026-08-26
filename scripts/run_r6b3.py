@@ -15,6 +15,7 @@ from banknifty_profiler.lifecycle.raw_engine import build_lifecycle
 from banknifty_profiler.participation.raw_engine import load_raw,participation_at,canonical_json_bytes
 from banknifty_profiler.participation.views import build as build_views
 from banknifty_profiler.runtime.anchors import EpisodeAnchor,contract_hash,read as read_anchors,validate,write as write_anchors
+from banknifty_profiler.runtime.configuration import validate_canonical_runtime_config
 
 
 def write_csv(path,rows):
@@ -91,7 +92,8 @@ def main():
  repository=Path(__file__).resolve().parents[1]
  if repository in output.parents:raise SystemExit('output inside repository source')
  if not a.config.is_file():raise SystemExit('configuration missing')
- config=json.loads(a.config.read_text())
+ try:config=validate_canonical_runtime_config(json.loads(a.config.read_text()))
+ except ValueError as error:raise SystemExit(str(error)) from error
  if any(k.endswith('_root') for k in config):raise SystemExit('hidden data root in configuration')
  output.mkdir(parents=True);native=output/'native';native.mkdir();participation=output/'participation';participation.mkdir()
  anchors,opened,run_id,engine_hash=native_anchors(data,config,a.config,native)
