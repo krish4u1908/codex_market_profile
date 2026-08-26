@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Repository-generated episode anchor",
+  "type": "object",
+  "required": ["episode_id", "dependency_group_id", "session", "colour", "confirmation_timestamp", "lifecycle_cutoff", "opposite_confirmation_cutoff", "index_confirmation_price", "futures_confirmation_price", "basis", "source_receipt_identifiers", "raw_generation_run_id", "engine_configuration_hash"],
+  "properties": {
+    "episode_id": {"type": "string"},
+    "dependency_group_id": {"type": "string"},
+    "session": {"type": "string", "format": "date"},
+    "colour": {"enum": ["GREEN", "RED"]},
+    "confirmation_timestamp": {"type": "string", "format": "date-time"},
+    "lifecycle_cutoff": {"type": "string", "format": "date-time"},
+    "opposite_confirmation_cutoff": {"type": "string", "format": "date-time"},
+    "index_confirmation_price": {"type": "number"},
+    "futures_confirmation_price": {"type": "number"},
+    "basis": {"type": "number"},
+    "source_receipt_identifiers": {"type": "string"},
+    "raw_generation_run_id": {"type": "string"},
+    "engine_configuration_hash": {"type": "string"}
+  },
+  "additionalProperties": false
+}

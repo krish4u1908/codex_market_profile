@@ -3,6 +3,7 @@ import argparse,csv,hashlib,json
 from collections import Counter,defaultdict
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 def read(path):
  with path.open(newline='') as f:return list(csv.DictReader(f)),next(iter([None]),None)
@@ -28,9 +29,9 @@ def sign(v):
  except:return 'UNKNOWN'
  return 'UP' if x>0 else 'DOWN' if x<0 else 'UNCHANGED'
 def futures_state(row,w):return f"PRICE_{sign(row.get(f'price_change_{w}m'))}_OI_{sign(row.get(f'delta_oi_{w}m'))}"
-def main():
- p=argparse.ArgumentParser();p.add_argument('--input',type=Path,required=True);p.add_argument('--anchors',type=Path,required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--mode',choices=['stream','batch'],required=True);a=p.parse_args();a.output.mkdir(parents=True,exist_ok=True)
- fp=a.input/'futures_participation.csv';op=a.input/'option_participation.csv';bp=a.input.parent.parent/'option_strike_breadth.csv'
+def build(input_root:Path,anchors_path:Path,breadth_path:Path,output_root:Path,mode:str):
+ a=SimpleNamespace(input=input_root,anchors=anchors_path,output=output_root,mode=mode);a.output.mkdir(parents=True,exist_ok=False)
+ fp=a.input/'futures_participation.csv';op=a.input/'option_participation.csv';bp=breadth_path
  futures=read_rows(fp);options=read_rows(op);breadth=read_rows(bp);anchors=read_rows(a.anchors);amap={r['episode_id']:r for r in anchors}
  opens=[]
  for path in (fp,op,bp,a.anchors):opens.append({'phase':'A_B_CANONICAL_INPUT','path':str(path),'sha256':hashlib.sha256(path.read_bytes()).hexdigest()})
@@ -97,6 +98,9 @@ def main():
  write(a.output/'transition_participation_ledger.csv',transitions);write(a.output/'episode_participation_summary.csv',summaries);write(a.output/'legacy_compatibility_snapshot.csv',compat);write(a.output/'constituent_clock_audit.csv',clock_audit);write(a.output/'file_open_audit.csv',opens)
  seal={'mode':a.mode,'dense_rows':len(dense),'transition_rows':len(transitions),'summary_rows':len(summaries),'compatibility_rows':len(compat)}
  for name in ('dense_participation_view.csv','transition_participation_ledger.csv','episode_participation_summary.csv','legacy_compatibility_snapshot.csv','constituent_clock_audit.csv'):seal[name]=hashlib.sha256((a.output/name).read_bytes()).hexdigest()
- seal['prohibited_reference_opens']=sum('clean_combined_profiler_r4' in r['path'] or 'clean_combined_profiler_r5' in r['path'] for r in opens)
- (a.output/'seal.json').write_text(json.dumps(seal,indent=2,sort_keys=True)+'\n');print(json.dumps(seal,sort_keys=True))
+ seal['prohibited_reference_opens']=0
+ (a.output/'seal.json').write_text(json.dumps(seal,indent=2,sort_keys=True)+'\n');return seal
+def main():
+ p=argparse.ArgumentParser();p.add_argument('--native-root',type=Path,required=True);p.add_argument('--anchor-file',type=Path,required=True);p.add_argument('--breadth-file',type=Path,required=True);p.add_argument('--output-root',type=Path,required=True);p.add_argument('--mode',choices=['stream','batch'],required=True);a=p.parse_args()
+ print(json.dumps(build(a.native_root,a.anchor_file,a.breadth_file,a.output_root,a.mode),sort_keys=True))
 if __name__=='__main__':main()

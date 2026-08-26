@@ -8,11 +8,12 @@ def main():
     p.add_argument("--data-root",type=Path,required=True)
     p.add_argument("--output-root",type=Path,required=True)
     p.add_argument("--mode",choices=["stream","batch"],required=True)
+    p.add_argument("--config",type=Path,required=True)
     a=p.parse_args()
     if a.data_root.resolve()==a.output_root.resolve() or a.data_root.resolve() in a.output_root.resolve().parents:
         raise SystemExit("output-root must be outside the read-only data-root")
     if not a.data_root.is_dir(): raise SystemExit("data-root does not exist")
+    if not a.config.is_file(): raise SystemExit("configuration does not exist")
     raise SystemExit("External full-data adapter is intentionally dormant; authorize a separate runtime revision.")
 
 if __name__ == "__main__": main()
-

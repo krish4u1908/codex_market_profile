@@ -19,3 +19,9 @@
 - Replaced the inventory wrapper with a repository-native raw-only implementation.
 - Removed hard-coded production roots, research imports, `sys.path` mutation, fixed date/chain dictionaries, minute fallback, and implicit output writes.
 - Added deterministic explicit-root CLI, continuity discovery, causal BN-reference mapping, and provenance tests.
+# R6C0T
+
+- Removed embedded participation collector roots and derived-anchor runtime inputs.
+- Added a typed, validated repository-generated episode-anchor contract.
+- Added a portable explicit-root full-stack participation processor and repository-native four-view builder.
+- Isolated historical R6B3A/R6B3R reconciliation utilities under `tools/historical_audit/`.

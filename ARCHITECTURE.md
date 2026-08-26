@@ -20,3 +20,6 @@ Canonical Price VPOC: `BN_REF_FUT_VOLUME_VPOC` (user label: **BN-REF FUT VOL-VPO
 # R6C0I raw inventory boundary
 
 `banknifty_profiler.raw_io.reader` owns repository-native raw parsing, expiry classification, backward causal joins, and moneyness. `banknifty_profiler.inventory.engine` owns continuity-based session discovery, chronological source chains, BN-reference Futures-volume VPOC, signed Futures/CE/PE OI-VPOCs, deterministic tie-breaking, fixed publication clocks, and causal intraday winner transitions. Runtime roots and configuration are mandatory CLI inputs.
+# R6C0T portable participation runtime
+
+The production participation processor now owns the complete raw causal path: synchronization, divergence, dependency grouping, lifecycle, typed in-run episode anchors, strike-level participation, and four canonical views. Data/output/config roots are explicit CLI arguments. Historical reconciliation utilities live under `tools/historical_audit/` and are not imported by production runtime.
