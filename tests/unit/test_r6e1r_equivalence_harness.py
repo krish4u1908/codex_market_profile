@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 
@@ -435,6 +436,22 @@ def test_raw_projection_is_byte_exact_preserves_rows_and_matches_clean_batch(
     )
 
 
+def test_raw_projection_hard_refuses_malformed_candidate_json(tmp_path: Path) -> None:
+    physical, sessions = _physical_fixture(tmp_path / "collector")
+    source = physical / "raw/2026-08-20/events_09.jsonl"
+    source.write_bytes(source.read_bytes() + b'{"received_at":"broken","message":{"symbol":"NSE:NIFTYBANK-INDEX"}\n')
+    source_hash = harness._sha256_file(source)
+
+    with pytest.raises(ValueError, match="malformed candidate JSON records: 1"):
+        harness.build_raw_projection(
+            data_root=physical,
+            projection_root=tmp_path / "malformed_projection",
+            sessions=sessions,
+        )
+
+    assert harness._sha256_file(source) == source_hash
+
+
 def test_merged_source_lines_are_chronological_and_byte_exact(tmp_path: Path) -> None:
     physical, sessions = _physical_fixture(tmp_path / "collector")
     sources = harness.discover_sources(physical, sessions)
@@ -507,6 +524,108 @@ def test_schedule_hash_comparator_reports_dependency() -> None:
     assert rows[1]["differences"] == 1
 
 
+def test_named_schedule_cannot_pass_when_adversary_was_not_exercised() -> None:
+    base = {
+        "analytical_semantic_sha256": "abc",
+        "analytical_ledgers_sha256": "ledger",
+        "source_json_records": 10,
+        "exposed_records": 10,
+        "poll_calls_by_harness": 1,
+        "analytical_refusals": 0,
+    }
+    rows = harness.scheduling_comparison(
+        base,
+        [
+            ("boundaries_inside_jsonl_lines", dict(base)),
+            (
+                "empty_repeated_polls",
+                {**base, "explicit_empty_poll_count": 20},
+            ),
+        ],
+    )
+    assert rows[0]["status"] == "FAIL"
+    assert "CONFIGURED_INSIDE_LINE_BOUNDARIES_NOT_MEASURED" in rows[0][
+        "schedule_exercise_failures"
+    ]
+    assert rows[1]["status"] == "PASS"
+
+
+def test_every_configured_schedule_predicate_is_exact() -> None:
+    records = 1000
+    variable_count, variable_hash = harness.expected_record_group_sequence(
+        records, harness.SCHEDULES["deterministic_variable_chunks"].line_groups
+    )
+    base = {
+        "source_json_records": records,
+        "exposed_records": records,
+        "poll_calls_by_harness": records,
+        "source_files": 2,
+        "analytical_refusals": 0,
+    }
+    passing = {
+        "original_source_chunks": {
+            **base,
+            "original_source_files_staged_before_first_poll": 2,
+            "maximum_exposure_bytes": 100,
+            "source_sizes_by_relative": {"raw/file": 1000, "oi/file": 500},
+            "original_checkpoint_chunk_counts": {"raw/file": 10, "oi/file": 5},
+            "original_checkpoint_delta_bytes": {"raw/file": 1000, "oi/file": 500},
+            "original_source_chunk_count": 15,
+            "original_checkpoint_delta_oversize_count": 0,
+        },
+        "one_record_per_increment": {
+            **base,
+            "record_group_sizes_exercised": [1],
+            "record_increment_count": records,
+        },
+        "deterministic_variable_chunks": {
+            **base,
+            "record_group_sizes_exercised": [1, 2, 3, 5, 7, 11, 13, 17],
+            "record_increment_count": variable_count,
+            "record_group_sequence_sha256": variable_hash,
+        },
+        "boundaries_inside_jsonl_lines": {**base, "split_line_boundary_count": 17},
+        "empty_repeated_polls": {**base, "explicit_empty_poll_count": 34},
+        "multiple_checkpoint_restarts": {**base, "checkpoint_restart_count": 7},
+        "hourly_file_rotation": {
+            **base,
+            "expected_hourly_rotation_boundaries": 2,
+            "hourly_rotation_boundary_count": 2,
+        },
+        "large_chronological_chunks": {
+            **base,
+            "record_group_sizes_exercised": [1000],
+            "maximum_exposure_bytes": 1_000_000,
+            "maximum_record_group_bytes": 900_000,
+        },
+    }
+    for name, seal in passing.items():
+        assert harness.schedule_exercise_failures(name, seal) == [], name
+    for name, seal in passing.items():
+        broken = dict(seal)
+        if name == "original_source_chunks":
+            broken["original_checkpoint_delta_bytes"] = {
+                "raw/file": 999,
+                "oi/file": 500,
+            }
+        elif name == "one_record_per_increment":
+            broken["record_increment_count"] -= 1
+        elif name == "deterministic_variable_chunks":
+            broken["record_group_sequence_sha256"] = "wrong"
+        elif name == "boundaries_inside_jsonl_lines":
+            broken["split_line_boundary_count"] = 16
+        elif name == "empty_repeated_polls":
+            broken["explicit_empty_poll_count"] = 33
+        elif name == "multiple_checkpoint_restarts":
+            broken["checkpoint_restart_count"] = 6
+        elif name == "hourly_file_rotation":
+            broken["hourly_rotation_boundary_count"] = 1
+        else:
+            broken["maximum_record_group_bytes"] = 10
+            broken["record_group_sizes_exercised"] = [2]
+        assert harness.schedule_exercise_failures(name, broken), name
+
+
 def test_schedule_feasibility_quantifies_without_claiming_semantics(tmp_path: Path) -> None:
     path = tmp_path / "events.jsonl"
     path.write_bytes(b"{}\n" * 100)
@@ -526,12 +645,16 @@ def test_runtime_open_gate_is_measured_and_derived_from_classifications() -> Non
             {
                 "run": "incremental_a",
                 "path": "/tmp/a/raw/events.jsonl",
-                "classification": "PERMITTED_RUNTIME_RAW_OPEN",
+                "classification": "PERMITTED_OBSERVED_RAW_OPEN",
+                "evidence_source": "PYTHON_SYS_AUDIT_HOOK_OPEN",
+                "observed_open_count": 1,
             },
             {
                 "run": "batch_b",
                 "path": "/tmp/b/raw/events.jsonl",
                 "classification": "PERMITTED_RUNTIME_RAW_OPEN",
+                "evidence_source": "LINUX_STRACE_SUCCESSFUL_READ_OPEN",
+                "observed_open_count": 1,
             },
         ]
     )
@@ -544,6 +667,8 @@ def test_runtime_open_gate_is_measured_and_derived_from_classifications() -> Non
                 "run": "batch_b",
                 "path": "/research/derived/table.csv",
                 "classification": "PROHIBITED_DERIVED_ANALYTICAL_INPUT",
+                "evidence_source": "REPOSITORY_READER_FILE_OPEN_AUDIT",
+                "observed_open_count": 1,
             }
         ]
     )
@@ -554,6 +679,136 @@ def test_runtime_open_gate_is_measured_and_derived_from_classifications() -> Non
     )
     assert unmeasured["measured"] is False
     assert unmeasured["unmeasured_rows"] == 1
+
+
+def test_runtime_open_recorder_observes_required_sources_and_prohibited_data(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "source/raw/2026-08-20/events_09.jsonl"
+    staged_root = tmp_path / "staged"
+    staged_path = staged_root / "raw/2026-08-20/events_09.jsonl"
+    _write_jsonl(source_path, [{"received_at": "2026-08-20T09:15:00+05:30"}])
+    _write_jsonl(staged_path, [{"received_at": "2026-08-20T09:15:00+05:30"}])
+    source = harness.SourceFile(
+        source_path,
+        Path("raw/2026-08-20/events_09.jsonl"),
+        source_path.stat().st_size,
+        1,
+        True,
+    )
+    recorder = harness.RuntimeOpenRecorder()
+    with recorder.recording("incremental_a"):
+        source_path.read_bytes()
+        staged_path.read_bytes()
+    coverage = harness.required_schedule_open_coverage(
+        recorder,
+        scope="incremental_a",
+        sources=[source],
+        context_sources=[],
+        staging_root=staged_root,
+    )
+    assert all(row["status"] == "PASS" for row in coverage)
+
+    derived = tmp_path / "research/derived/table.csv"
+    derived.parent.mkdir(parents=True)
+    derived.write_text("derived\n")
+    external = tmp_path / "ordinary_external.csv"
+    external.write_text("external\n")
+    with recorder.recording("batch_b"):
+        derived.read_text()
+        external.read_text()
+        created = tmp_path / "created_not_read.csv"
+        created.write_text("created,not-read\n")
+    assert recorder.observed_count("batch_b", created) == 0
+    rows = [
+        *coverage,
+        *recorder.audit_rows(
+            scope="incremental_a",
+            permitted_data_roots=(tmp_path / "source", staged_root),
+            permitted_state_roots=(),
+            repository=Path(__file__).resolve().parents[2],
+        ),
+        *recorder.audit_rows(
+            scope="batch_b",
+            permitted_data_roots=(),
+            permitted_state_roots=(),
+            repository=Path(__file__).resolve().parents[2],
+        ),
+    ]
+    summary = harness.runtime_open_audit_summary(rows)
+    assert summary["measured"] is True
+    assert summary["prohibited_rows"] == 2
+
+
+def test_child_strace_audits_every_raw_source_and_layers_generated_state(
+    tmp_path: Path,
+) -> None:
+    data = tmp_path / "data"
+    raw = data / "raw/2026-08-20/events_09.jsonl"
+    oi = data / "oi/2026-08-20/oi_09.jsonl"
+    _write_jsonl(raw, [{"received_at": "2026-08-20T09:15:00+05:30"}])
+    _write_jsonl(oi, [{"received_at": "2026-08-20T09:15:00+05:30"}])
+    generated = tmp_path / "batch/generated"
+    intermediate = generated / "runs/stream_stack/native/basis.csv"
+    intermediate.parent.mkdir(parents=True)
+    intermediate.write_text("basis\n")
+    traces = {
+        name: tmp_path / f"traces/{name}.strace"
+        for name in ("inventory", "stack", "layers")
+    }
+    for prefix, opened in (
+        (traces["inventory"], raw),
+        (traces["stack"], oi),
+        (traces["layers"], intermediate),
+    ):
+        prefix.parent.mkdir(parents=True, exist_ok=True)
+        (prefix.parent / f"{prefix.name}.123").write_text(
+            f'openat(AT_FDCWD<{tmp_path}>, "{opened}", '
+            f'O_RDONLY|O_CLOEXEC) = 3<{opened.resolve()}>\n'
+        )
+    rows = harness.child_open_audit_rows(
+        traces=traces,
+        data_root=data,
+        generated_root=generated,
+        repository=Path(__file__).resolve().parents[2],
+        config_paths=(),
+    )
+    required = [row for row in rows if row.get("required_source_open")]
+    assert len(required) == 2
+    assert all(row["status"] == "PASS" for row in required)
+    coverage = [
+        row
+        for row in rows
+        if str(row.get("purpose", "")).startswith("REQUIRED_")
+        and not row.get("required_source_open")
+    ]
+    assert {row["component"] for row in coverage} == {
+        "inventory", "stack", "layers"
+    }
+    assert all(row["status"] == "PASS" for row in coverage)
+    assert not any("PROHIBITED" in row["classification"] for row in rows)
+    external = tmp_path / "outside/untrusted.csv"
+    external.parent.mkdir(parents=True)
+    external.write_text("derived\n")
+    stack_trace = traces["stack"].parent / f"{traces['stack'].name}.123"
+    with stack_trace.open("a") as handle:
+        handle.write(
+            f'openat(AT_FDCWD<{tmp_path}>, "{external}", '
+            f'O_RDONLY|O_CLOEXEC) = 4<{external.resolve()}>\n'
+        )
+    refused = harness.child_open_audit_rows(
+        traces=traces,
+        data_root=data,
+        generated_root=generated,
+        repository=Path(__file__).resolve().parents[2],
+        config_paths=(),
+    )
+    assert any("PROHIBITED" in row["classification"] for row in refused)
+
+    malformed = tmp_path / "malformed.strace"
+    malformed.write_text('openat(AT_FDCWD, "unterminated\n')
+    with pytest.raises(ValueError, match="unparsed successful child open"):
+        harness._parse_strace_read_opens(malformed, tmp_path)
 
 
 def test_real_checkpoint_recovery_refuses_truncate_and_replace(tmp_path: Path) -> None:
@@ -598,6 +853,42 @@ def test_b_uses_independent_repository_canonical_batch_processors(tmp_path: Path
     assert sessions[0] in snapshot["gui_payload"]
     assert (tmp_path / "canonical_b/generated/runs/stream_stack/seal.json").is_file()
     assert opens
+    assert {row.get("evidence_source") for row in opens} == {
+        "LINUX_STRACE_SUCCESSFUL_READ_OPEN"
+    }
+    assert not any("PROHIBITED" in row["classification"] for row in opens)
+    required = [row for row in opens if row.get("required_source_open")]
+    assert len(required) == len(harness.discover_sources(physical, sessions))
+    assert all(row["status"] == "PASS" for row in required)
+    component_coverage = {
+        row["component"]: row
+        for row in opens
+        if row.get("purpose") in {
+            "REQUIRED_CHILD_RAW_READ",
+            "REQUIRED_LAYERS_GENERATED_STATE_READ",
+        }
+    }
+    assert set(component_coverage) == {"inventory", "stack", "layers"}
+    assert all(row["status"] == "PASS" for row in component_coverage.values())
+    gate = harness.runtime_open_audit_summary(
+        [
+            {
+                "run": "incremental_a",
+                "path": str(physical),
+                "classification": "PERMITTED_OBSERVED_RAW_OPEN",
+                "evidence_source": "PYTHON_SYS_AUDIT_HOOK_OPEN",
+                "observed_open_count": 1,
+            },
+            *opens,
+        ]
+    )
+    assert gate == {
+        "measured": True,
+        "audited_rows": len(opens) + 1,
+        "a_b_runtime_rows": len(opens) + 1,
+        "unmeasured_rows": 0,
+        "prohibited_rows": 0,
+    }
 
 
 def test_intraday_fallback_is_explicitly_equivalent_to_live_degradation(
@@ -653,6 +944,141 @@ def test_intraday_fallback_is_explicitly_equivalent_to_live_degradation(
     assert harness._row_counter(
         a_rows["partial_fixed_cross_layer_transitions"]
     ) == harness._row_counter(b_rows["partial_fixed_cross_layer_transitions"])
+    ledger_rows = harness.compare_analytical_ledgers(incremental, batch)
+    assert {row["ledger"] for row in ledger_rows} == set(
+        harness.MATERIAL_LEDGER_NAMES
+    )
+    assert all(row["status"] == "PASS" for row in ledger_rows)
+    assert all(
+        row["incremental_a_count"] == row["batch_b_expected_count"]
+        for row in ledger_rows
+    )
+    gui_a = harness._gui_projection(incremental["gui_payload"][sessions[0]])
+    gui_b = harness._gui_projection(batch["gui_payload"][sessions[0]])
+    assert harness._row_counter(gui_a["display_metadata"]) == harness._row_counter(
+        gui_b["display_metadata"]
+    )
+    assert harness._row_counter(
+        gui_a["availability_instruments"]
+    ) == harness._row_counter(gui_b["availability_instruments"])
+    assert harness._row_counter(gui_a["counts"]) == harness._row_counter(
+        gui_b["counts"]
+    )
+
+
+def test_clean_b_terminal_null_receipt_advances_cutoff_not_valid_freshness(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = "2026-08-20"
+    future = "NSE:BANKNIFTY26AUGFUT"
+    base = pd.Timestamp(f"{session}T09:15:00+05:30")
+    terminal = base + pd.Timedelta(seconds=30)
+    market = pd.DataFrame(
+        [
+            {
+                "symbol": "NSE:NIFTYBANK-INDEX",
+                "receipt_timestamp": base,
+                "last_price": 57_000.0,
+            },
+            {
+                "symbol": future,
+                "receipt_timestamp": base,
+                "last_price": 57_025.0,
+            },
+            {
+                "symbol": "NSE:NIFTYBANK-INDEX",
+                "receipt_timestamp": base + pd.Timedelta(seconds=20),
+                "last_price": None,
+            },
+        ]
+    )
+    oi = pd.DataFrame(
+        [
+            {
+                "instrument_class": "future",
+                "symbol": future,
+                "oi_receipt_timestamp": base,
+                "oi_close": 1000.0,
+            },
+            {
+                "instrument_class": "future",
+                "symbol": future,
+                "oi_receipt_timestamp": base + pd.Timedelta(seconds=25),
+                "oi_close": None,
+            },
+            {
+                "instrument_class": "call",
+                "symbol": "NSE:BANKNIFTY26AUG57000CE",
+                "oi_receipt_timestamp": base,
+                "oi_close": 500.0,
+            },
+            {
+                "instrument_class": "call",
+                "symbol": "NSE:BANKNIFTY26AUG57000CE",
+                "oi_receipt_timestamp": terminal,
+                "oi_close": None,
+            },
+            {
+                "instrument_class": "put",
+                "symbol": "NSE:BANKNIFTY26AUG57000PE",
+                "oi_receipt_timestamp": base,
+                "oi_close": 450.0,
+            },
+        ]
+    )
+    monkeypatch.setattr(harness.raw_reader, "load_market", lambda *_args, **_kwargs: market)
+    monkeypatch.setattr(harness.raw_reader, "load_oi", lambda *_args, **_kwargs: oi)
+    monkeypatch.setattr(
+        harness.raw_reader,
+        "select_contracts",
+        lambda *_args, **_kwargs: (future, "2026-08-25", "2026-08-25"),
+    )
+    stack = tmp_path / "stack.json"
+    stack.write_text(json.dumps({"index_symbol": "NSE:NIFTYBANK-INDEX"}))
+    shadow = _config(tmp_path / "shadow.json")
+    inventory_row = {
+        "evaluation_date": session,
+        "horizon": "ID",
+        "family": "BN_REF_FUT_VOLUME_VPOC",
+        "control_value": 57_000.0,
+        "control_effective_timestamp": base.isoformat(),
+    }
+    snapshot = {"intraday_inventory": [inventory_row]}
+    detail = harness.build_clean_batch_availability_detail(
+        snapshot=snapshot,
+        data_root=tmp_path / "unused",
+        stack_config_path=stack,
+        shadow_config_path=shadow,
+        sessions=(session,),
+    )[session]
+    assert detail["evidence_cutoff_timestamp"] == terminal.isoformat()
+    assert detail["reference_timestamp"] == terminal.isoformat()
+    assert detail["index_state"] == "STALE_OR_MISSING"
+    assert detail["futures_state"] == "STALE_OR_MISSING"
+    assert detail["futures_oi_state"] == "AVAILABLE"
+    assert detail["ce_state"] == "AVAILABLE"
+    assert detail["receipt_ages_seconds"] == {
+        "INDEX": 30.0,
+        "FUTURES": 30.0,
+        "FUTURES_OI": 30.0,
+        "CE": 30.0,
+        "PE": 30.0,
+    }
+    snapshot["availability_detail"] = {session: detail}
+    snapshot["gui_payload"] = {session: {}}
+    harness.rebuild_clean_gui_payload(snapshot, (session,))
+    ledgers = harness.build_batch_analytical_ledgers(snapshot)
+    assert ledgers["availability_transitions"]
+    assert all(
+        row["effective_timestamp"] == terminal.isoformat()
+        for row in ledgers["availability_transitions"]
+    )
+    gui = harness._gui_projection(snapshot["gui_payload"][session])
+    metadata = gui["display_metadata"][0]
+    assert metadata["reference_timestamp"] == terminal.isoformat()
+    assert metadata["evidence_cutoff_timestamp"] == terminal.isoformat()
+    assert metadata["as_of_matches_availability_calculation"] is True
+    assert harness.audit_invariants(snapshot)["gui_clock_contract_violations"] == 0
 
 
 def test_reference_comparison_uses_reference_fields_after_type_normalization() -> None:
@@ -698,12 +1124,26 @@ def test_reference_comparison_uses_reference_fields_after_type_normalization() -
     assert all(row["status"] == "PASS" for row in rows)
 
 
-def test_gui_comparison_ignores_packaging_but_not_visible_rows() -> None:
+def test_gui_component_gate_requires_public_contract_and_visible_rows() -> None:
     packed = {"fields": ["episode_id", "state"], "rows": [["E1", "ACTIVE"]]}
-    a = {"gui_payload": {"2026-08-20": {"schema": "LIVE", "episodes": json.loads(json.dumps(packed))}}}
-    b = {"gui_payload": {"2026-08-20": {"schema": "BATCH", "episodes": json.loads(json.dumps(packed))}}}
+    contract = {
+        "schema": "R6E_SESSION_PAYLOAD_V1",
+        "classification": "LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL",
+    }
+    a = {
+        "gui_payload": {
+            "2026-08-20": {**contract, "episodes": json.loads(json.dumps(packed))}
+        }
+    }
+    b = {
+        "gui_payload": {
+            "2026-08-20": {**contract, "episodes": json.loads(json.dumps(packed))}
+        }
+    }
     reference = {
-        "gui_payload": {"2026-08-20": {"source_contract_hash": "R6D", "episodes": json.loads(json.dumps(packed))}}
+        "gui_payload": {
+            "2026-08-20": {**contract, "episodes": json.loads(json.dumps(packed))}
+        }
     }
     rows = harness.compare_reference_snapshot(
         a_snapshot=a,
@@ -713,6 +1153,16 @@ def test_gui_comparison_ignores_packaging_but_not_visible_rows() -> None:
         components=("gui_visible_state",),
     )
     assert all(row["status"] == "PASS" for row in rows)
+    b["gui_payload"]["2026-08-20"]["schema"] = "WRONG"
+    rows = harness.compare_reference_snapshot(
+        a_snapshot=a,
+        b_snapshot=b,
+        reference_snapshot=reference,
+        reference_name="R6E",
+        components=("gui_visible_state",),
+    )
+    assert next(row for row in rows if row["target"] == "batch_b")["status"] == "FAIL"
+    b["gui_payload"]["2026-08-20"]["schema"] = contract["schema"]
     b["gui_payload"]["2026-08-20"]["episodes"]["rows"][0][1] = "ENDED"
     rows = harness.compare_reference_snapshot(
         a_snapshot=a,
@@ -853,3 +1303,60 @@ def test_real_live_path_chunk_split_and_restart_equivalence(tmp_path: Path) -> N
         for row in harness.compare_snapshots(chunked, boundary, expected=None)
     )
     assert len(chunked["basis"]) >= 1
+
+
+def test_original_byte_chunks_and_hourly_rotation_are_measured(tmp_path: Path) -> None:
+    physical, sessions = _physical_fixture(tmp_path / "collector")
+    session = sessions[0]
+    for stream, first_name, rotated_name in (
+        ("raw", "events_09.jsonl", "events_10.jsonl"),
+        ("oi", "oi_09.jsonl", "oi_10.jsonl"),
+    ):
+        first = physical / stream / session / first_name
+        lines = first.read_bytes().splitlines(keepends=True)
+        first.write_bytes(b"".join(lines[:-1]))
+        (first.parent / rotated_name).write_bytes(lines[-1])
+    config = _config(tmp_path / "shadow.json")
+    sources = harness.discover_sources(
+        physical, sessions, include_predecessors=False
+    )
+
+    original, original_accounting, original_metrics = harness.run_schedule(
+        schedule=harness.SCHEDULES["original_source_chunks"],
+        sources=sources,
+        staging_root=tmp_path / "original_collector",
+        state_root=tmp_path / "original_state",
+        config_path=config,
+        sessions=sessions,
+    )
+    rotated, rotated_accounting, rotated_metrics = harness.run_schedule(
+        schedule=harness.SCHEDULES["hourly_file_rotation"],
+        sources=sources,
+        staging_root=tmp_path / "rotated_collector",
+        state_root=tmp_path / "rotated_state",
+        config_path=config,
+        sessions=sessions,
+    )
+
+    assert all(row["status"] == "PASS" for row in original_accounting)
+    assert all(row["status"] == "PASS" for row in rotated_accounting)
+    assert original_metrics["original_source_chunk_count"] >= len(sources)
+    assert original_metrics["original_source_files_staged_before_first_poll"] == len(
+        sources
+    )
+    assert original_metrics["analytical_refusals"] == 0
+    assert rotated_metrics["hourly_rotation_boundary_count"] == 2
+    assert rotated_metrics["analytical_refusals"] == 0
+    assert harness.schedule_exercise_failures(
+        "original_source_chunks", original_metrics
+    ) == []
+    assert harness.schedule_exercise_failures(
+        "hourly_file_rotation", rotated_metrics
+    ) == []
+    assert all(
+        row["status"] == "PASS"
+        for row in harness.compare_snapshots(original, rotated, expected=None)
+    )
+    assert harness.analytical_ledger_rows(original) == (
+        harness.analytical_ledger_rows(rotated)
+    )

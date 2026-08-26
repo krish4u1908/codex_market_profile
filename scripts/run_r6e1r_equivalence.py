@@ -18,6 +18,7 @@ import os
 import re
 import resource
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,7 @@ import time
 import uuid
 from collections import Counter
 from collections.abc import Iterable, Mapping
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -36,6 +38,7 @@ import pandas as pd
 from banknifty_profiler.shadow.contracts import validate_shadow_contract
 from banknifty_profiler.shadow.ingest import IncrementalJSONLIngestor
 from banknifty_profiler.shadow.orchestrator import LiveAnalyticalOrchestrator
+from banknifty_profiler.shadow.api import _chart as sanitized_chart_projection
 from banknifty_profiler.runtime.configuration import canonical_configuration_sha256
 from banknifty_profiler.runtime.timestamps import parse_timestamp
 from banknifty_profiler.divergence.detector import causal_basis
@@ -62,7 +65,7 @@ AUTHORIZED_FOCUSED_FIXTURE_ROOT = Path(
     "r6e1r0_aug19_0915_1205/collector"
 )
 AUTHORIZED_FOCUSED_MANIFEST_SHA256 = (
-    "5bf62dda9b6613e2d6b3000c084a723133c5af01c7e4cb5acff84af84fb610e2"
+    "31077f42ae1bf639f746e5980aba028b1369b8d44ba9a15973b2a517cc8a8382"
 )
 
 EXPECTED_COUNTS = {
@@ -81,6 +84,11 @@ EXPECTED_COUNTS = {
     "compatibility_snapshots": 65,
     "cross_layer_transitions": 60_659,
 }
+
+STATE_TREE_MANIFEST_SCHEMA = "R6E1R_INCREMENTAL_A_STATE_TREE_MANIFEST_V1"
+STATE_TREE_SIDECAR_SUFFIXES = (
+    "-journal", "-wal", "-shm", ".journal", ".wal",
+)
 
 REFERENCE_PACKAGE_CONTRACTS = {
     "R6C2R_REFERENCE_C": {
@@ -137,6 +145,20 @@ COMPONENT_KEYS = {
     "partial_fixed_cross_layer_transitions": "partial_fixed_cross_layer_transitions",
 }
 
+MATERIAL_LEDGER_NAMES = (
+    "divergence_confirmations",
+    "dependency_retriggers",
+    "lifecycle_transitions",
+    "inventory_winner_transitions",
+    "participation_transitions",
+    "cross_layer_transitions",
+    "availability_transitions",
+    "stale_recovery_transitions",
+)
+LEDGER_ENVELOPE_FIELDS = RUN_VOLATILE_FIELDS | frozenset(
+    {"engine_hash", "configuration_hash"}
+)
+
 IDENTITY_FIELDS = (
     "event_id",
     "transition_id",
@@ -182,10 +204,215 @@ class Schedule:
     restart_every: int = 0
     restart_events: int = 0
     restart_on_analytical_transition: bool = False
+    original_byte_chunks: bool = False
+
+
+def _runtime_library_roots() -> tuple[Path, ...]:
+    return tuple(
+        path.resolve()
+        for path in {
+            Path(sys.prefix),
+            Path(sys.base_prefix),
+            Path(sys.executable).resolve().parent.parent,
+            Path("/usr"),
+            Path("/lib"),
+            Path("/lib64"),
+            Path("/etc"),
+            Path("/proc"),
+            Path("/sys"),
+            Path("/dev"),
+        }
+        if path.exists()
+    )
+
+
+def _classify_observed_open(
+    requested: Path,
+    resolved: Path,
+    *,
+    data_roots: tuple[Path, ...],
+    state_roots: tuple[Path, ...],
+    config_paths: tuple[Path, ...],
+    repository: Path,
+    runtime_roots: tuple[Path, ...],
+) -> tuple[str, str]:
+    if any(
+        requested.is_relative_to(root) or resolved.is_relative_to(root)
+        for root in data_roots
+    ):
+        return "PERMITTED_OBSERVED_RAW_OPEN", "RUNTIME_RAW_OR_CONTEXT_READ"
+    if any(
+        requested.is_relative_to(root) or resolved.is_relative_to(root)
+        for root in state_roots
+    ):
+        return (
+            "PERMITTED_OBSERVED_STATE_OPEN",
+            "RUNTIME_CHECKPOINT_LEDGER_OR_GENERATED_STATE_READ",
+        )
+    if requested.is_relative_to(repository) or resolved.is_relative_to(repository):
+        return (
+            "PERMITTED_OBSERVED_CODE_CONFIG_PACKAGE_OPEN",
+            "RUNTIME_CODE_CONFIG_OR_MANIFEST_READ",
+        )
+    if requested in config_paths or resolved in config_paths:
+        return "PERMITTED_OBSERVED_EXPLICIT_CONFIG_OPEN", "RUNTIME_EXPLICIT_CONFIGURATION_READ"
+    if any(
+        requested.is_relative_to(root) or resolved.is_relative_to(root)
+        for root in runtime_roots
+    ):
+        return "PERMITTED_OBSERVED_RUNTIME_LIBRARY_OPEN", "RUNTIME_LIBRARY_OR_SYSTEM_READ"
+    return (
+        "PROHIBITED_OBSERVED_UNCLASSIFIED_EXTERNAL_OPEN",
+        "UNAUTHORIZED_OR_UNCLASSIFIED_EXTERNAL_INPUT",
+    )
+
+
+class RuntimeOpenRecorder:
+    """Capture actual in-process read opens with a scoped Python audit hook."""
+
+    def __init__(self) -> None:
+        self.scope: str | None = None
+        self.counts: Counter[tuple[str, str, str]] = Counter()
+        self._normalized_paths: dict[tuple[str, str], tuple[str, str]] = {}
+        sys.addaudithook(self._audit)
+
+    def _audit(self, event: str, args: tuple[Any, ...]) -> None:
+        if event != "open" or self.scope is None or not args:
+            return
+        raw_path = args[0]
+        if not isinstance(raw_path, (str, bytes, os.PathLike)):
+            return
+        mode = args[1] if len(args) > 1 else None
+        flags = args[2] if len(args) > 2 else None
+        readable = isinstance(mode, str) and mode.startswith("r")
+        if mode is None and isinstance(flags, int):
+            mutating = flags & (os.O_CREAT | os.O_TRUNC | os.O_EXCL)
+            readable = not mutating and flags & os.O_ACCMODE != os.O_WRONLY
+        if not readable:
+            return
+        try:
+            decoded = os.fsdecode(raw_path)
+            raw = Path(decoded)
+            cwd = "" if raw.is_absolute() else os.getcwd()
+            cache_key = (cwd, decoded)
+            normalized = self._normalized_paths.get(cache_key)
+            if normalized is None:
+                requested = raw if raw.is_absolute() else Path(cwd) / raw
+                requested = requested.absolute()
+                resolved = requested.resolve(strict=False)
+                normalized = (str(requested), str(resolved))
+                self._normalized_paths[cache_key] = normalized
+        except (OSError, TypeError, ValueError):
+            return
+        self.counts[(self.scope, *normalized)] += 1
+
+    @contextmanager
+    def recording(self, scope: str) -> Iterator[None]:
+        if self.scope is not None:
+            raise RuntimeError("runtime open recorder scopes must not overlap")
+        self.scope = scope
+        try:
+            yield
+        finally:
+            self.scope = None
+
+    def observed_count(self, scope: str, path: Path) -> int:
+        requested = str(path.absolute())
+        return sum(
+            count
+            for (label, opened, _), count in self.counts.items()
+            if label == scope and opened == requested
+        )
+
+    def audit_rows(
+        self,
+        *,
+        scope: str,
+        permitted_data_roots: Iterable[Path],
+        permitted_state_roots: Iterable[Path],
+        permitted_config_paths: Iterable[Path] = (),
+        repository: Path,
+    ) -> list[dict[str, Any]]:
+        data_roots = tuple(path.resolve() for path in permitted_data_roots)
+        state_roots = tuple(path.resolve() for path in permitted_state_roots)
+        config_paths = tuple(path.resolve() for path in permitted_config_paths)
+        repo = repository.resolve()
+        runtime_roots = _runtime_library_roots()
+        rows = []
+        for (label, requested, resolved_text), count in sorted(self.counts.items()):
+            if label != scope:
+                continue
+            resolved = Path(resolved_text)
+            requested_path = Path(requested)
+            classification, purpose = _classify_observed_open(
+                requested_path,
+                resolved,
+                data_roots=data_roots,
+                state_roots=state_roots,
+                config_paths=config_paths,
+                repository=repo,
+                runtime_roots=runtime_roots,
+            )
+            rows.append(
+                {
+                    "run": scope,
+                    "path": requested,
+                    "resolved_path": resolved_text,
+                    "purpose": purpose,
+                    "classification": classification,
+                    "evidence_source": "PYTHON_SYS_AUDIT_HOOK_OPEN",
+                    "observed_open_count": count,
+                }
+            )
+        return rows
+
+
+def required_schedule_open_coverage(
+    recorder: RuntimeOpenRecorder,
+    *,
+    scope: str,
+    sources: Iterable[SourceFile],
+    context_sources: Iterable[SourceFile],
+    staging_root: Path,
+) -> list[dict[str, Any]]:
+    expected: list[tuple[str, Path]] = []
+    for source in sources:
+        expected.extend(
+            (
+                ("HARNESS_BYTE_EXACT_SOURCE_READ", source.source),
+                ("INGESTOR_STAGED_LIVE_SOURCE_READ", staging_root / source.relative),
+            )
+        )
+    expected.extend(
+        ("FIXED_CONTEXT_STAGED_SOURCE_READ", staging_root / source.relative)
+        for source in context_sources
+    )
+    rows = []
+    for purpose, path in expected:
+        count = recorder.observed_count(scope, path)
+        rows.append(
+            {
+                "run": scope,
+                "path": str(path.absolute()),
+                "purpose": purpose,
+                "classification": (
+                    "PERMITTED_OBSERVED_REQUIRED_SOURCE_OPEN"
+                    if count
+                    else "UNMEASURED_REQUIRED_SOURCE_OPEN"
+                ),
+                "evidence_source": "PYTHON_SYS_AUDIT_HOOK_OPEN",
+                "observed_open_count": count,
+                "required_source_open": True,
+                "status": "PASS" if count else "FAIL",
+            }
+        )
+    return rows
 
 
 SCHEDULES = {
-    "original_source_chunks": Schedule("original_source_chunks", (512,)),
+    "original_source_chunks": Schedule(
+        "original_source_chunks", (512,), original_byte_chunks=True
+    ),
     "one_record_per_increment": Schedule("one_record_per_increment", (1,)),
     "deterministic_variable_chunks": Schedule(
         "deterministic_variable_chunks", (1, 7, 3, 11, 2, 17, 5, 13)
@@ -292,6 +519,79 @@ def verify_reference_package_manifest(
 
 def _json_bytes(value: Any) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def _safe_state_relative_path(value: str) -> bool:
+    relative = Path(value)
+    return bool(
+        value
+        and "\\" not in value
+        and not relative.is_absolute()
+        and value == relative.as_posix()
+        and all(part not in {"", ".", ".."} for part in relative.parts)
+    )
+
+
+def write_state_tree_manifest(
+    state_root: Path, manifest_path: Path,
+) -> dict[str, Any]:
+    """Seal the exact incremental-A state tree outside the mutable state root."""
+    root = state_root.resolve(strict=True)
+    destination = manifest_path.resolve(strict=False)
+    if destination.is_relative_to(root):
+        raise ValueError("state-tree manifest must be outside state")
+    root_stat = state_root.lstat()
+    if stat.S_ISLNK(root_stat.st_mode) or not stat.S_ISDIR(root_stat.st_mode):
+        raise ValueError("state-tree root is not a plain directory")
+
+    files: list[dict[str, Any]] = []
+    for current, directory_names, file_names in os.walk(
+        state_root, topdown=True, followlinks=False,
+    ):
+        directory_names.sort()
+        file_names.sort()
+        current_path = Path(current)
+        for name in directory_names:
+            child_stat = (current_path / name).lstat()
+            if stat.S_ISLNK(child_stat.st_mode) or not stat.S_ISDIR(child_stat.st_mode):
+                raise ValueError("state-tree directory is not plain")
+        for name in file_names:
+            child = current_path / name
+            child_stat = child.lstat()
+            relative = child.relative_to(state_root).as_posix()
+            if (
+                stat.S_ISLNK(child_stat.st_mode)
+                or not stat.S_ISREG(child_stat.st_mode)
+                or name.lower().endswith(STATE_TREE_SIDECAR_SUFFIXES)
+                or not _safe_state_relative_path(relative)
+            ):
+                raise ValueError("state-tree file is unsafe")
+            files.append({
+                "path": relative,
+                "size": child_stat.st_size,
+                "sha256": _sha256_file(child),
+            })
+    files.sort(key=lambda row: row["path"])
+    aggregate = hashlib.sha256()
+    for row in files:
+        aggregate.update(
+            f'{row["path"]}\0{row["sha256"]}\0{row["size"]}\n'.encode()
+        )
+    manifest = {
+        "schema": STATE_TREE_MANIFEST_SCHEMA,
+        "classification": (
+            "LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL"
+        ),
+        "file_count": len(files),
+        "state_tree_sha256": aggregate.hexdigest(),
+        "files": files,
+    }
+    manifest_path.write_bytes(_json_bytes(manifest))
+    return {
+        "state_manifest_sha256": _sha256_file(manifest_path),
+        "state_tree_sha256": manifest["state_tree_sha256"],
+        "state_file_count": manifest["file_count"],
+    }
 
 
 def _jsonable(value: Any) -> Any:
@@ -402,8 +702,17 @@ def _as_rows(value: Any) -> list[dict[str, Any]]:
     raise TypeError(f"analytical component is not row-like: {type(value)!r}")
 
 
+class _SealedChartProjectionState:
+    """Minimal state marker forcing the API to use only sealed inputs."""
+
+    orchestrator = object()
+
+
+_SEALED_CHART_STATE = _SealedChartProjectionState()
+
+
 def _gui_projection(payload: Any) -> dict[str, Any]:
-    """Project only GUI-visible analytical rows, excluding packaging metadata."""
+    """Project GUI-visible rows plus operational clocks/display metadata."""
     if not isinstance(payload, Mapping):
         return {}
     row_keys = (
@@ -427,6 +736,96 @@ def _gui_projection(payload: Any) -> dict[str, Any]:
             if not row.get("evaluation_date"):
                 row["evaluation_date"] = str(payload_date)
     projected["availability"] = availability
+    raw_availability = payload.get("availability", {})
+    detail = raw_availability if isinstance(raw_availability, Mapping) else {}
+    date = str(payload.get("date") or payload.get("session") or "")
+    # Exercise the repository's actual sanitized /api/chart projection.  The
+    # analytical GUI payload intentionally does not carry public display/as-of
+    # fields; inventing defaults here would let an absent API field compare as
+    # if it had been published.  Historical A/B uses the sealed availability
+    # object as the API derivation input and compares its causal contract.
+    chart = sanitized_chart_projection(
+        _SEALED_CHART_STATE,
+        {"session_date": date, "availability": detail},
+        payload,
+        operational=False,
+    )
+    chart_availability = chart.get("availability", {})
+    if not isinstance(chart_availability, Mapping):
+        chart_availability = {}
+    reference = str(chart_availability.get("reference_timestamp") or "")
+    evidence = str(chart_availability.get("evidence_cutoff_timestamp") or "")
+    as_of = str(chart.get("as_of") or "")
+    try:
+        as_of_not_before_evidence = bool(
+            as_of
+            and evidence
+            and parse_timestamp(as_of, field_name="public chart as-of")
+            >= parse_timestamp(evidence, field_name="public chart evidence cutoff")
+        )
+    except (TypeError, ValueError):
+        as_of_not_before_evidence = False
+    states = {
+        key: chart_availability.get(key)
+        for key in (
+            "index_state",
+            "futures_state",
+            "futures_oi_state",
+            "ce_state",
+            "pe_state",
+        )
+        if key in chart_availability
+    }
+    projected["public_contract_metadata"] = [
+        {
+            "schema": str(payload.get("schema") or ""),
+            "classification": str(payload.get("classification") or ""),
+            "date": date,
+        }
+    ]
+    projected["classification_metadata"] = [
+        {
+            "classification": str(payload.get("classification") or ""),
+            "date": date,
+        }
+    ]
+    projected["display_metadata"] = [
+        {
+            "date": str(chart.get("session_date") or date),
+            "session_date": str(chart.get("session_date") or ""),
+            "as_of_present": bool(as_of),
+            "as_of_matches_availability_calculation": (
+                as_of == str(chart_availability.get("calculation_timestamp") or "")
+            ),
+            "as_of_not_before_evidence": as_of_not_before_evidence,
+            "as_of_clock_contract": "SANITIZED_CHART_CALCULATION_CLOCK",
+            "reference_timestamp": reference,
+            "evidence_cutoff_timestamp": evidence,
+            "display_state": str(chart.get("display_state") or ""),
+            "overall_state": str(chart_availability.get("overall_state") or ""),
+            "stale_warning": bool(chart.get("stale_warning")),
+            "warning_reason": str(chart.get("warning_reason") or ""),
+        }
+    ]
+    projected["availability_instruments"] = [
+        {
+            "date": date,
+            **states,
+            "receipt_ages_seconds": chart.get("receipt_ages_seconds", {}),
+        }
+    ]
+    counts = payload.get("counts", {})
+    if isinstance(counts, Mapping):
+        aliases = {
+            "resolution_dense": "resolution_mechanisms",
+            "cross_layer": "cross_layer_transitions",
+        }
+        normalized_counts = {
+            aliases.get(str(key), str(key)): value for key, value in counts.items()
+        }
+        projected["counts"] = [normalized_counts]
+    else:
+        projected["counts"] = []
     return projected
 
 
@@ -548,7 +947,184 @@ def analytical_ledger_rows(snapshot: Mapping[str, Any]) -> dict[str, list[dict[s
     ledgers = snapshot.get("analytical_ledgers", {})
     if not isinstance(ledgers, Mapping):
         return {}
-    return {str(name): _as_rows(rows) for name, rows in ledgers.items()}
+    return {
+        name: [
+            {
+                key: value
+                for key, value in row.items()
+                if key not in LEDGER_ENVELOPE_FIELDS
+            }
+            for row in _as_rows(ledgers.get(name, []))
+        ]
+        for name in MATERIAL_LEDGER_NAMES
+    }
+
+
+def _ledger_event_hash(prefix: str, *parts: object) -> str:
+    """Independent implementation of the frozen deterministic ledger ID contract."""
+    body = "|".join(
+        json.dumps(
+            _jsonable(part), sort_keys=True, separators=(",", ":"), default=str
+        )
+        for part in parts
+    )
+    return prefix + "-" + hashlib.sha256(body.encode()).hexdigest()[:24].upper()
+
+
+def _batch_availability_states(value: Mapping[str, Any]) -> dict[str, str]:
+    result = {
+        f"HORIZON_{horizon}": str(item.get("state", ""))
+        for horizon, item in value.get("layers", {}).items()
+    }
+    for key in (
+        "divergence_state",
+        "participation_state",
+        "index_state",
+        "futures_state",
+        "futures_oi_state",
+        "ce_state",
+        "pe_state",
+        "overall_state",
+    ):
+        if key in value:
+            result[key.upper()] = str(value[key])
+    return result
+
+
+def build_batch_analytical_ledgers(snapshot: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """Derive expected append-only publications from independent clean-B rows."""
+    expected: dict[str, list[dict[str, Any]]] = {
+        name: [] for name in MATERIAL_LEDGER_NAMES
+    }
+    expected["divergence_confirmations"] = [
+        {**row, "event_id": str(row["episode_id"])}
+        for row in _as_rows(snapshot.get("episodes", []))
+    ]
+    expected["dependency_retriggers"] = [
+        {
+            **row,
+            "event_id": _ledger_event_hash(
+                "ANALYTICAL",
+                "dependency_retriggers",
+                f"dependency:{row['episode_id']}",
+            ),
+        }
+        for row in _as_rows(snapshot.get("dependencies", []))
+    ]
+    expected["lifecycle_transitions"] = [
+        {**row, "event_id": str(row["record_id"])}
+        for row in _as_rows(snapshot.get("lifecycle", []))
+    ]
+    inventory = [
+        *_as_rows(snapshot.get("inventory", [])),
+        *_as_rows(snapshot.get("partial_fixed_inventory", [])),
+        *_as_rows(snapshot.get("intraday_inventory", [])),
+    ]
+    for row in inventory:
+        inner = _ledger_event_hash(
+            "INVENTORY",
+            row.get("evaluation_date"),
+            row.get("horizon"),
+            row.get("family"),
+            row.get("control_effective_timestamp"),
+            float(row["control_value"]),
+        )
+        expected["inventory_winner_transitions"].append(
+            {
+                **row,
+                "event_id": _ledger_event_hash(
+                    "ANALYTICAL", "inventory_winner_transitions", inner
+                ),
+            }
+        )
+    expected["participation_transitions"] = [
+        {**row, "event_id": str(row["transition_id"])}
+        for row in _as_rows(snapshot.get("participation_transitions", []))
+    ]
+    cross = [
+        *_as_rows(snapshot.get("cross_layer_transitions", [])),
+        *_as_rows(snapshot.get("partial_fixed_cross_layer_transitions", [])),
+        *_as_rows(snapshot.get("intraday_cross_layer_transitions", [])),
+    ]
+    expected["cross_layer_transitions"] = [
+        {**row, "event_id": str(row["transition_id"])} for row in cross
+    ]
+    details = snapshot.get("availability_detail", {})
+    if not isinstance(details, Mapping):
+        raise ValueError("clean-B availability detail is missing")
+    for session, detail in details.items():
+        effective = str(
+            detail.get("reference_timestamp")
+            or detail.get("evidence_cutoff_timestamp")
+            or detail.get("calculation_timestamp")
+            or ""
+        )
+        for component, state in _batch_availability_states(detail).items():
+            event = {
+                "session_date": str(session),
+                "component": component,
+                "previous_state": "NOT_YET_AVAILABLE",
+                "new_state": state,
+                "effective_timestamp": effective,
+                "reason": "MATERIAL_AVAILABILITY_CHANGE",
+            }
+            identity = _ledger_event_hash(
+                "AVAILABILITY", session, component, effective, state
+            )
+            expected["availability_transitions"].append(
+                {
+                    **event,
+                    "event_id": _ledger_event_hash(
+                        "ANALYTICAL", "availability_transitions", identity
+                    ),
+                }
+            )
+            if "STALE" in state:
+                stale_identity = _ledger_event_hash(
+                    "STALE", session, component, effective, state
+                )
+                expected["stale_recovery_transitions"].append(
+                    {
+                        **event,
+                        "event_id": _ledger_event_hash(
+                            "ANALYTICAL",
+                            "stale_recovery_transitions",
+                            stale_identity,
+                        ),
+                    }
+                )
+    return _jsonable(expected)
+
+
+def compare_analytical_ledgers(
+    a_snapshot: Mapping[str, Any], b_snapshot: Mapping[str, Any]
+) -> list[dict[str, Any]]:
+    a_ledgers = analytical_ledger_rows(a_snapshot)
+    b_ledgers = analytical_ledger_rows(b_snapshot)
+    rows = []
+    for name in MATERIAL_LEDGER_NAMES:
+        left_rows = a_ledgers[name]
+        right_rows = b_ledgers[name]
+        left = _row_counter(left_rows)
+        right = _row_counter(right_rows)
+        a_only = sum((left - right).values())
+        b_only = sum((right - left).values())
+        fields = _field_mismatches(left_rows, right_rows)
+        remainder = a_only + b_only + fields
+        rows.append(
+            {
+                "ledger": name,
+                "incremental_a_count": len(left_rows),
+                "batch_b_expected_count": len(right_rows),
+                "matched_rows": sum((left & right).values()),
+                "a_only": a_only,
+                "b_only": b_only,
+                "field_mismatches": fields,
+                "identity_content_differences": remainder,
+                "status": "PASS" if remainder == 0 else "FAIL",
+            }
+        )
+    return rows
 
 
 def _row_counter(rows: Iterable[Mapping[str, Any]]) -> Counter[str]:
@@ -721,12 +1297,64 @@ def audit_invariants(snapshot: Mapping[str, Any]) -> dict[str, int]:
     for rows in analytical_ledger_rows(snapshot).values():
         values = [str(row["event_id"]) for row in rows if row.get("event_id")]
         duplicate_ids += len(values) - len(set(values))
+    raw_ledgers = snapshot.get("analytical_ledgers", {})
+    analytical_refusals = (
+        len(_as_rows(raw_ledgers.get("refusals_data_quality", [])))
+        if isinstance(raw_ledgers, Mapping)
+        else 0
+    )
+    gui_clock_contract_violations = 0
+    gui_display_contract_violations = 0
+    gui_path_clock_violations = 0
+    gui = snapshot.get("gui_payload", {})
+    if isinstance(gui, Mapping):
+        for payload in gui.values():
+            projected = _gui_projection(payload)
+            for metadata in projected.get("display_metadata", []):
+                evidence = _timestamp_value(metadata.get("evidence_cutoff_timestamp"))
+                reference = _timestamp_value(metadata.get("reference_timestamp"))
+                if evidence is not None and (
+                    not metadata.get("as_of_present")
+                    or not metadata.get("as_of_matches_availability_calculation")
+                    or not metadata.get("as_of_not_before_evidence")
+                    or reference is None
+                    or reference < evidence
+                ):
+                    gui_clock_contract_violations += 1
+                stale = metadata.get("stale_warning") is True
+                display = str(metadata.get("display_state", ""))
+                warning = str(metadata.get("warning_reason", ""))
+                if (
+                    stale
+                    and (
+                        display != "LAST_VALID_CHART_WITH_STALE_WARNING"
+                        or warning != "STALE_DATA"
+                    )
+                ) or (
+                    not stale
+                    and (
+                        display != "CURRENT_OR_REPLAY_PROJECTION" or warning
+                    )
+                ):
+                    gui_display_contract_violations += 1
+            for row in projected.get("price", []):
+                index_receipt = _timestamp_value(row.get("it"))
+                futures_receipt = _timestamp_value(row.get("ft"))
+                if index_receipt is None or futures_receipt is None:
+                    continue
+                delta_ms = (futures_receipt - index_receipt) / 1_000_000
+                if not 0 <= delta_ms <= 2_000:
+                    gui_path_clock_violations += 1
     return {
         "future_joins": int(future_joins),
         "synchronization_tolerance_violations": synchronization_tolerance_violations,
         "timestamp_backdating": backdating,
         "duplicate_analytical_ids": duplicate_ids,
         "valid_timestamps_becoming_nat": nat_timestamps,
+        "analytical_refusals": analytical_refusals,
+        "gui_clock_contract_violations": gui_clock_contract_violations,
+        "gui_display_contract_violations": gui_display_contract_violations,
+        "gui_path_clock_violations": gui_path_clock_violations,
     }
 
 
@@ -779,54 +1407,211 @@ def _required_source_dates(data_root: Path, sessions: Iterable[str]) -> list[str
     ]
 
 
+def _safe_fixture_path(root: Path, relative_text: object) -> Path:
+    relative = Path(str(relative_text))
+    target = (root / relative).resolve()
+    if (
+        not relative.parts
+        or relative.is_absolute()
+        or ".." in relative.parts
+        or not target.is_relative_to(root.resolve())
+    ):
+        raise ValueError("authorized focused fixture contains an unsafe path")
+    return target
+
+
+def _validate_focused_fixture_manifest(
+    root: Path, *, expected_manifest_sha256: str
+) -> None:
+    """Cryptographically validate the authorized source-hour projection."""
+    fixture_root = root.parent
+    manifest_path = fixture_root / "manifest.json"
+    checksum_path = fixture_root / "manifest.sha256"
+    if (
+        not manifest_path.is_file()
+        or not checksum_path.is_file()
+        or _sha256_file(manifest_path) != expected_manifest_sha256
+        or checksum_path.read_text(encoding="ascii")
+        != f"{expected_manifest_sha256}  manifest.json\n"
+    ):
+        raise ValueError("authorized focused fixture manifest identity mismatch")
+    manifest = json.loads(manifest_path.read_text())
+    if (
+        manifest.get("schema") != "R6E1R_FOCUSED_SAMPLE_V2"
+        or
+        manifest.get("fixture") != "r6e1r0_aug19_0915_1205"
+        or manifest.get("collector_root") != "collector"
+        or manifest.get("session_date") != "2026-08-19"
+        or manifest.get("complete_json_lines_only") is not True
+        or manifest.get("complete_json_records_only") is not True
+        or manifest.get("selected_records_byte_exact") is not True
+        or manifest.get("incomplete_final_lines_excluded") is not True
+        or manifest.get("source_mutations") != 0
+        or manifest.get("canonical_symbols", {}).get("index") != "NSE:NIFTYBANK-INDEX"
+        or manifest.get("contract_selection", {}).get("authority")
+        != "banknifty_profiler.raw_io.reader.load_oi+select_contracts"
+        or manifest.get("window", {}).get("timezone") != "Asia/Kolkata"
+        or manifest.get("window", {}).get("start_inclusive")
+        != "2026-08-19T09:15:00+05:30"
+        or manifest.get("window", {}).get("end_exclusive")
+        != "2026-08-19T12:05:00+05:30"
+    ):
+        raise ValueError("authorized focused fixture contract mismatch")
+
+    source_rows = manifest.get("source_files")
+    collector_rows = manifest.get("collector_files")
+    identities = manifest.get("selected_records")
+    if (
+        not isinstance(source_rows, list)
+        or not isinstance(collector_rows, list)
+        or not isinstance(identities, list)
+        or len(source_rows) != 8
+        or len(collector_rows) != 8
+        or manifest.get("collector_file_count") != 8
+        or len(identities) != manifest.get("selected_outer_records")
+    ):
+        raise ValueError("authorized focused fixture inventory mismatch")
+
+    source_paths: dict[str, Path] = {}
+    for source in source_rows:
+        path = Path(str(source.get("path", ""))).resolve()
+        relative = str(source.get("relative_path", ""))
+        stat = path.stat() if path.is_file() else None
+        if (
+            stat is None
+            or path.is_symlink()
+            or relative in source_paths
+            or stat.st_dev != int(source.get("device", -1))
+            or stat.st_ino != int(source.get("inode", -1))
+            or stat.st_size != int(source.get("bytes_before", -1))
+            or stat.st_size != int(source.get("bytes_after", -2))
+            or stat.st_mtime_ns != int(source.get("mtime_ns_before", -1))
+            or stat.st_mtime_ns != int(source.get("mtime_ns_after", -2))
+            or source.get("unchanged") is not True
+            or not (
+                source.get("sha256_before")
+                == source.get("sha256_during_extraction")
+                == source.get("sha256_after")
+                == source.get("sha256")
+                == _sha256_file(path)
+            )
+        ):
+            raise ValueError(f"authorized focused fixture source identity mismatch: {path}")
+        source_paths[relative] = path
+
+    collector_paths: dict[str, Path] = {}
+    expected_collector_files: set[str] = set()
+    for row in collector_rows:
+        relative = str(row.get("relative_path", ""))
+        path = _safe_fixture_path(root, relative)
+        if (
+            relative in collector_paths
+            or not path.is_file()
+            or path.is_symlink()
+            or path.stat().st_size != int(row.get("bytes", -1))
+            or _sha256_file(path) != row.get("sha256")
+            or row.get("ends_with_newline") is not True
+        ):
+            raise ValueError(
+                f"authorized focused fixture collector identity mismatch: {relative}"
+            )
+        collector_paths[relative] = path
+        expected_collector_files.add(relative)
+    observed_collector_files = {
+        str(path.relative_to(root)) for path in root.rglob("*") if path.is_file()
+    }
+    if observed_collector_files != expected_collector_files or any(
+        path.is_symlink() for path in root.rglob("*")
+    ):
+        raise ValueError("authorized focused fixture file set mismatch")
+
+    archive_paths: dict[str, Path] = {}
+    for stream in ("raw", "oi"):
+        archive = manifest.get("compatibility_archives", {}).get(stream, {})
+        path = _safe_fixture_path(fixture_root, archive.get("relative_path", ""))
+        if (
+            not path.is_file()
+            or path.is_symlink()
+            or path.stat().st_size != int(archive.get("bytes", -1))
+            or archive.get("sha256")
+            != manifest.get("extracted_sha256", {}).get(stream)
+            or _sha256_file(path) != archive.get("sha256")
+            or archive.get("ends_with_newline") is not True
+        ):
+            raise ValueError(
+                f"authorized focused fixture compatibility identity mismatch: {stream}"
+            )
+        archive_paths[stream] = path
+
+    identity_file = manifest.get("selected_record_identity_file", {})
+    identity_path = _safe_fixture_path(
+        fixture_root, identity_file.get("relative_path", "")
+    )
+    if (
+        not identity_path.is_file()
+        or identity_path.is_symlink()
+        or int(identity_file.get("rows", -1)) != len(identities)
+        or _sha256_file(identity_path) != identity_file.get("sha256")
+        or sum(1 for _ in identity_path.open("rb")) != len(identities)
+    ):
+        raise ValueError("authorized focused fixture identity ledger mismatch")
+
+    source_handles = {name: path.open("rb") for name, path in source_paths.items()}
+    collector_handles = {
+        name: path.open("rb") for name, path in collector_paths.items()
+    }
+    archive_handles = {name: path.open("rb") for name, path in archive_paths.items()}
+    try:
+        for identity in identities:
+            relative = str(identity.get("source_relative_path", ""))
+            projection_relative = str(identity.get("projection_relative_path", ""))
+            stream = str(identity.get("source_stream", ""))
+            if (
+                relative not in source_handles
+                or projection_relative != relative
+                or projection_relative not in collector_handles
+                or stream not in archive_handles
+                or Path(str(identity.get("source_path", ""))).resolve()
+                != source_paths[relative]
+            ):
+                raise ValueError("authorized focused fixture record path mismatch")
+            source_handle = source_handles[relative]
+            source_handle.seek(int(identity["source_byte_offset"]))
+            value = source_handle.read(int(identity["source_byte_length"]))
+            if (
+                not value.endswith(b"\n")
+                or _sha256_bytes(value) != identity["record_sha256"]
+            ):
+                raise ValueError("authorized focused fixture source record identity mismatch")
+            collector_handle = collector_handles[projection_relative]
+            collector_handle.seek(int(identity["projection_byte_offset"]))
+            if collector_handle.read(len(value)) != value:
+                raise ValueError(
+                    "authorized focused fixture projection record identity mismatch"
+                )
+            archive_handle = archive_handles[stream]
+            archive_handle.seek(int(identity["output_byte_offset"]))
+            if archive_handle.read(len(value)) != value:
+                raise ValueError(
+                    "authorized focused fixture compatibility record identity mismatch"
+                )
+    finally:
+        for handle in (
+            *source_handles.values(),
+            *collector_handles.values(),
+            *archive_handles.values(),
+        ):
+            handle.close()
+
+
 def _validate_authorized_focused_fixture(root: Path) -> None:
     """Validate the one explicitly authorized research-hosted raw fixture."""
     expected_root = AUTHORIZED_FOCUSED_FIXTURE_ROOT.resolve()
     if root != expected_root:
         raise ValueError("research-derived analytical input root is prohibited")
-    fixture_root = root.parent
-    manifest_path = fixture_root / "manifest.json"
-    if not manifest_path.is_file() or _sha256_file(manifest_path) != AUTHORIZED_FOCUSED_MANIFEST_SHA256:
-        raise ValueError("authorized focused fixture manifest identity mismatch")
-    manifest = json.loads(manifest_path.read_text())
-    if (
-        manifest.get("fixture") != "r6e1r0_aug19_0915_1205"
-        or manifest.get("complete_json_lines_only") is not True
-        or manifest.get("canonical_symbols", {}).get("index") != "NSE:NIFTYBANK-INDEX"
-    ):
-        raise ValueError("authorized focused fixture contract mismatch")
-    output_paths = {
-        "raw.jsonl": root / "raw/2026-08-19/events_sample.jsonl",
-        "oi.jsonl": root / "oi/2026-08-19/oi_sample.jsonl",
-    }
-    for name, path in output_paths.items():
-        expected = manifest.get("extracted_sha256", {}).get(name.removesuffix(".jsonl"))
-        if not path.is_file() or _sha256_file(path) != expected:
-            raise ValueError(f"authorized focused fixture output identity mismatch: {name}")
-    for source in manifest.get("source_files", []):
-        path = Path(source.get("path", ""))
-        stat = path.stat() if path.is_file() else None
-        if (
-            stat is None
-            or stat.st_size != int(source.get("size", -1))
-            or stat.st_mtime_ns != int(source.get("mtime_ns_before", -1))
-            or _sha256_file(path) != source.get("sha256")
-        ):
-            raise ValueError(f"authorized focused fixture source identity mismatch: {path}")
-    handles = {name: path.open("rb") for name, path in output_paths.items()}
-    try:
-        for identity in manifest.get("selected_records", []):
-            source_path = Path(identity["source_path"])
-            with source_path.open("rb") as source_handle:
-                source_handle.seek(int(identity["source_byte_offset"]))
-                value = source_handle.read(int(identity["source_byte_length"]))
-            if _sha256_bytes(value) != identity["record_sha256"]:
-                raise ValueError("authorized focused fixture source record identity mismatch")
-            if handles[identity["output_file"]].readline() != value:
-                raise ValueError("authorized focused fixture output record identity mismatch")
-    finally:
-        for handle in handles.values():
-            handle.close()
+    _validate_focused_fixture_manifest(
+        root, expected_manifest_sha256=AUTHORIZED_FOCUSED_MANIFEST_SHA256
+    )
 
 
 def _projection_classes(
@@ -1056,6 +1841,11 @@ def build_raw_projection(
         source_mutations += int(not row["unchanged_after_projection"])
     if source_mutations:
         raise ValueError(f"authoritative sources changed during raw projection: {source_mutations}")
+    if malformed_candidates:
+        raise ValueError(
+            "raw projection refused malformed candidate JSON records: "
+            f"{malformed_candidates}"
+        )
 
     manifest = {
         "schema": "R6E1R_BYTE_EXACT_RAW_RECORD_PROJECTION_V1",
@@ -1103,6 +1893,7 @@ def validate_existing_raw_projection(
         manifest.get("schema") != "R6E1R_BYTE_EXACT_RAW_RECORD_PROJECTION_V1"
         or manifest.get("complete_json_records_only") is not True
         or manifest.get("selected_records_byte_exact") is not True
+        or manifest.get("malformed_candidate_records") != 0
         or manifest.get("source_mutations") != 0
         or tuple(manifest.get("evaluation_sessions", ())) != sessions
         or Path(str(manifest.get("authoritative_source_root", ""))).resolve()
@@ -1331,6 +2122,17 @@ def merged_source_lines(sources: list[SourceFile]) -> Iterator[tuple[SourceFile,
             handle.close()
 
 
+def source_chunk_order(sources: Iterable[SourceFile]) -> list[SourceFile]:
+    """Order physical source files by their first complete JSON receipt."""
+    keyed = []
+    for source in sources:
+        with source.source.open("rb") as handle:
+            line, row = _next_json_record_chunk(handle, 0)
+        key = _receipt_key(line, source, row) if line else (-(1 << 63), str(source.relative), row)
+        keyed.append((key, source))
+    return [source for _, source in sorted(keyed, key=lambda item: item[0])]
+
+
 def _write_csv(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:
     materialized = list(rows)
     fields = list(dict.fromkeys(key for row in materialized for key in row))
@@ -1416,7 +2218,9 @@ class _RunContext:
         self.open()
 
     def snapshot(self, sessions: Iterable[str]) -> dict[str, Any]:
-        assert self.orchestrator is not None
+        assert self.ingestor is not None and self.orchestrator is not None
+        sessions = tuple(map(str, sessions))
+        source_integrity = self.ingestor.verify_committed_sources(sessions)
         by_session = {}
         finalizer = getattr(self.orchestrator, "finalize_session", None)
         for session in sessions:
@@ -1456,6 +2260,7 @@ class _RunContext:
         combined["counts"] = {
             key: len(combined[key]) for key in row_keys if isinstance(combined[key], list)
         }
+        combined["committed_source_integrity"] = source_integrity
         return combined
 
     @property
@@ -1697,6 +2502,18 @@ def run_schedule(
     poll_count = 0
     split_line_boundary_count = 0
     explicit_empty_poll_count = 0
+    original_source_chunk_count = 0
+    original_source_files_staged_before_first_poll = 0
+    record_increment_count = 0
+    record_group_sizes_exercised: set[int] = set()
+    record_group_sequence = hashlib.sha256()
+    maximum_record_group_bytes = 0
+    post_poll_hourly_path_introductions = 0
+    polled_live_paths: set[Path] = set()
+    original_checkpoint_chunk_counts: Counter[str] = Counter()
+    original_checkpoint_delta_bytes: Counter[str] = Counter()
+    original_checkpoint_delta_oversize_count = 0
+    exposed_source_paths: set[Path] = set()
     analytical_boundary_probe: dict[str, Any] = {"measured": False}
     total_records = sum(
         source.json_records if source.json_records is not None else source.complete_rows
@@ -1729,11 +2546,19 @@ def run_schedule(
             nonlocal group_index, pending_bytes, split_line_boundary_count
             nonlocal explicit_empty_poll_count, next_empty_threshold
             nonlocal next_restart_threshold
+            nonlocal record_increment_count
+            nonlocal maximum_record_group_bytes
+            nonlocal post_poll_hourly_path_introductions
             if not pending:
                 return
+            record_increment_count += 1
+            record_group_sizes_exercised.add(len(pending))
+            record_group_sequence.update(f"{len(pending)},".encode())
+            maximum_record_group_bytes = max(maximum_record_group_bytes, pending_bytes)
             changed_paths: set[Path] = set()
             for pending_source, pending_line in pending:
                 destination = staging_root / pending_source.relative
+                exposed_source_paths.add(pending_source.relative)
                 changed_paths.add(destination)
                 record_ordinal = exposed_records + 1
                 if schedule.split_inside_lines and (
@@ -1748,7 +2573,16 @@ def run_schedule(
                 exposed_records += 1
             # This final poll is also required when only a deterministic subset
             # was split: records appended after the last split remain pending.
+            for destination in changed_paths - polled_live_paths:
+                relative = destination.relative_to(staging_root)
+                stream_session = relative.parts[:2]
+                if any(
+                    prior.relative_to(staging_root).parts[:2] == stream_session
+                    for prior in polled_live_paths
+                ):
+                    post_poll_hourly_path_introductions += 1
             poll_for_schedule(changed_paths)
+            polled_live_paths.update(changed_paths)
             if (
                 schedule.restart_every
                 and exposed_records // schedule.restart_every > checkpoint_restart_count
@@ -1781,15 +2615,115 @@ def run_schedule(
             group_index += 1
             pending_bytes = 0
 
-        for source, line in merged_source_lines(sources):
-            target = groups[group_index % len(groups)]
-            if pending and (len(pending) >= target or pending_bytes + len(line) > maximum_exposure_bytes):
-                flush_pending()
-            pending.append((source, line))
-            pending_bytes += len(line)
-            if len(pending) >= groups[group_index % len(groups)]:
-                flush_pending()
-        flush_pending()
+        if schedule.original_byte_chunks:
+            # Make every complete evaluation file visible before the first
+            # production poll.  The collector writes raw and OI peers
+            # concurrently; exposing and polling one complete hourly file at a
+            # time would invent an ordering in which (for example) raw_10 can
+            # publish through the hour before oi_10 exists.  Once staged, the
+            # production ingestor reads every file in its native ``read_limit``
+            # chunks and its incomplete-stream watermarks merge the streams.
+            # Predecessor symlinks remain fixed-context-only because every poll
+            # below receives the explicit evaluation-file allowlist.
+            for source in source_chunk_order(sources):
+                destination = staging_root / source.relative
+                exposed_source_paths.add(source.relative)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                with source.source.open("rb") as handle, destination.open("xb") as staged:
+                    while True:
+                        block = handle.read(maximum_exposure_bytes)
+                        if not block:
+                            break
+                        staged.write(block)
+                    staged.flush()
+                    os.fsync(staged.fileno())
+                exposed_records += (
+                    source.json_records
+                    if source.json_records is not None
+                    else source.complete_rows
+                )
+            live_destinations = tuple(
+                staging_root / source.relative for source in sources
+            )
+            original_source_files_staged_before_first_poll = len(live_destinations)
+            previous_offsets: tuple[tuple[str, int], ...] | None = None
+            for _ in range(100_000):
+                before = {
+                    str(source.relative): int(
+                        context.checkpoints.get(str(source.relative), {}).get("offset", 0)
+                    )
+                    for source in sources
+                }
+                poll_for_schedule(live_destinations)
+                after = tuple(
+                    sorted(
+                        (
+                            str(source.relative),
+                            int(
+                                context.checkpoints.get(
+                                    str(source.relative), {}
+                                ).get("offset", 0)
+                            ),
+                        )
+                        for source in sources
+                    )
+                )
+                after_by_relative = dict(after)
+                original_source_chunk_count += sum(
+                    offset > before[relative] for relative, offset in after
+                )
+                for relative, offset in after:
+                    delta = offset - before[relative]
+                    if delta <= 0:
+                        continue
+                    original_checkpoint_chunk_counts[relative] += 1
+                    original_checkpoint_delta_bytes[relative] += delta
+                    if delta > maximum_exposure_bytes:
+                        original_checkpoint_delta_oversize_count += 1
+                if all(
+                    after_by_relative[str(source.relative)] == source.size
+                    for source in sources
+                ):
+                    break
+                if after == previous_offsets:
+                    raise RuntimeError(
+                        "original source chunks made no checkpoint progress"
+                    )
+                previous_offsets = after
+            else:
+                raise RuntimeError("original source chunk drain iteration limit exceeded")
+        else:
+            for source, line in merged_source_lines(sources):
+                target = groups[group_index % len(groups)]
+                stream_session = source.relative.parts[:2]
+                earlier_same_stream_file = any(
+                    item.relative.parts[:2] == stream_session
+                    and item.relative != source.relative
+                    for item, _ in pending
+                ) or any(
+                    relative.parts[:2] == stream_session
+                    and relative != source.relative
+                    for relative in exposed_source_paths
+                )
+                if pending and (
+                    len(pending) >= target
+                    or (
+                        target >= 512
+                        and pending_bytes + len(line) > maximum_exposure_bytes
+                    )
+                    or (
+                        schedule.name == "hourly_file_rotation"
+                        and source.relative
+                        not in {item.relative for item, _ in pending}
+                        and earlier_same_stream_file
+                    )
+                ):
+                    flush_pending()
+                pending.append((source, line))
+                pending_bytes += len(line)
+                if len(pending) >= groups[group_index % len(groups)]:
+                    flush_pending()
+            flush_pending()
         _drain(context, sources, staging_root)
         if schedule.restart_on_analytical_transition:
             analytical_boundary_probe = analytical_transition_boundary_probe(
@@ -1828,6 +2762,12 @@ def run_schedule(
                     "analytical transition duplicated after restart/seal retry"
                 )
         accounting = checkpoint_accounting(sources, staging_root, context.checkpoints)
+        raw_ledgers = snapshot.get("analytical_ledgers", {})
+        analytical_refusals = (
+            len(_as_rows(raw_ledgers.get("refusals_data_quality", [])))
+            if isinstance(raw_ledgers, Mapping)
+            else 0
+        )
         metrics = {
             "schedule": schedule.name,
             "source_files": len(sources),
@@ -1849,7 +2789,48 @@ def run_schedule(
             "analytical_boundary_probe": analytical_boundary_probe,
             "split_line_boundary_count": split_line_boundary_count,
             "explicit_empty_poll_count": explicit_empty_poll_count,
+            "original_source_chunk_count": original_source_chunk_count,
+            "original_source_files_staged_before_first_poll": (
+                original_source_files_staged_before_first_poll
+            ),
+            "record_increment_count": record_increment_count,
+            "record_group_sizes_exercised": sorted(record_group_sizes_exercised),
+            "record_group_sequence_sha256": record_group_sequence.hexdigest(),
+            "maximum_record_group_bytes": maximum_record_group_bytes,
+            "maximum_exposure_bytes": maximum_exposure_bytes,
+            "hourly_rotation_boundary_count": post_poll_hourly_path_introductions,
+            "expected_hourly_rotation_boundaries": sum(
+                max(
+                    0,
+                    len(
+                        {
+                            source.relative
+                            for source in sources
+                            if source.relative.parts[:2] == (stream, session)
+                        }
+                    )
+                    - 1,
+                )
+                for stream in ("raw", "oi")
+                for session in sessions
+            ),
+            "source_sizes_by_relative": {
+                str(source.relative): source.size for source in sources
+            },
+            "original_checkpoint_chunk_counts": dict(
+                sorted(original_checkpoint_chunk_counts.items())
+            ),
+            "original_checkpoint_delta_bytes": dict(
+                sorted(original_checkpoint_delta_bytes.items())
+            ),
+            "original_checkpoint_delta_oversize_count": (
+                original_checkpoint_delta_oversize_count
+            ),
             "checkpoint_failures": sum(row["status"] != "PASS" for row in accounting),
+            "analytical_refusals": analytical_refusals,
+            "committed_source_integrity": dict(
+                snapshot.get("committed_source_integrity", {})
+            ),
             "semantic_hash": semantic_hash(component_rows(snapshot)),
             "elapsed_seconds": time.monotonic() - begun,
             "peak_rss_kib_process": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
@@ -1935,14 +2916,35 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def _run_repository_command(command: list[str], repository: Path) -> dict[str, Any]:
+def _run_repository_command(
+    command: list[str], repository: Path, *, trace_path: Path | None = None
+) -> dict[str, Any]:
     environment = os.environ.copy()
     source_path = str(repository / "src")
     environment["PYTHONPATH"] = source_path + (
         os.pathsep + environment["PYTHONPATH"] if environment.get("PYTHONPATH") else ""
     )
+    executed = command
+    if trace_path is not None:
+        trace_path.parent.mkdir(parents=True, exist_ok=True)
+        executed = [
+            "strace",
+            "-ff",
+            "-qq",
+            "-s",
+            "4096",
+            "-yy",
+            "-e",
+            "trace=open,openat,openat2",
+            "-e",
+            "status=successful",
+            "-o",
+            str(trace_path),
+            "--",
+            *command,
+        ]
     completed = subprocess.run(
-        command,
+        executed,
         cwd=repository,
         env=environment,
         text=True,
@@ -1968,7 +2970,179 @@ def _run_repository_command(command: list[str], repository: Path) -> dict[str, A
         "returncode": completed.returncode,
         "stdout": completed.stdout.strip(),
         "stderr": completed.stderr.strip(),
+        "open_trace": str(trace_path) if trace_path is not None else "",
+        "open_trace_files": [
+            str(path) for path in _strace_files(trace_path)
+        ] if trace_path is not None else [],
+        "open_trace_sha256": semantic_hash(
+            [_sha256_file(path) for path in _strace_files(trace_path)]
+        ) if trace_path is not None and _strace_files(trace_path) else "",
     }
+
+
+_STRACE_OPEN = re.compile(
+    r'^(?:\d+\s+)?(?:open|openat|openat2)\(([^\"]*)'
+    r'\"((?:\\.|[^\"])*)\",\s*([^)]*)\)\s+=\s+(-?\d+)'
+    r'(?:<([^>]*)>)?'
+)
+
+
+def _strace_files(prefix: Path) -> tuple[Path, ...]:
+    files = tuple(sorted(prefix.parent.glob(prefix.name + ".*")))
+    if not files and prefix.is_file():
+        files = (prefix,)
+    return files
+
+
+def _parse_strace_read_opens(trace_path: Path, cwd: Path) -> Counter[tuple[str, str]]:
+    """Parse successful non-creating read opens from one child trace."""
+    result: Counter[tuple[str, str]] = Counter()
+    with trace_path.open(errors="replace") as handle:
+        for line in handle:
+            match = _STRACE_OPEN.match(line)
+            if match is None:
+                if line.strip():
+                    raise ValueError(f"unparsed successful child open: {line[:300]!r}")
+                continue
+            if int(match.group(4)) < 0:
+                continue
+            flags = match.group(3)
+            if "O_WRONLY" in flags or any(
+                flag in flags for flag in ("O_CREAT", "O_TRUNC", "O_EXCL")
+            ):
+                continue
+            if "O_RDONLY" not in flags and "O_RDWR" not in flags:
+                continue
+            try:
+                decoded = json.loads('"' + match.group(2) + '"')
+                raw = Path(decoded)
+                dirfd = re.search(r'<([^>]*)>', match.group(1))
+                base = Path(dirfd.group(1)) if dirfd is not None else cwd
+                requested = raw if raw.is_absolute() else base / raw
+                requested = requested.absolute()
+                returned = match.group(5)
+                resolved = (
+                    Path(returned)
+                    if returned and Path(returned).is_absolute()
+                    else requested.resolve(strict=False)
+                )
+            except (json.JSONDecodeError, OSError, TypeError, ValueError):
+                continue
+            result[(str(requested), str(resolved))] += 1
+    return result
+
+
+def child_open_audit_rows(
+    *,
+    traces: Mapping[str, Path],
+    data_root: Path,
+    generated_root: Path,
+    repository: Path,
+    config_paths: Iterable[Path],
+) -> list[dict[str, Any]]:
+    """Classify actual clean-B child reads and require complete raw coverage."""
+    raw_root = data_root.resolve()
+    state_root = generated_root.resolve()
+    repo = repository.resolve()
+    configs = tuple(path.resolve() for path in config_paths)
+    runtime_roots = _runtime_library_roots()
+    observed_by_component: dict[str, Counter[tuple[str, str]]] = {}
+    rows: list[dict[str, Any]] = []
+    for component, trace_path in traces.items():
+        trace_files = _strace_files(trace_path)
+        if not trace_files:
+            raise ValueError(f"clean-B child open trace missing: {component}")
+        observed: Counter[tuple[str, str]] = Counter()
+        for path in trace_files:
+            observed.update(_parse_strace_read_opens(path, repo))
+        observed_by_component[component] = observed
+        for (requested_text, resolved_text), count in sorted(observed.items()):
+            requested = Path(requested_text)
+            resolved = Path(resolved_text)
+            classification, purpose = _classify_observed_open(
+                requested,
+                resolved,
+                data_roots=(raw_root,),
+                state_roots=(state_root,),
+                config_paths=configs,
+                repository=repo,
+                runtime_roots=runtime_roots,
+            )
+            rows.append(
+                {
+                    "run": "batch_b",
+                    "component": component,
+                    "path": requested_text,
+                    "resolved_path": resolved_text,
+                    "purpose": purpose,
+                    "classification": classification,
+                    "evidence_source": "LINUX_STRACE_SUCCESSFUL_READ_OPEN",
+                    "observed_open_count": count,
+                }
+            )
+
+    union = Counter()
+    for observed in observed_by_component.values():
+        union.update(observed)
+    for source in sorted(
+        [*(raw_root / "raw").glob("*/*.jsonl"), *(raw_root / "oi").glob("*/*.jsonl")]
+    ):
+        requested = str(source.absolute())
+        resolved = str(source.resolve())
+        count = sum(
+            value
+            for (opened, target), value in union.items()
+            if opened == requested or target == resolved
+        )
+        rows.append(
+            {
+                "run": "batch_b",
+                "component": "all_clean_batch_children",
+                "path": requested,
+                "resolved_path": resolved,
+                "purpose": "REQUIRED_AUTHORITATIVE_SOURCE_CHILD_READ",
+                "classification": "PERMITTED_OBSERVED_REQUIRED_SOURCE_OPEN"
+                if count
+                else "UNMEASURED_REQUIRED_SOURCE_OPEN",
+                "evidence_source": "LINUX_STRACE_SUCCESSFUL_READ_OPEN",
+                "observed_open_count": count,
+                "required_source_open": True,
+                "status": "PASS" if count else "FAIL",
+            }
+        )
+    for component, observed in observed_by_component.items():
+        raw_reads = sum(
+            count
+            for (requested, resolved), count in observed.items()
+            if Path(requested).is_relative_to(raw_root)
+            or Path(resolved).is_relative_to(raw_root)
+        )
+        generated_reads = sum(
+            count
+            for (requested, resolved), count in observed.items()
+            if Path(requested).is_relative_to(state_root)
+            or Path(resolved).is_relative_to(state_root)
+        )
+        passed = raw_reads > 0 if component in {"inventory", "stack"} else generated_reads > 0
+        rows.append(
+            {
+                "run": "batch_b",
+                "component": component,
+                "path": str(traces[component]),
+                "purpose": "REQUIRED_CHILD_RAW_READ"
+                if component in {"inventory", "stack"}
+                else "REQUIRED_LAYERS_GENERATED_STATE_READ",
+                "classification": "PERMITTED_OBSERVED_CHILD_COMPONENT_COVERAGE"
+                if passed
+                else "UNMEASURED_CHILD_COMPONENT_INPUT",
+                "evidence_source": "LINUX_STRACE_SUCCESSFUL_READ_OPEN",
+                "observed_open_count": raw_reads
+                if component in {"inventory", "stack"}
+                else generated_reads,
+                "status": "PASS" if passed else "FAIL",
+            }
+        )
+    return rows
 
 
 def load_canonical_batch_snapshot(
@@ -2264,6 +3438,156 @@ def build_intraday_inventory_fallback(
     )
 
 
+def build_clean_batch_availability_detail(
+    *,
+    snapshot: Mapping[str, Any],
+    data_root: Path,
+    stack_config_path: Path,
+    shadow_config_path: Path,
+    sessions: tuple[str, ...],
+) -> dict[str, dict[str, Any]]:
+    """Independently derive final availability from clean chronological raw bytes."""
+    stack = json.loads(stack_config_path.read_text())
+    shadow = json.loads(shadow_config_path.read_text())
+    limits = shadow.get("freshness_seconds", {})
+    if not isinstance(limits, Mapping):
+        raise ValueError("shadow freshness_seconds must be a component mapping")
+    inventory = [
+        *_as_rows(snapshot.get("inventory", [])),
+        *_as_rows(snapshot.get("partial_fixed_inventory", [])),
+        *_as_rows(snapshot.get("intraday_inventory", [])),
+    ]
+    result: dict[str, dict[str, Any]] = {}
+    for session in sessions:
+        oi = raw_reader.load_oi(data_root / "oi", session)
+        futures, _, _ = raw_reader.select_contracts(oi, session)
+        if not futures:
+            raise ValueError(f"clean-B availability could not select futures for {session}")
+        market = raw_reader.load_market(
+            data_root / "raw",
+            session,
+            {str(stack["index_symbol"]), futures},
+        )
+        latest: dict[str, Any] = {}
+        accepted_receipts: list[Any] = []
+        for kind, symbol in (
+            ("INDEX", str(stack["index_symbol"])),
+            ("FUTURES", futures),
+        ):
+            accepted = market[
+                (market.symbol == symbol) & market.receipt_timestamp.notna()
+            ]
+            accepted_receipts.extend(accepted.receipt_timestamp.tolist())
+            values = accepted[accepted.last_price.notna()]
+            if not values.empty:
+                latest[kind] = values.receipt_timestamp.max()
+        for kind, instrument_class in (
+            ("FUTURES_OI", "future"),
+            ("CE", "call"),
+            ("PE", "put"),
+        ):
+            accepted = oi[
+                (oi.instrument_class == instrument_class)
+                & oi.oi_receipt_timestamp.notna()
+            ]
+            if kind == "FUTURES_OI":
+                accepted = accepted[accepted.symbol == futures]
+            accepted_receipts.extend(accepted.oi_receipt_timestamp.tolist())
+            values = accepted[accepted.oi_close.notna()]
+            if not values.empty:
+                latest[kind] = values.oi_receipt_timestamp.max()
+        # Production evidence_cutoff is the latest accepted known receipt,
+        # including a terminal row whose analytical value is null.  Freshness
+        # clocks remain latest *valid-valued* receipts.  Collapsing those two
+        # clocks would incorrectly keep an older price/OI fresh.
+        reference = max(accepted_receipts, default=None)
+
+        def fresh(kind: str) -> bool:
+            if reference is None or kind not in latest:
+                return False
+            seconds = float(limits.get(kind.lower(), 180))
+            age = (reference - latest[kind]).total_seconds()
+            return 0 <= age <= seconds
+
+        market_available = fresh("INDEX") and fresh("FUTURES")
+        layers: dict[str, context_availability.LayerAvailability] = {}
+        for horizon in ("1D", "2D", "3D"):
+            present = any(
+                _evaluation_date(row) == session
+                and str(row.get("horizon")) == horizon
+                for row in inventory
+            )
+            layers[horizon] = context_availability.LayerAvailability(
+                horizon,
+                "AVAILABLE" if present else "MISSING_PRIOR_SESSION",
+                "CACHED_RAW_PRIOR_CONTEXT" if present else "INSUFFICIENT_PRIOR_SESSIONS",
+            )
+        intraday_present = any(
+            _evaluation_date(row) == session and str(row.get("horizon")) == "ID"
+            for row in inventory
+        )
+        layers["ID"] = context_availability.LayerAvailability(
+            "ID",
+            "AVAILABLE"
+            if market_available and intraday_present
+            else "STALE_DATA"
+            if any(kind in latest for kind in ("INDEX", "FUTURES"))
+            else "NOT_YET_AVAILABLE",
+            "FRESH_SYNCHRONIZED_MARKET"
+            if market_available and intraday_present
+            else "MARKET_INPUT_STALE_OR_MISSING",
+        )
+        participation_available = any(
+            fresh(kind) for kind in ("FUTURES_OI", "CE", "PE")
+        )
+        classified = context_availability.classify_context(
+            layers,
+            divergence_inputs_available=market_available,
+            participation_inputs_available=participation_available,
+        )
+        if not market_available and any(
+            kind in latest for kind in ("INDEX", "FUTURES")
+        ):
+            classified["divergence_state"] = "STALE_DATA"
+        result[session] = _jsonable(
+            {
+                **classified,
+                "layers": {
+                    horizon: {"state": layer.state, "reason": layer.reason}
+                    for horizon, layer in layers.items()
+                },
+                "index_state": "AVAILABLE" if fresh("INDEX") else "STALE_OR_MISSING",
+                "futures_state": "AVAILABLE"
+                if fresh("FUTURES")
+                else "STALE_OR_MISSING",
+                "futures_oi_state": "AVAILABLE"
+                if fresh("FUTURES_OI")
+                else "STALE_OR_MISSING",
+                "ce_state": "AVAILABLE" if fresh("CE") else "STALE_OR_MISSING",
+                "pe_state": "AVAILABLE" if fresh("PE") else "STALE_OR_MISSING",
+                "evidence_cutoff_timestamp": reference.isoformat()
+                if reference is not None
+                else "",
+                # B uses its evidence clock as the deterministic calculation
+                # reference; calculation/publication wall clocks are excluded
+                # from analytical comparison.
+                "calculation_timestamp": reference.isoformat()
+                if reference is not None
+                else "",
+                "reference_timestamp": reference.isoformat()
+                if reference is not None
+                else "",
+                "receipt_ages_seconds": {
+                    kind: (reference - instant).total_seconds()
+                    for kind, instant in latest.items()
+                }
+                if reference is not None
+                else {},
+            }
+        )
+    return result
+
+
 def rebuild_clean_gui_payload(snapshot: dict[str, Any], sessions: tuple[str, ...]) -> None:
     """Project clean-B rows through the same calculation-free live GUI shape."""
     all_inventory = [
@@ -2279,6 +3603,16 @@ def rebuild_clean_gui_payload(snapshot: dict[str, Any], sessions: tuple[str, ...
     gui = snapshot.setdefault("gui_payload", {})
     for session in sessions:
         payload = dict(gui.get(session, {}))
+        detail = snapshot.get("availability_detail", {}).get(session, {})
+        if not detail:
+            raise ValueError(f"clean-B GUI availability detail missing for {session}")
+        payload["schema"] = "R6E_LIVE_SESSION_PAYLOAD_V1"
+        payload["classification"] = (
+            "LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL"
+        )
+        payload["date"] = session
+        payload["session"] = session
+        payload["availability"] = detail
         basis = [
             row
             for row in _as_rows(snapshot.get("basis", []))
@@ -2339,6 +3673,11 @@ def rebuild_clean_gui_payload(snapshot: dict[str, Any], sessions: tuple[str, ...
         payload["cross_layer_transitions"] = gui_adapter._pack(
             [row for row in all_cross if _evaluation_date(row) == session]
         )
+        payload["counts"] = {
+            key: len(value.get("rows", []))
+            for key, value in payload.items()
+            if isinstance(value, Mapping) and "rows" in value
+        }
         gui[session] = payload
 
 
@@ -2397,6 +3736,7 @@ def run_clean_canonical_batch(
     stack_config_path: Path,
     inventory_config_path: Path,
     sessions: tuple[str, ...],
+    shadow_config_path: Path | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
     """Run B through repository batch processors, never the live checkpoint path."""
     begun = time.monotonic()
@@ -2414,7 +3754,7 @@ def run_clean_canonical_batch(
     stack_root = layout / "runs/stream_stack"
     layers_root = layout / "runs/stream_layers"
     commands = [
-        [
+        ("inventory", [
             sys.executable,
             "-m",
             "banknifty_profiler.inventory.engine",
@@ -2426,8 +3766,8 @@ def run_clean_canonical_batch(
             str(inventory_root),
             "--config",
             str(inventory_config_path.resolve()),
-        ],
-        [
+        ]),
+        ("stack", [
             sys.executable,
             str(repository / "scripts/run_r6b3.py"),
             "--mode",
@@ -2440,8 +3780,8 @@ def run_clean_canonical_batch(
             str(stack_config_path.resolve()),
             "--anchor-source",
             "generated",
-        ],
-        [
+        ]),
+        ("layers", [
             sys.executable,
             str(repository / "scripts/build_r6c2_layers.py"),
             "--inventory-root",
@@ -2452,9 +3792,22 @@ def run_clean_canonical_batch(
             str(layers_root),
             "--sessions",
             *sessions,
-        ],
+        ]),
     ]
-    command_audit = [_run_repository_command(command, repository) for command in commands]
+    trace_root = batch_root / "child_open_traces"
+    traces = {
+        component: trace_root / f"{component}.strace"
+        for component, _ in commands
+    }
+    command_audit = [
+        {
+            "component": component,
+            **_run_repository_command(
+                command, repository, trace_path=traces[component]
+            ),
+        }
+        for component, command in commands
+    ]
     (batch_root / "canonical_batch_commands.json").write_bytes(_json_bytes(command_audit))
     snapshot = load_canonical_batch_snapshot(
         layout_root=layout,
@@ -2480,24 +3833,26 @@ def run_clean_canonical_batch(
     snapshot["intraday_cross_layer_transitions"] = intraday_cross
     snapshot["partial_fixed_cross_layer_transitions"] = partial_fixed_cross
     snapshot["intraday_fallback_sessions"] = list(fallback_sessions)
+    snapshot["availability_detail"] = build_clean_batch_availability_detail(
+        snapshot=snapshot,
+        data_root=data_root.resolve(),
+        stack_config_path=stack_config_path.resolve(),
+        shadow_config_path=(
+            shadow_config_path.resolve()
+            if shadow_config_path is not None
+            else repository / "configs/r6e_shadow.json"
+        ),
+        sessions=sessions,
+    )
     rebuild_clean_gui_payload(snapshot, sessions)
-    open_rows = []
-    for component, path in (
-        ("inventory", inventory_root / "file_open_audit.csv"),
-        ("stack", stack_root / "file_open_audit.csv"),
-    ):
-        for row in _read_csv(path):
-            value = {"run": "batch_b", "component": component, **row}
-            value.setdefault("purpose", "CANONICAL_BATCH_RUNTIME_RAW_OPEN")
-            value.setdefault("classification", "PERMITTED_RUNTIME_RAW_OPEN")
-            if not value.get("classification"):
-                value["classification"] = "PERMITTED_RUNTIME_RAW_OPEN"
-            opened = Path(str(value.get("path", ""))).resolve()
-            if not opened.is_relative_to(data_root.resolve()):
-                value["classification"] = (
-                    "PROHIBITED_RUNTIME_OPEN_OUTSIDE_A_B_RAW_ROOT"
-                )
-            open_rows.append(value)
+    snapshot["analytical_ledgers"] = build_batch_analytical_ledgers(snapshot)
+    open_rows = child_open_audit_rows(
+        traces=traces,
+        data_root=data_root.resolve(),
+        generated_root=layout,
+        repository=repository,
+        config_paths=(stack_config_path, inventory_config_path),
+    )
     metrics = {
         "schedule": "independent_clean_canonical_batch",
         "processor_count": len(commands),
@@ -2667,6 +4022,8 @@ def compare_gui_visual_authority(
         "inventory",
         "resolution_mechanisms",
         "cross_layer_transitions",
+        "display_metadata",
+        "availability_instruments",
     }
     targets = {
         "incremental_a": a_snapshot.get("gui_payload", {}),
@@ -2699,9 +4056,38 @@ def compare_gui_visual_authority(
                 continue
             target = _gui_projection(payloads[session])
             for component in sorted(reference.keys() | target.keys()):
+                if component == "public_contract_metadata":
+                    # R6D's legacy schema identifier is packaging authority,
+                    # while the complete A/B gate above requires the R6E live
+                    # public schema and classification to match exactly.
+                    continue
+                if component == "counts":
+                    # R6D compressed several live supersets, so its aggregate
+                    # values cannot be compared as row subsets.  The complete
+                    # A/B GUI projection gate still compares every normalized
+                    # count exactly; the individual R6D-visible artifacts are
+                    # checked above instead.
+                    continue
                 reference_rows = reference.get(component, [])
                 target_rows = target.get(component, [])
-                fields = {field for row in reference_rows for field in row}
+                if component == "display_metadata":
+                    # R6D predates sanitized operational chart metadata.  Its
+                    # visual authority here is the displayed session identity;
+                    # exact as-of/display/stale clocks are gated A/B through
+                    # the production /api/chart projection above.
+                    fields = {"date", "session_date"}
+                elif component == "availability_instruments":
+                    # R6D's packed layer table has no instrument receipt-age
+                    # contract.  Preserve the session mapping only; A/B exact
+                    # comparison owns the new instrument states and ages.
+                    fields = {"date"}
+                else:
+                    fields = {
+                        field
+                        for row in reference_rows
+                        for field, value in row.items()
+                        if value not in (None, "", {}, [])
+                    }
                 if fields:
                     left = _reference_counter(target_rows, fields)
                     right = _reference_counter(reference_rows, fields)
@@ -2758,6 +4144,140 @@ def _load_sealed_snapshot(run_root: Path) -> dict[str, Any]:
     return json.loads(snapshot_path.read_text())
 
 
+def expected_record_group_sequence(
+    total_records: int, groups: tuple[int, ...]
+) -> tuple[int, str]:
+    digest = hashlib.sha256()
+    remaining = total_records
+    count = 0
+    while remaining > 0:
+        size = min(groups[count % len(groups)], remaining)
+        digest.update(f"{size},".encode())
+        remaining -= size
+        count += 1
+    return count, digest.hexdigest()
+
+
+def schedule_exercise_failures(
+    name: str, seal: Mapping[str, Any]
+) -> list[str]:
+    """Return truthful failures when a named adversarial schedule was inert."""
+    failures: list[str] = []
+    if name not in SCHEDULES:
+        return failures
+    source_records = int(seal.get("source_json_records", 0) or 0)
+    exposed_records = int(seal.get("exposed_records", 0) or 0)
+    poll_calls = int(seal.get("poll_calls_by_harness", 0) or 0)
+    if source_records <= 0:
+        failures.append("NO_SOURCE_RECORDS")
+    if exposed_records != source_records:
+        failures.append("NOT_ALL_SOURCE_RECORDS_EXPOSED")
+    if poll_calls <= 0:
+        failures.append("NO_PRODUCTION_POLLS")
+
+    if name == "original_source_chunks":
+        counts = {
+            str(key): int(value)
+            for key, value in dict(
+                seal.get("original_checkpoint_chunk_counts", {})
+            ).items()
+        }
+        delta_bytes = {
+            str(key): int(value)
+            for key, value in dict(
+                seal.get("original_checkpoint_delta_bytes", {})
+            ).items()
+        }
+        source_sizes = {
+            str(key): int(value)
+            for key, value in dict(seal.get("source_sizes_by_relative", {})).items()
+        }
+        read_limit = int(seal.get("maximum_exposure_bytes", 0) or 0)
+        exact_chunks = (
+            source_sizes
+            and delta_bytes == source_sizes
+            and set(counts) == set(source_sizes)
+            and int(seal.get("original_source_chunk_count", 0) or 0)
+            == sum(counts.values())
+            and int(seal.get("original_checkpoint_delta_oversize_count", 0) or 0)
+            == 0
+            and read_limit > 0
+            and all(
+                counts[path] >= (size + read_limit - 1) // read_limit
+                for path, size in source_sizes.items()
+            )
+        )
+        if not exact_chunks:
+            failures.append("NATIVE_CHECKPOINT_CHUNK_ACCOUNTING_NOT_EXACT")
+        if int(
+            seal.get("original_source_files_staged_before_first_poll", 0) or 0
+        ) != int(seal.get("source_files", 0) or 0):
+            failures.append("ALL_SOURCE_FILES_NOT_STAGED_BEFORE_FIRST_POLL")
+    elif name == "one_record_per_increment":
+        sizes = {int(value) for value in seal.get("record_group_sizes_exercised", [])}
+        if sizes != {1} or int(seal.get("record_increment_count", 0) or 0) != source_records:
+            failures.append("ONE_RECORD_INCREMENT_NOT_EXERCISED_FOR_FULL_STREAM")
+    elif name == "deterministic_variable_chunks":
+        expected_count, expected_hash = expected_record_group_sequence(
+            source_records, SCHEDULES[name].line_groups
+        )
+        if (
+            int(seal.get("record_increment_count", 0) or 0) != expected_count
+            or str(seal.get("record_group_sequence_sha256", "")) != expected_hash
+        ):
+            failures.append("EXACT_DETERMINISTIC_VARIABLE_SEQUENCE_NOT_EXERCISED")
+    elif name == "boundaries_inside_jsonl_lines":
+        expected = len(
+            _fraction_thresholds(source_records, SCHEDULES[name].split_events)
+        )
+        if int(seal.get("split_line_boundary_count", 0) or 0) != expected:
+            failures.append("CONFIGURED_INSIDE_LINE_BOUNDARIES_NOT_MEASURED")
+    elif name == "empty_repeated_polls":
+        configured = SCHEDULES[name]
+        expected = len(
+            _fraction_thresholds(source_records, configured.empty_poll_events)
+        ) * configured.empty_polls
+        if int(seal.get("explicit_empty_poll_count", 0) or 0) != expected:
+            failures.append("CONFIGURED_REPEATED_EMPTY_POLLS_NOT_MEASURED")
+    elif name == "multiple_checkpoint_restarts":
+        expected = len(
+            _fraction_thresholds(source_records, SCHEDULES[name].restart_events)
+        )
+        if int(seal.get("checkpoint_restart_count", 0) or 0) != expected:
+            failures.append("CONFIGURED_CHECKPOINT_RESTARTS_NOT_MEASURED")
+    elif name == "analytical_boundary_restarts":
+        probe = seal.get("analytical_boundary_probe", {})
+        if not isinstance(probe, Mapping) or not probe.get("measured"):
+            failures.append("ANALYTICAL_BOUNDARY_NOT_MEASURED")
+        elif not (
+            int(probe.get("durable_occurrences_before_restart", 0) or 0) == 1
+            and int(probe.get("durable_occurrences_after_restart", 0) or 0) == 1
+            and int(probe.get("occurrences_after_retry_and_seal", 0) or 0) == 1
+            and probe.get("exactly_once_after_seal") is True
+        ):
+            failures.append("ANALYTICAL_BOUNDARY_NOT_EXACTLY_ONCE")
+    elif name == "hourly_file_rotation":
+        expected = int(seal.get("expected_hourly_rotation_boundaries", 0) or 0)
+        observed = int(seal.get("hourly_rotation_boundary_count", 0) or 0)
+        if expected <= 0 or observed != expected:
+            failures.append("ALL_POST_POLL_HOURLY_PATH_INTRODUCTIONS_NOT_MEASURED")
+    elif name == "large_chronological_chunks":
+        sizes = [int(value) for value in seal.get("record_group_sizes_exercised", [])]
+        target_records = min(SCHEDULES[name].line_groups[0], source_records)
+        byte_limit = int(seal.get("maximum_exposure_bytes", 0) or 0)
+        maximum_bytes = int(seal.get("maximum_record_group_bytes", 0) or 0)
+        record_target_reached = bool(sizes) and max(sizes) >= target_records
+        # A complete JSONL record can approach the configured 1 MiB line
+        # buffer, so a bounded group may have to stop one record below the
+        # 4 MiB poll limit.  Filling at least 75% of that production limit is a
+        # measured multi-megabyte chronological increment, not a token >1-row
+        # exercise.
+        byte_target_reached = byte_limit > 0 and maximum_bytes >= int(byte_limit * 0.75)
+        if source_records > 1 and not (record_target_reached or byte_target_reached):
+            failures.append("LARGE_CHRONOLOGICAL_TARGET_NOT_MEASURED")
+    return failures
+
+
 def scheduling_comparison(
     canonical_seal: Mapping[str, Any], variants: Iterable[tuple[str, Mapping[str, Any]]]
 ) -> list[dict[str, Any]]:
@@ -2767,16 +4287,32 @@ def scheduling_comparison(
     for name, seal in variants:
         state_equal = seal.get("analytical_semantic_sha256") == canonical_hash
         ledgers_equal = seal.get("analytical_ledgers_sha256", "") == canonical_ledger_hash
+        canonical_refusals = int(canonical_seal.get("analytical_refusals", 0))
+        schedule_refusals = int(seal.get("analytical_refusals", 0))
+        refusals_clear = canonical_refusals == schedule_refusals == 0
+        exercise_failures = schedule_exercise_failures(name, seal)
         rows.append({
             "schedule": name,
             "canonical_a_hash": canonical_hash,
             "schedule_hash": seal.get("analytical_semantic_sha256", ""),
             "canonical_a_ledger_hash": canonical_ledger_hash,
             "schedule_ledger_hash": seal.get("analytical_ledgers_sha256", ""),
-            "differences": int(not state_equal) + int(not ledgers_equal),
-            "status": "PASS" if state_equal and ledgers_equal else "FAIL",
+            "canonical_a_analytical_refusals": canonical_refusals,
+            "schedule_analytical_refusals": schedule_refusals,
+            "schedule_exercise_failures": "|".join(exercise_failures),
+            "differences": (
+                int(not state_equal)
+                + int(not ledgers_equal)
+                + int(not refusals_clear)
+                + len(exercise_failures)
+            ),
+            "status": "PASS"
+            if state_equal and ledgers_equal and refusals_clear and not exercise_failures
+            else "FAIL",
             "reason": "IDENTICAL_SESSION_FINALIZED_ANALYTICAL_STATE"
-            if state_equal and ledgers_equal
+            if state_equal and ledgers_equal and refusals_clear and not exercise_failures
+            else "SCHEDULE_NOT_EXERCISED"
+            if exercise_failures
             else "SCHEDULE_DEPENDENT_ANALYTICAL_STATE",
         })
     return rows
@@ -2840,27 +4376,37 @@ def _new_output_root(path: Path) -> Path:
 
 
 def runtime_open_audit_summary(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
-    """Derive the prohibited-open gate from explicit classified audit rows."""
+    """Gate only observed reader/audit-hook opens, never declarations."""
     materialized = list(rows)
-    unmeasured = [row for row in materialized if not str(row.get("classification", "")).strip()]
-    prohibited = [
-        row
-        for row in materialized
-        if "PROHIBITED" in str(row.get("classification", "")).upper()
-        or "DERIVED_ANALYTICAL_INPUT" in str(row.get("classification", "")).upper()
-    ]
     a_b_runtime = [
         row
         for row in materialized
-        if str(row.get("run", "")) in {
-            "incremental_a",
-            "batch_b",
-            "A_AND_B_SOURCE",
-        }
+        if str(row.get("run", "")) in {"incremental_a", "batch_b"}
         or str(row.get("run", "")).startswith("schedule:")
     ]
+    trusted = {
+        "PYTHON_SYS_AUDIT_HOOK_OPEN",
+        "LINUX_STRACE_SUCCESSFUL_READ_OPEN",
+    }
+    unmeasured = [
+        row
+        for row in a_b_runtime
+        if not str(row.get("classification", "")).strip()
+        or str(row.get("evidence_source", "")) not in trusted
+        or int(row.get("observed_open_count") or 0) <= 0
+        or str(row.get("status", "PASS")) == "FAIL"
+        or "UNMEASURED" in str(row.get("classification", "")).upper()
+    ]
+    prohibited = [
+        row
+        for row in a_b_runtime
+        if "PROHIBITED" in str(row.get("classification", "")).upper()
+        or "DERIVED_ANALYTICAL_INPUT" in str(row.get("classification", "")).upper()
+    ]
+    observed_scopes = {str(row.get("run", "")) for row in a_b_runtime}
     return {
-        "measured": bool(a_b_runtime) and not unmeasured,
+        "measured": {"incremental_a", "batch_b"}.issubset(observed_scopes)
+        and not unmeasured,
         "audited_rows": len(materialized),
         "a_b_runtime_rows": len(a_b_runtime),
         "unmeasured_rows": len(unmeasured),
@@ -3147,8 +4693,26 @@ def main() -> int:
             # the non-research work root.
             _validate_authorized_focused_fixture(analytical_data_root)
             focused_fixture_source = analytical_data_root
+            focused_manifest = json.loads(
+                (focused_fixture_source.parent / "manifest.json").read_text()
+            )
             analytical_data_root = work / "focused_fixture_collector"
             shutil.copytree(focused_fixture_source, analytical_data_root)
+            # ``discover_sources`` must distinguish actual JSON records from
+            # the blank physical rows that retain authoritative source-row
+            # coordinates.  Materialize a local, non-authoritative scheduling
+            # contract from the already pinned and fully validated fixture
+            # manifest.  A and B still consume only the copied collector bytes.
+            (work / "projection_manifest.json").write_bytes(
+                _json_bytes(
+                    {
+                        "schema": "R6E1R_BYTE_EXACT_RAW_RECORD_PROJECTION_V1",
+                        "collector_root": str(analytical_data_root.resolve()),
+                        "source_mutations": 0,
+                        "projection_files": focused_manifest["collector_files"],
+                    }
+                )
+            )
 
         focused_equivalence = (
             focused_fixture_source is not None and sessions == ("2026-08-19",)
@@ -3210,58 +4774,74 @@ def main() -> int:
                 }
             )
         all_accounting: list[dict[str, Any]] = []
-        a_snapshot, accounting, a_metrics = run_schedule(
-            schedule=SCHEDULES["original_source_chunks"],
-            sources=sources,
-            staging_root=work / "a_collector",
-            state_root=output / "runs/incremental_a/state",
-            config_path=args.config,
-            sessions=sessions,
-            context_sources=context_sources,
-        )
+        open_recorder = RuntimeOpenRecorder()
+        a_staging = work / "a_collector"
+        a_state = output / "runs/incremental_a/state"
+        with open_recorder.recording("incremental_a"):
+            a_snapshot, accounting, a_metrics = run_schedule(
+                schedule=SCHEDULES["original_source_chunks"],
+                sources=sources,
+                staging_root=a_staging,
+                state_root=a_state,
+                config_path=args.config,
+                sessions=sessions,
+                context_sources=context_sources,
+            )
         all_accounting.extend({"run": "incremental_a", **row} for row in accounting)
         audit.extend(
-            {
-                "run": "incremental_a",
-                "path": str(work / "a_collector" / source.relative),
-                "relative_path": str(source.relative),
-                "purpose": "LIVE_INGEST_RUNTIME_STAGED_RAW_OPEN",
-                "classification": "PERMITTED_RUNTIME_RAW_OPEN",
-                "sha256": next(
-                    row["staged_sha256"]
-                    for row in accounting
-                    if row["source_file"] == str(source.relative)
-                ),
-                "bytes": source.size,
-            }
-            for source in sources
+            open_recorder.audit_rows(
+                scope="incremental_a",
+                permitted_data_roots=(analytical_data_root, a_staging),
+                permitted_state_roots=(a_state,),
+                permitted_config_paths=(args.config,),
+                repository=repository,
+            )
         )
         audit.extend(
-            {
-                "run": "incremental_a",
-                "path": str(work / "a_collector" / source.relative),
-                "relative_path": str(source.relative),
-                "purpose": "FIXED_CONTEXT_RUNTIME_READ_ONLY_RAW_OPEN",
-                "classification": "PERMITTED_RUNTIME_RAW_OPEN",
-                "sha256": analytical_hashes_before[str(source.source)],
-                "bytes": source.size,
-                "live_callback_input": False,
-            }
-            for source in context_sources
+            required_schedule_open_coverage(
+                open_recorder,
+                scope="incremental_a",
+                sources=sources,
+                context_sources=context_sources,
+                staging_root=a_staging,
+            )
         )
         a_seal = seal_run(output / "runs/incremental_a", a_snapshot, a_metrics)
+        state_manifest_seal = write_state_tree_manifest(
+            a_state, output / "incremental_a_state_manifest.json",
+        )
+        a_seal.update(state_manifest_seal)
+        (output / "runs/incremental_a/seal.json").write_bytes(
+            _json_bytes(a_seal)
+        )
         if not args.retain_staging:
             shutil.rmtree(work / "a_collector")
 
-        b_snapshot, b_metrics, batch_open_rows = run_clean_canonical_batch(
-            data_root=analytical_data_root,
-            batch_root=output / "runs/batch_b",
-            stack_config_path=args.stack_config,
-            inventory_config_path=args.inventory_config,
-            sessions=sessions,
-        )
+        b_state = output / "runs/batch_b"
+        with open_recorder.recording("batch_b"):
+            b_snapshot, b_metrics, batch_open_rows = run_clean_canonical_batch(
+                data_root=analytical_data_root,
+                batch_root=b_state,
+                stack_config_path=args.stack_config,
+                inventory_config_path=args.inventory_config,
+                shadow_config_path=args.config,
+                sessions=sessions,
+            )
         b_seal = seal_run(output / "runs/batch_b", b_snapshot, b_metrics)
         audit.extend(batch_open_rows)
+        audit.extend(
+            open_recorder.audit_rows(
+                scope="batch_b",
+                permitted_data_roots=(analytical_data_root,),
+                permitted_state_roots=(b_state,),
+                permitted_config_paths=(
+                    args.stack_config,
+                    args.inventory_config,
+                    args.config,
+                ),
+                repository=repository,
+            )
+        )
 
         # Deliberately reopen only sealed A/B snapshots for comparison.
         sealed_a = _load_sealed_snapshot(output / "runs/incremental_a")
@@ -3275,6 +4855,11 @@ def main() -> int:
             expected=None if args.no_expected_count_gate else EXPECTED_COUNTS,
         )
         _write_csv(output / "component_equivalence.csv", comparison)
+        ledger_comparison = compare_analytical_ledgers(sealed_a, sealed_b)
+        _write_csv(
+            output / "analytical_ledger_identity_equivalence.csv",
+            ledger_comparison,
+        )
         invariant_rows = compare_invariants(sealed_a, sealed_b)
         _write_csv(output / "causality_invariants.csv", invariant_rows)
 
@@ -3368,46 +4953,37 @@ def main() -> int:
                     }
                 )
                 continue
-            variant_snapshot, accounting, metrics = run_schedule(
-                schedule=SCHEDULES[name],
-                sources=sources,
-                staging_root=work / f"schedule_{name}/collector",
-                state_root=output / f"runs/schedules/{name}/state",
-                config_path=args.config,
-                sessions=sessions,
-                context_sources=context_sources,
-            )
+            variant_scope = f"schedule:{name}"
+            variant_staging = work / f"schedule_{name}/collector"
+            variant_state = output / f"runs/schedules/{name}/state"
+            with open_recorder.recording(variant_scope):
+                variant_snapshot, accounting, metrics = run_schedule(
+                    schedule=SCHEDULES[name],
+                    sources=sources,
+                    staging_root=variant_staging,
+                    state_root=variant_state,
+                    config_path=args.config,
+                    sessions=sessions,
+                    context_sources=context_sources,
+                )
             all_accounting.extend({"run": name, **row} for row in accounting)
             audit.extend(
-                {
-                    "run": f"schedule:{name}",
-                    "path": str(work / f"schedule_{name}/collector" / source.relative),
-                    "relative_path": str(source.relative),
-                    "purpose": "SCHEDULE_RUNTIME_STAGED_RAW_OPEN",
-                    "classification": "PERMITTED_RUNTIME_RAW_OPEN",
-                    "sha256": next(
-                        row["staged_sha256"]
-                        for row in accounting
-                        if row["source_file"] == str(source.relative)
-                    ),
-                    "bytes": source.size,
-                }
-                for source in sources
+                open_recorder.audit_rows(
+                    scope=variant_scope,
+                    permitted_data_roots=(analytical_data_root, variant_staging),
+                    permitted_state_roots=(variant_state,),
+                    permitted_config_paths=(args.config,),
+                    repository=repository,
+                )
             )
             audit.extend(
-                {
-                    "run": f"schedule:{name}",
-                    "path": str(
-                        work / f"schedule_{name}/collector" / source.relative
-                    ),
-                    "relative_path": str(source.relative),
-                    "purpose": "FIXED_CONTEXT_RUNTIME_READ_ONLY_RAW_OPEN",
-                    "classification": "PERMITTED_RUNTIME_RAW_OPEN",
-                    "sha256": analytical_hashes_before[str(source.source)],
-                    "bytes": source.size,
-                    "live_callback_input": False,
-                }
-                for source in context_sources
+                required_schedule_open_coverage(
+                    open_recorder,
+                    scope=variant_scope,
+                    sources=sources,
+                    context_sources=context_sources,
+                    staging_root=variant_staging,
+                )
             )
             variant_run_root = output / f"runs/schedules/{name}"
             variant_seal = seal_run(variant_run_root, variant_snapshot, metrics)
@@ -3463,8 +5039,19 @@ def main() -> int:
 
         summary = {
             "incremental_a_seal": a_seal,
+            "incremental_a_state_manifest_sha256": a_seal[
+                "state_manifest_sha256"
+            ],
+            "incremental_a_state_tree_sha256": a_seal["state_tree_sha256"],
+            "incremental_a_state_file_count": a_seal["state_file_count"],
+            "incremental_a_committed_source_integrity": a_seal[
+                "committed_source_integrity"
+            ],
             "batch_b_seal": b_seal,
             "component_failures": sum(row["status"] != "PASS" for row in comparison),
+            "analytical_ledger_failures": sum(
+                row["status"] != "PASS" for row in ledger_comparison
+            ),
             "causality_failures": sum(row["status"] != "PASS" for row in invariant_rows),
             "reference_failures": sum(
                 row["status"] != "PASS" for row in reference_rows + gui_reference_rows
@@ -3505,6 +5092,11 @@ def main() -> int:
                 "source_mutations": projection_manifest.get("source_mutations", 0)
                 if projection_manifest is not None
                 else 0,
+                "malformed_candidate_records": projection_manifest.get(
+                    "malformed_candidate_records", 0
+                )
+                if projection_manifest is not None
+                else 0,
                 "selected_outer_records": projection_manifest.get("selected_outer_records", 0)
                 if projection_manifest is not None
                 else 0,
@@ -3524,6 +5116,7 @@ def main() -> int:
         summary["status"] = (
             "PASS"
             if not summary["component_failures"]
+            and not summary["analytical_ledger_failures"]
             and not summary["causality_failures"]
             and not summary["reference_failures"]
             and (focused_equivalence or not summary["references_skipped"])
@@ -3536,6 +5129,7 @@ def main() -> int:
             and not summary["file_open_audit_unmeasured_rows"]
             and not summary["prohibited_a_b_opens"]
             and not summary["post_run_source_mutations"]
+            and not summary["raw_projection"]["malformed_candidate_records"]
             else "FAIL"
         )
         (output / "equivalence_summary.json").write_bytes(_json_bytes(summary))

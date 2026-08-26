@@ -70,7 +70,7 @@ preload below, not by moving the activation boundary backward.
 ```bash
 cd /opt/banknifty/repositories/banknifty-market-profiler
 DEPLOY_ROOT=/opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow
-install -d -m 0700 "$DEPLOY_ROOT" "$DEPLOY_ROOT/state" "$DEPLOY_ROOT/config"
+install -d -m 0700 "$DEPLOY_ROOT" "$DEPLOY_ROOT/config"
 install -m 0600 deploy/r6e1r/r6e1r-runtime-config.json.example "$DEPLOY_ROOT/config/r6e1r-runtime-config.json"
 install -m 0600 deploy/r6e1r/r6e1r-activation.json.example "$DEPLOY_ROOT/config/r6e1r-activation.json"
 /opt/banknifty/research/.venv/bin/python -m json.tool "$DEPLOY_ROOT/config/r6e1r-runtime-config.json"
@@ -97,29 +97,78 @@ table, or raw JSONL. The source run must contain 2026-08-11, 2026-08-12,
 2026-08-13, 2026-08-18, 2026-08-19, and 2026-08-20 and must retain the August
 17 rejection.
 
-The following copy is safe only while the new target state directory is empty
-and both services are stopped:
+The preload is staged below `DEPLOY_ROOT`, so staging and the final state
+directory are on the same filesystem. The source and staged copies are both
+verified against one SHA-256 manifest. The staged copy must then pass the
+dependency-light state validator before a single atomic directory rename makes
+it live. A pre-existing target is refused; do not merge, overlay, or repair a
+target in place. Both services must remain stopped throughout this procedure.
 
 ```bash
 DEPLOY_ROOT=/opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow
 VERIFIED_OUTPUT=/absolute/path/to/the/passing/r6e1r-equivalence-output
 VERIFIED_STATE="$VERIFIED_OUTPUT/runs/incremental_a/state"
-STATE_MANIFEST="$VERIFIED_OUTPUT/incremental_a-state.sha256"
-test -f "$VERIFIED_STATE/live_analytical_orchestrator.json"
-test -f "$VERIFIED_STATE/checkpoints.json"
-test -f "$VERIFIED_STATE/dedup.sqlite3"
-test -z "$(find "$VERIFIED_STATE" -type l -print -quit)"
-test -z "$(find "$DEPLOY_ROOT/state" -mindepth 1 -print -quit)"
-(cd "$VERIFIED_STATE" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum) > "$STATE_MANIFEST"
-cp -a -- "$VERIFIED_STATE/." "$DEPLOY_ROOT/state/"
-chmod -R go-rwx "$DEPLOY_ROOT/state"
-(cd "$DEPLOY_ROOT/state" && sha256sum -c "$STATE_MANIFEST")
+EQUIVALENCE_SUMMARY="$VERIFIED_OUTPUT/equivalence_summary.json"
+RAW_PROJECTION_MANIFEST="$VERIFIED_OUTPUT/raw_projection_manifest.json"
+STATE_MANIFEST="$VERIFIED_OUTPUT/incremental_a_state_manifest.json"
+PACKAGE_MANIFEST=manifests/r6e1r_deployment_package_manifest.json
+test ! -e "$DEPLOY_ROOT/state"
+sha256sum -c manifests/r6e1r_deployment_package_manifest.sha256
+jq -r '.files[] | "\(.sha256)  \(.path)"' "$PACKAGE_MANIFEST" | sha256sum -c -
+EXPECTED_ENGINE_MANIFEST_SHA256="$(jq -er '.files[] | select(.path == "manifests/r6e1r_engine_source_manifest.json") | .sha256' "$PACKAGE_MANIFEST")"
+EXPECTED_RUNTIME_CONFIG_SHA256="$(jq -er '.files[] | select(.path == "deploy/r6e1r/r6e1r-runtime-config.json.example") | .sha256' "$PACKAGE_MANIFEST")"
+EXPECTED_ENGINE_HASH="$(jq -er '.engine_hash' "$PACKAGE_MANIFEST")"
+EXPECTED_CONFIGURATION_HASH="$(jq -er '.runtime_configuration_hash' "$PACKAGE_MANIFEST")"
+test -f "$EQUIVALENCE_SUMMARY"
+test -f "$RAW_PROJECTION_MANIFEST"
+test -f "$STATE_MANIFEST"
+jq -er '.schema == "R6E1R_INCREMENTAL_A_STATE_TREE_MANIFEST_V1" and (.file_count > 0)' "$STATE_MANIFEST"
+jq -r '.files[] | "\(.sha256)  \(.path)"' "$STATE_MANIFEST" | (cd "$VERIFIED_STATE" && sha256sum -c -)
+STATE_STAGE="$(mktemp -d "$DEPLOY_ROOT/.state.preload.XXXXXX")"
+chmod 0700 "$STATE_STAGE"
+cp -a -- "$VERIFIED_STATE/." "$STATE_STAGE/"
+chmod -R go-rwx "$STATE_STAGE"
+jq -r '.files[] | "\(.sha256)  \(.path)"' "$STATE_MANIFEST" | (cd "$STATE_STAGE" && sha256sum -c -)
+/opt/banknifty/research/.venv/bin/python -I -B deploy/r6e1r/validate_preloaded_state.py \
+  --state-root "$STATE_STAGE" \
+  --expected-session 2026-08-11 \
+  --expected-session 2026-08-12 \
+  --expected-session 2026-08-13 \
+  --expected-session 2026-08-18 \
+  --expected-session 2026-08-19 \
+  --expected-session 2026-08-20 \
+  --engine-manifest manifests/r6e1r_engine_source_manifest.json \
+  --expected-engine-manifest-sha256 "$EXPECTED_ENGINE_MANIFEST_SHA256" \
+  --expected-engine-hash "$EXPECTED_ENGINE_HASH" \
+  --runtime-config "$DEPLOY_ROOT/config/r6e1r-runtime-config.json" \
+  --expected-runtime-config-sha256 "$EXPECTED_RUNTIME_CONFIG_SHA256" \
+  --expected-configuration-hash "$EXPECTED_CONFIGURATION_HASH" \
+  --equivalence-summary "$EQUIVALENCE_SUMMARY" \
+  --raw-projection-manifest "$RAW_PROJECTION_MANIFEST" \
+  --state-manifest "$STATE_MANIFEST"
+test ! -e "$DEPLOY_ROOT/state"
+mv -T -- "$STATE_STAGE" "$DEPLOY_ROOT/state"
 ```
 
-Retain the generated state manifest with the equivalence evidence. This copy
-does not alter the authoritative raw root or repository. On startup, existing
-checkpoint identities and append-only analytical IDs remain durable; only
-new files at or after `activation_day` are polled.
+The validator requires the exact state schema, streams every nonempty durable
+ledger to bind the preload to the expected engine and configuration hashes,
+requires both callback outboxes and the durable futures-selection probe table
+to be empty,
+and accepts only the fresh full six-session equivalence PASS. The equivalence
+gate requires all zero-difference, causality, restart, file-open, source-hash,
+reference-manifest, and frozen-count fields; it also binds the copied raw
+projection manifest and its explicit August 17 present-for-rejection policy.
+The state manifest must be the immutable `incremental_a_state_manifest.json`
+emitted and cryptographically bound by that same passing harness run. Never
+generate, replace, or refresh it during deployment. The validator requires an
+exact file set, sizes, digests and aggregate hash, then recounts the actual
+six-session analytical output lists against every frozen count. Its only
+output is a sanitized JSON summary; retain it and the harness-emitted state
+manifest with the equivalence evidence. If any command fails, leave the hidden
+staging directory in place for offline inspection and do not start either
+service. This preload does not alter the authoritative raw root or repository.
+On startup, existing checkpoint identities and append-only analytical IDs
+remain durable; only new files at or after `activation_day` are polled.
 
 The runtime configuration retains a rolling window of at most 32 non-protected
 live analytical outputs in addition to the six independently protected
@@ -157,9 +206,12 @@ systemctl --user is-active r6e1r-shadow.service r6e1r-readonly-gateway.service
 ```
 
 Both units use `Restart=on-failure`, bounded restart bursts, SIGTERM shutdown,
-and systemd memory, swap, CPU, task, and file-descriptor limits. The 6 GiB
-backend ceiling is a safety boundary, not permission to truncate analytics;
-measured six-session peak RSS must remain below it before installation.
+and systemd memory, swap, CPU, task, and file-descriptor limits. The backend's
+post-start health retry permits up to 300 seconds for a verified six-session
+cold preload and its start timeout is 360 seconds; the lightweight gateway
+retains its 30-attempt/75-second boundary. The 6 GiB backend ceiling is a
+safety boundary, not permission to truncate analytics; measured six-session
+peak RSS must remain below it before installation.
 
 ## Health, readiness, replay, and external checks
 

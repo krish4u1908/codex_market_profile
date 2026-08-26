@@ -72,3 +72,69 @@ RESULT: PASS; 289 passed, 0 failed, 0 skipped in 62.29s; max RSS 663,256 KiB
 
 2026-08-26 live browser acceptance screenshot refresh
 RESULT: PASS; 3/3 screenshots regenerated and visually inspected; complete=edd2df7bebee95c2a51d4e0f316881170f680a9b1c6d45d7befc374d1ddd8e53; intraday=bd738cbaabe086d39fa37d36f6069681e03d853b9009e2e2378bf623eb3c0ebe; latest=2b9ddf8c7e79264d772470bdd3637440e307f0e3a3aa8277d17620a2281264ba
+
+2026-08-26 independent focused-evidence acceptance audit
+RESULT: REPAIR REQUIRED; focused-v8 remains diagnostic; ledger identity, complete GUI/as-of/availability, observed file-open, malformed-record gate, separate path sorting, replay-toggle, and schedule-boundary evidence gaps identified
+
+2026-08-26 focused one-record schedule probe
+RESULT: REPAIR REQUIRED; 668 OUT_OF_ORDER refusals exposed; unresolved pre-selection Futures candidates were released behind the acknowledged global high-water; strict causal candidate watermark repair started
+
+2026-08-26 targeted causal test before final manifest regeneration
+RESULT: EXPECTED FAIL-CLOSED; runtime allowlist bytes changed while manifest remains frozen; contract refused current sources before test setup; no analytical assertion bypassed
+
+2026-08-26 linear staging + bounded candidate-probe targeted suite
+RESULT: PASS; 78/78 ingestion, orchestrator, and equivalence-harness tests in 12.64s against the regenerated real engine manifest
+
+2026-08-26 fresh current-code focused chronological A/B
+RESULT: PASS; exit 0; 21/21 components exact; 8/8 analytical ledgers exact; 9/9 causal/GUI invariants zero; analytical refusals 0; prohibited opens 0; source mutations 0; wall 2m58.41s; parent max RSS 1,149,224 KiB; child max RSS 715,080 KiB; output /dev/shm/r6e1r_focused_current_ab
+
+2026-08-26 deployment package regeneration and verification
+RESULT: PASS; 34 files; engine manifest f52814b73087944d0846564a4d4da2cdfc3e7f387d3b18d3c28773e6c1278279; engine hash 8d17e067ab6256075c49142ef1f86320538df263de6942441fc4aad959c44c5c; deployment manifest 3d49db748e453e90121285b94a8d57ed2aac20dac4d04d8823fdd0924bdc5942; 75/75 deployment/API tests
+
+2026-08-26 focused all-schedule diagnostic after independent replacement review
+RESULT: INTERRUPTED; baseline A/B had sealed and one-record schedule was advancing, but adversarial review reproduced selection-probe authority replacement acceptance and unreachable truncation replay target; diagnostic output rejected and repair started
+
+2026-08-26 post-quarantine clean code gates
+RESULT: PASS; ingestion/orchestrator/equivalence harness 82/82 in 12.15s (135,500 KiB peak RSS); deployment/API/logging 78/78 in 17.44s (122,948 KiB peak RSS); browser six-session navigation 1/1 in 3.11s
+
+2026-08-26 focused nine-schedule v2 independent edge-case review
+RESULT: INTERRUPTED AND REJECTED; baseline A/B was exact before one-record execution, but six newly reproduced ingestion edge cases required repair; partial roots /dev/shm/r6e1r_focused_nine_final_v2 and /dev/shm/r6e1r_focused_nine_final_v2_work were deleted
+
+2026-08-26 final ingestion-integrity repair and real-manifest core gate
+RESULT: PASS; all six reproduced replay/quarantine/probe/integrity defects repaired; independent code audit found no release blocker; regenerated engine manifest SHA-256 2843d18ff5decd98a4a2cdb04390c80019f3a24b3da759a77b3d0b098be16f0e and engine hash 7016cbd4e4d908e5adcb551e4d3b12e64cc760d75a3eb37577f9aa491d451d38; ingestion/orchestrator/equivalence harness 98/98 in 13.98s, max RSS 135,800 KiB
+
+2026-08-26 host-Python core-gate invocation
+RESULT: INVOCATION FAILURE RETAINED; /usr/bin/python3 has no pytest module, so collection did not start; the identical command was rerun with /opt/banknifty/research/.venv/bin/python and passed 98/98; no test was changed, skipped, or reclassified
+
+2026-08-26 final preload-validator and deployment-package gate
+RESULT: PASS; 39/39 focused preload-validator cases; current 13-column selection-probe schema, exact contiguous 64-KiB prefix-block inventory, residual byte counts, digest shape, orphan rejection, scrub bounds and empty quarantine/probe/outboxes validated; engine companion path corrected to repository-relative identity; package manifest SHA-256 0cb3c7e3ccfe65abe26e7ed695ccde2255aa36e60db091094d41683fb06565aa; package hash c0293ac25af0717f281d083927ff2a6861ccf2f0e2d526d6ac053be0d1eb6651; runtime configuration hash a853daa9b34a2fba2b1bb4bf3429bac441f99bc8671b92ab19377d77083cac03; 34/34 file identities PASS
+
+2026-08-26 final deployment/API/logging test gate
+RESULT: PASS; 87/87 in 17.33s; max RSS 123,468 KiB; git diff --check PASS; service installation remains correctly gated on final analytics
+
+2026-08-26 final fixture-browser acceptance gate
+RESULT: PASS; 1/1 in 3.20s; max RSS 145,892 KiB; all six canonical replay dates exercised; three screenshots 1600x1733; complete=66af74411fc859a784aeafe963039c9e3bdc6a14e6d1a2eb942e5b23a005d5a5; Intraday-only=6a13dfe3911dc4bc04532e9aad80b4a0708b0a975e99a7ef7d44e338bbd02430; fixture live/latest=3ccee566595d9a7c0eda66c8d31dfcda2ce26711cb2ad54cff7e11950fb79e50; deployed live/latest evidence remains pending analytics-gated deployment
+
+2026-08-26 focused nine-schedule v3 diagnostic
+RESULT: ABORTED AND REJECTED; stopped deliberately after one-record schedule sealed FAIL; wall 7m00.15s; max RSS 1,408,444 KiB; baseline A/B 21/21 components, 8/8 ledgers and 9/9 invariants exact, original chunks PASS, one-record exercised all 46,550 increments but produced six refusal rows and schedule-dependent semantic state; later schedules not accepted; output/work preserved at /dev/shm/r6e1r_focused_nine_final_v3*
+
+2026-08-26 one-record refusal reproduction
+RESULT: REPRODUCED; 46,550 polls in 147.50s, max RSS 703,348 KiB; exactly three observations were each refused at ingestion and orchestration (6 rows), all at collapsed fixture hour boundaries; the eight authoritative source files are individually monotonic, proving the two-file focused fixture incorrectly merged four hourly raw files and four hourly OI files; repair is to rebuild the fixture with original hourly relative paths, not alter frozen evidence clocks
+
+2026-08-26 independent release audit
+RESULT: REPAIR REQUIRED; found unbound preload state, unsampled old-block rewrite after final append, and missed recovered-session finalization; callback/outbox, deterministic publication, all-nine definitions, GUI/API sanitization, and systemd/gateway isolation had no additional blocker
+
+2026-08-26 integrity/finalization targeted repairs
+RESULT: PASS; bounded rotating scrub now advances on unchanged polls, exhaustive full-prefix verification gates session sealing, and recovered/multi-date sessions finalize chronologically only after integrity verification; focused integrity plus runner tests 49/49 PASS
+
+2026-08-26 source-hour-preserving focused sample build
+RESULT: PASS; manifest 31077f42ae1bf639f746e5980aba028b1369b8d44ba9a15973b2a517cc8a8382; 8 hourly collector files; 46,550 selected outer records; contract NSE:BANKNIFTY26AUGFUT discovered by raw_io.reader; 8/8 source before/during/after hashes unchanged; 9.91s; max RSS 434,972 KiB
+
+2026-08-26 independent post-repair audit
+RESULT: CODE BLOCKERS CLOSED; recovered-session finalization, unsampled-prefix seal, and state-tree binding verified; 46,550/46,550 focused identities independently verified; deployment package allowlist intentionally stale until source freeze
+
+2026-08-26 focused nine-schedule v4 sparse-row diagnostic
+RESULT: REJECTED; baseline components/ledgers/invariants exact and all generated schedule semantic hashes exact, but 8 exercise gates failed because 2,060,715 sparse physical rows were counted as JSON records; wall 18m23.25s; max RSS 1,508,212 KiB; output preserved at /dev/shm/r6e1r_focused_nine_final_v4
+
+2026-08-26 focused one-record v5 after sparse-row accounting repair
+RESULT: PASS; status PASS; 46,550 JSON records; 46,550 one-record increments; 46,550 production polls; 2,060,715 checkpoint rows exact; component/ledger/schedule differences 0; causality violations 0; analytical refusals 0; prohibited opens 0; source mutations 0; wall 5m45.06s; max RSS 1,487,424 KiB

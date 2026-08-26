@@ -330,15 +330,20 @@ class LiveAnalyticalOrchestrator:
         self._stage_seen.setdefault(session, set()).update(identities)
         bucket = self._sessions.setdefault(session, {})
         added = False
-        for row in sorted(values, key=self._order_key):
+        last_order_key = self._last_order_key.get(session)
+        ordered = sorted(
+            ((self._order_key(row), row) for row in values),
+            key=lambda item: item[0],
+        )
+        for order_key, row in ordered:
             identity = str(row["observation_id"])
             if identity not in bucket:
                 bucket[identity] = row
+                if last_order_key is None or order_key > last_order_key:
+                    last_order_key = order_key
                 added = True
-        if bucket:
-            self._last_order_key[session] = max(
-                self._order_key(row) for row in bucket.values()
-            )
+        if last_order_key is not None:
+            self._last_order_key[session] = last_order_key
         if added:
             self._dirty_sessions.add(session)
         return added
@@ -362,6 +367,14 @@ class LiveAnalyticalOrchestrator:
         self._dirty_sessions.difference_update(targets)
         self._persist()
         return {session: self.snapshot(session) for session in sorted(targets)}
+
+    def pending_session_dates(self) -> tuple[str, ...]:
+        """Return recovered/live mutable sessions that still require sealing."""
+        pending = (
+            set(self._sessions)
+            | set(self._dirty_sessions)
+        ) - set(self._finalized_sessions)
+        return tuple(sorted(pending))
 
     def finalize_session(self, session_date: str) -> dict:
         """Flush and close one session against subsequent late callbacks."""

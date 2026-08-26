@@ -3,14 +3,17 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 import json
 import os
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
 
+from banknifty_profiler.runtime.timestamps import parse_timestamp
 from banknifty_profiler.shadow.contracts import validate_shadow_contract
 from banknifty_profiler.shadow.contracts import engine_hash, engine_source_inventory
 from banknifty_profiler.shadow.ingest import IncrementalJSONLIngestor
 from banknifty_profiler.shadow.observation import TypedObservation
+from banknifty_profiler.shadow.orchestrator import LiveAnalyticalOrchestrator
 from banknifty_profiler.shadow.symbols import (
     CANONICAL_INDEX_SYMBOL,
     InstrumentClass,
@@ -172,6 +175,89 @@ def test_same_inode_same_size_rewrite_is_refused_replayably(tmp_path):
     restarted.close()
 
 
+def test_path_replacement_between_stat_and_open_never_publishes_replacement(
+    tmp_path, monkeypatch,
+):
+    data, contract = _contract(tmp_path)
+    receipt = _timestamp(-0.2)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    path.write_text(
+        _market(receipt, CANONICAL_INDEX_SYMBOL, 57_100, 100) + "\n"
+    )
+    replacement = path.with_suffix(".replacement")
+    replacement.write_text(
+        _market(receipt, CANONICAL_INDEX_SYMBOL, 57_999, 100) + "\n"
+    )
+    original_open = Path.open
+    swapped = False
+
+    def replacing_open(opened_path, *args, **kwargs):
+        nonlocal swapped
+        mode = args[0] if args else kwargs.get("mode", "r")
+        if opened_path == path and mode == "rb" and not swapped:
+            os.replace(replacement, path)
+            swapped = True
+        return original_open(opened_path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", replacing_open)
+    ingestor = IncrementalJSONLIngestor(contract)
+    assert ingestor.poll(source_paths=[path]) == []
+    assert swapped
+    assert ingestor.ledgers["normalized_raw_events"].rows() == []
+    assert ingestor.db.execute(
+        "select count(*) from observation_outbox"
+    ).fetchone()[0] == 0
+    assert ingestor.db.execute(
+        "select reason from quarantined_source where source_file=?",
+        (str(path.relative_to(data)),),
+    ).fetchone() == ("FILE_REPLACED",)
+    ingestor.close()
+
+
+def test_same_inode_append_during_snapshot_commits_then_replays_remainder(
+    tmp_path, monkeypatch,
+):
+    data, contract = _contract(tmp_path)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    original = (
+        _market(_timestamp(-0.2), CANONICAL_INDEX_SYMBOL, 57_100, 100) + "\n"
+    ).encode()
+    appended = (
+        _market(_timestamp(-0.1), CANONICAL_INDEX_SYMBOL, 57_101, 200) + "\n"
+    ).encode()
+    path.write_bytes(original)
+    real_hash_blocks = IncrementalJSONLIngestor._new_complete_prefix_blocks
+    appended_once = False
+
+    def append_while_hashing(self, source, rel, committed_offset, **kwargs):
+        nonlocal appended_once
+        if not appended_once:
+            with source.open("ab") as writer:
+                writer.write(appended)
+                writer.flush()
+                os.fsync(writer.fileno())
+            appended_once = True
+        return real_hash_blocks(
+            self, source, rel, committed_offset, **kwargs,
+        )
+
+    monkeypatch.setattr(
+        IncrementalJSONLIngestor,
+        "_new_complete_prefix_blocks",
+        append_while_hashing,
+    )
+    ingestor = IncrementalJSONLIngestor(contract, lambda _row: None)
+    first = ingestor.poll(source_paths=[path])
+    assert [row.price for row in first] == [57_100]
+    rel = str(path.relative_to(data))
+    assert ingestor.checkpoints[rel]["offset"] == len(original)
+    assert ingestor.checkpoints[rel]["size_at_commit"] == len(original + appended)
+    second = ingestor.poll(source_paths=[path])
+    assert [row.price for row in second] == [57_101]
+    assert ingestor.checkpoints[rel]["offset"] == len(original + appended)
+    ingestor.close()
+
+
 def test_same_inode_committed_prefix_rewrite_with_growth_is_refused(tmp_path):
     data, contract = _contract(tmp_path)
     receipt = _timestamp(-0.3)
@@ -210,6 +296,339 @@ def test_same_inode_committed_prefix_rewrite_with_growth_is_refused(tmp_path):
     restarted = IncrementalJSONLIngestor(contract)
     assert restarted.poll(source_paths=[path]) == []
     assert len(restarted.ledgers["normalized_raw_events"].rows()) == 1
+    restarted.close()
+
+
+def test_middle_committed_block_rewrite_with_growth_is_refused(tmp_path):
+    data, contract = _contract(tmp_path)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    block_size = IncrementalJSONLIngestor._INTEGRITY_BLOCK_BYTES
+    blank_block = b" " * (block_size - 1) + b"\n"
+    initial_record = (
+        _market(_timestamp(-0.3), CANONICAL_INDEX_SYMBOL, 57_100, 100) + "\n"
+    ).encode()
+    path.write_bytes(blank_block * 5 + initial_record)
+
+    ingestor = IncrementalJSONLIngestor(contract, lambda _row: None)
+    assert len(ingestor.poll(source_paths=[path])) == 1
+    rel = str(path.relative_to(data))
+    checkpoint = dict(ingestor.checkpoints[rel])
+    assert ingestor.db.execute(
+        "select count(*) from file_prefix_block where source_file=?", (rel,)
+    ).fetchone()[0] == 6
+
+    # This byte is outside the 4 KiB head/midpoint/tail fingerprint windows,
+    # but inside the durable midpoint block selected on a changed-file poll.
+    rewrite_offset = block_size * 2 + 8192
+    with path.open("r+b") as handle:
+        handle.seek(rewrite_offset)
+        assert handle.read(1) == b" "
+        handle.seek(rewrite_offset)
+        handle.write(b"\t")
+        handle.seek(0, os.SEEK_END)
+        handle.write(
+            (
+                _market(
+                    _timestamp(-0.1), CANONICAL_INDEX_SYMBOL, 57_101, 200,
+                )
+                + "\n"
+            ).encode()
+        )
+        handle.flush()
+        os.fsync(handle.fileno())
+
+    assert ingestor.poll(source_paths=[path]) == []
+    assert ingestor.checkpoints[rel]["offset"] == checkpoint["offset"]
+    assert len(ingestor.ledgers["normalized_raw_events"].rows()) == 1
+    assert ingestor.db.execute(
+        "select reason from quarantined_source where source_file=?", (rel,)
+    ).fetchone()[0] == "FILE_REPLACED_IN_PLACE"
+    ingestor.close()
+
+
+def test_committed_partial_block_rewrite_before_append_is_refused(tmp_path):
+    data, contract = _contract(tmp_path)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    committed_size = 50 * 1024
+    initial_record = (
+        _market(_timestamp(-0.3), CANONICAL_INDEX_SYMBOL, 57_100, 100) + "\n"
+    ).encode()
+    padding_size = committed_size - len(initial_record)
+    assert padding_size > 1
+    path.write_bytes(initial_record + b" " * (padding_size - 1) + b"\n")
+
+    ingestor = IncrementalJSONLIngestor(contract, lambda _row: None)
+    assert len(ingestor.poll(source_paths=[path])) == 1
+    rel = str(path.relative_to(data))
+    checkpoint = dict(ingestor.checkpoints[rel])
+    assert ingestor.db.execute(
+        "select block_index,byte_count from file_prefix_block "
+        "where source_file=?",
+        (rel,),
+    ).fetchall() == [(0, committed_size)]
+
+    # Twelve KiB misses the bounded prefix fingerprint's head, midpoint and
+    # tail windows.  The exact digest of the old 50 KiB partial block must be
+    # verified before append bytes can extend and replace that digest.
+    rewrite_offset = 12 * 1024
+    with path.open("r+b") as handle:
+        handle.seek(rewrite_offset)
+        assert handle.read(1) == b" "
+        handle.seek(rewrite_offset)
+        handle.write(b"\t")
+        handle.seek(0, os.SEEK_END)
+        handle.write(
+            (
+                _market(
+                    _timestamp(-0.1), CANONICAL_INDEX_SYMBOL, 57_101, 200,
+                )
+                + "\n"
+            ).encode()
+        )
+        handle.flush()
+        os.fsync(handle.fileno())
+
+    assert ingestor.poll(source_paths=[path]) == []
+    assert ingestor.checkpoints[rel]["offset"] == checkpoint["offset"]
+    assert len(ingestor.ledgers["normalized_raw_events"].rows()) == 1
+    assert ingestor.db.execute(
+        "select reason from quarantined_source where source_file=?", (rel,)
+    ).fetchone()[0] == "FILE_REPLACED_IN_PLACE"
+    ingestor.close()
+
+
+def test_rotating_integrity_scrub_cursor_survives_restart(tmp_path):
+    data, contract = _contract(tmp_path)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    block_size = IncrementalJSONLIngestor._INTEGRITY_BLOCK_BYTES
+    blank_block = b" " * (block_size - 1) + b"\n"
+    path.write_bytes(
+        blank_block * 6
+        + (
+            _market(_timestamp(-0.3), CANONICAL_INDEX_SYMBOL, 57_100, 100)
+            + "\n"
+        ).encode()
+    )
+    rel = str(path.relative_to(data))
+
+    ingestor = IncrementalJSONLIngestor(contract, lambda _row: None)
+    assert len(ingestor.poll(source_paths=[path])) == 1
+    with path.open("ab") as handle:
+        handle.write(
+            (
+                _market(
+                    _timestamp(-0.2), CANONICAL_INDEX_SYMBOL, 57_101, 200,
+                )
+                + "\n"
+            ).encode()
+        )
+    assert len(ingestor.poll(source_paths=[path])) == 1
+    assert ingestor.db.execute(
+        "select next_block from file_integrity_scrub where source_file=?", (rel,)
+    ).fetchone()[0] == 1
+    ingestor.close()
+
+    restarted = IncrementalJSONLIngestor(contract, lambda _row: None)
+    with path.open("ab") as handle:
+        handle.write(
+            (
+                _market(
+                    _timestamp(-0.1), CANONICAL_INDEX_SYMBOL, 57_102, 300,
+                )
+                + "\n"
+            ).encode()
+        )
+    assert len(restarted.poll(source_paths=[path])) == 1
+    assert restarted.db.execute(
+        "select next_block from file_integrity_scrub where source_file=?", (rel,)
+    ).fetchone()[0] == 2
+    restarted.close()
+
+
+def test_unsampled_old_block_rewrite_cannot_cross_session_seal(tmp_path):
+    data, contract = _contract(tmp_path)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    block_size = IncrementalJSONLIngestor._INTEGRITY_BLOCK_BYTES
+    blank_block = b" " * (block_size - 1) + b"\n"
+    path.write_bytes(
+        blank_block * 10
+        + (
+            _market(_timestamp(-0.3), CANONICAL_INDEX_SYMBOL, 57_100, 100)
+            + "\n"
+        ).encode()
+    )
+    rel = str(path.relative_to(data))
+    ingestor = IncrementalJSONLIngestor(contract, lambda _row: None)
+    assert len(ingestor.poll(source_paths=[path])) == 1
+    checkpoint = dict(ingestor.checkpoints[rel])
+
+    # Block two is neither head, midpoint, tail nor the first rotating target.
+    # The bounded append poll may safely stage bytes beyond the immutable old
+    # checkpoint, but the exhaustive seal gate must refuse the altered prefix.
+    rewrite_offset = block_size * 2 + 8192
+    with path.open("r+b") as handle:
+        handle.seek(rewrite_offset)
+        assert handle.read(1) == b" "
+        handle.seek(rewrite_offset)
+        handle.write(b"\t")
+        handle.seek(0, os.SEEK_END)
+        handle.write(
+            (
+                _market(
+                    _timestamp(-0.1), CANONICAL_INDEX_SYMBOL, 57_101, 200,
+                )
+                + "\n"
+            ).encode()
+        )
+        handle.flush()
+        os.fsync(handle.fileno())
+
+    assert len(ingestor.poll(source_paths=[path])) == 1
+    assert ingestor.checkpoints[rel]["offset"] > checkpoint["offset"]
+    with pytest.raises(
+        ValueError, match="committed source integrity verification failed",
+    ):
+        ingestor.verify_committed_sources(["2099-01-01"])
+    assert ingestor.db.execute(
+        "select reason from quarantined_source where source_file=?", (rel,)
+    ).fetchone() == ("FILE_REPLACED_IN_PLACE",)
+    ingestor.close()
+
+    restarted = IncrementalJSONLIngestor(contract)
+    with pytest.raises(
+        ValueError, match="committed source integrity verification failed",
+    ):
+        restarted.verify_committed_sources(["2099-01-01"])
+    assert rel in restarted._quarantined_sources
+    assert len(restarted.ledgers["normalized_raw_events"].rows()) == 2
+    restarted.close()
+
+
+def test_unchanged_polls_continue_rotating_integrity_scrub(tmp_path):
+    data, contract = _contract(tmp_path)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    block_size = IncrementalJSONLIngestor._INTEGRITY_BLOCK_BYTES
+    blank_block = b" " * (block_size - 1) + b"\n"
+    path.write_bytes(
+        blank_block * 6
+        + (
+            _market(_timestamp(-0.2), CANONICAL_INDEX_SYMBOL, 57_100, 100)
+            + "\n"
+        ).encode()
+    )
+    rel = str(path.relative_to(data))
+    ingestor = IncrementalJSONLIngestor(contract, lambda _row: None)
+    assert len(ingestor.poll(source_paths=[path])) == 1
+    first = ingestor.db.execute(
+        "select next_block from file_integrity_scrub where source_file=?", (rel,)
+    ).fetchone()[0]
+    assert ingestor.poll(source_paths=[path]) == []
+    second = ingestor.db.execute(
+        "select next_block from file_integrity_scrub where source_file=?", (rel,)
+    ).fetchone()[0]
+    assert second != first
+    ingestor.close()
+
+
+def test_missing_block_inventory_fails_closed_without_historical_rescan(tmp_path):
+    data, contract = _contract(tmp_path)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    block_size = IncrementalJSONLIngestor._INTEGRITY_BLOCK_BYTES
+    blank_block = b" " * (block_size - 1) + b"\n"
+    path.write_bytes(
+        blank_block * 5
+        + (
+            _market(_timestamp(-0.3), CANONICAL_INDEX_SYMBOL, 57_100, 100)
+            + "\n"
+        ).encode()
+    )
+    rel = str(path.relative_to(data))
+    ingestor = IncrementalJSONLIngestor(contract, lambda _row: None)
+    assert len(ingestor.poll(source_paths=[path])) == 1
+    prior_offset = ingestor.checkpoints[rel]["offset"]
+    # Whether this models a legacy database or damaged current state, no exact
+    # historical block authority exists.  A changed source must fail closed;
+    # silently baselining its current tail would bless an unsampled rewrite.
+    with ingestor.db:
+        ingestor.db.execute(
+            "delete from file_prefix_block where source_file=?", (rel,)
+        )
+        ingestor.db.execute(
+            "delete from file_integrity_scrub where source_file=?", (rel,)
+        )
+    ingestor.close()
+
+    with path.open("ab") as handle:
+        handle.write(
+            (
+                _market(
+                    _timestamp(-0.1), CANONICAL_INDEX_SYMBOL, 57_101, 200,
+                )
+                + "\n"
+            ).encode()
+        )
+    migrated = IncrementalJSONLIngestor(contract, lambda _row: None)
+    assert migrated.poll(source_paths=[path]) == []
+    assert migrated.checkpoints[rel]["offset"] == prior_offset
+    blocks = migrated.db.execute(
+        "select block_index from file_prefix_block where source_file=? "
+        "order by block_index",
+        (rel,),
+    ).fetchall()
+    assert blocks == []
+    assert migrated.db.execute(
+        "select reason from quarantined_source where source_file=?", (rel,)
+    ).fetchone() == ("FILE_REPLACED_IN_PLACE",)
+    migrated.close()
+
+
+def test_quarantined_committed_source_does_not_watermark_block_valid_rotated_file(
+    tmp_path,
+):
+    data, contract = _contract(tmp_path)
+    first_receipt = _timestamp(-0.3)
+    later_receipt = _timestamp(-0.1)
+    damaged = data / "raw/2099-01-01/events_09.jsonl"
+    original = (
+        _market(first_receipt, CANONICAL_INDEX_SYMBOL, 57_100, 100) + "\n"
+    ).encode()
+    replacement = (
+        _market(first_receipt, CANONICAL_INDEX_SYMBOL, 57_101, 100) + "\n"
+    ).encode()
+    assert len(original) == len(replacement)
+    damaged.write_bytes(original)
+    ingestor = IncrementalJSONLIngestor(contract, lambda _row: None)
+    assert len(ingestor.poll(source_paths=[damaged])) == 1
+    checkpoint = dict(ingestor.checkpoints[str(damaged.relative_to(data))])
+    with damaged.open("r+b") as handle:
+        handle.write(replacement)
+        handle.flush()
+        os.fsync(handle.fileno())
+    if damaged.stat().st_mtime_ns == checkpoint["mtime_ns_at_commit"]:
+        os.utime(
+            damaged,
+            ns=(damaged.stat().st_atime_ns, checkpoint["mtime_ns_at_commit"] + 1),
+        )
+    rotated = data / "raw/2099-01-01/events_10.jsonl"
+    rotated.write_text(
+        _market(later_receipt, CANONICAL_INDEX_SYMBOL, 57_102, 200) + "\n"
+    )
+
+    rows = ingestor.poll(source_paths=[damaged, rotated])
+    assert [row.price for row in rows] == [57_102]
+    assert ingestor.db.execute(
+        "select reason from quarantined_source where source_file=?",
+        (str(damaged.relative_to(data)),),
+    ).fetchone()[0] == "FILE_REPLACED_IN_PLACE"
+    assert [
+        row["reason"] for row in ingestor.ledgers["refusals_data_quality"].rows()
+        if row["reason"] == "FILE_REPLACED_IN_PLACE"
+    ] == ["FILE_REPLACED_IN_PLACE"]
+    ingestor.close()
+
+    restarted = IncrementalJSONLIngestor(contract)
+    assert restarted.poll(source_paths=[damaged, rotated]) == []
+    assert str(damaged.relative_to(data)) in restarted._quarantined_sources
     restarted.close()
 
 
@@ -559,15 +978,68 @@ def test_session_selection_defers_raw_future_until_verified_depth_arrives(tmp_pa
     (data / f"raw/{session}").mkdir(parents=True)
     (data / f"oi/{session}").mkdir(parents=True)
     raw_receipt = f"{session}T09:15:00.100000+05:30"
+    tied_index_receipt = raw_receipt
+    index_receipt = f"{session}T09:15:00.500000+05:30"
+    option_receipt = f"{session}T09:15:00.750000+05:30"
     oi_receipt = f"{session}T09:15:01.100000+05:30"
     raw_path = data / f"raw/{session}/events_09.jsonl"
     raw_path.write_text(
-        _market(raw_receipt, "NSE:BANKNIFTY26SEPFUT", 58_130.2, 100) + "\n"
+        _market(raw_receipt, "NSE:BANKNIFTY26SEPFUT", 58_130.2, 100)
+        + "\n"
+        + _market(tied_index_receipt, CANONICAL_INDEX_SYMBOL, 58_099.0, 0)
+        + "\n"
+        + _market(index_receipt, CANONICAL_INDEX_SYMBOL, 58_100.0, 0)
+        + "\n"
     )
+    ingestor = IncrementalJSONLIngestor(contract)
+    # The later Index is durably staged, but the unresolved earlier Futures
+    # receipt is a causal publication barrier until canonical depth evidence
+    # selects the session contract.
+    assert ingestor.poll() == []
+    assert ingestor.db.execute("select count(*) from futures_candidate_outbox").fetchone()[0] == 1
+    assert ingestor.db.execute("select count(*) from observation_outbox").fetchone()[0] == 2
+    assert ingestor.checkpoints[str(raw_path.relative_to(data))]["offset"] == raw_path.stat().st_size
+    ingestor.close()
+
+    # Restart and repeated polling neither loses nor duplicates the unresolved
+    # candidate or the Index held behind it.
     ingestor = IncrementalJSONLIngestor(contract)
     assert ingestor.poll() == []
     assert ingestor.db.execute("select count(*) from futures_candidate_outbox").fetchone()[0] == 1
-    assert ingestor.checkpoints[str(raw_path.relative_to(data))]["offset"] == raw_path.stat().st_size
+    assert ingestor.db.execute("select count(*) from observation_outbox").fetchone()[0] == 2
+
+    # The first growing-OI record can be an option-chain response. It remains
+    # causally staged behind the unresolved raw Futures candidate and must not
+    # prevent the next record in this same file from supplying selection
+    # authority after another restart.
+    option = {
+        "source": "option_chain",
+        "request_time": option_receipt,
+        "received_at": option_receipt,
+        "requested_symbol": CANONICAL_INDEX_SYMBOL,
+        "response": {"data": {"optionsChain": [{
+            "symbol": "NSE:BANKNIFTY26SEP58100CE",
+            "ltp": 101.0,
+            "oi": 500_000,
+            "pdoi": 499_000,
+            "strike_price": 58_100,
+            "option_type": "CE",
+            "expiry": "2026-09-29",
+        }]}},
+    }
+    oi_path = data / f"oi/{session}/oi_09.jsonl"
+    oi_path.write_text(json.dumps(option) + "\n")
+    assert ingestor.poll(source_paths=[oi_path]) == []
+    assert ingestor.db.execute("select count(*) from observation_outbox").fetchone()[0] == 2
+    assert str(oi_path.relative_to(data)) not in ingestor.checkpoints
+    assert ingestor.db.execute(
+        "select probe_offset from futures_selection_probe where source_file=?",
+        (str(oi_path.relative_to(data)),),
+    ).fetchone()[0] == oi_path.stat().st_size
+    ingestor.close()
+
+    ingestor = IncrementalJSONLIngestor(contract)
+    assert ingestor.poll(source_paths=[oi_path]) == []
 
     depth = {
         "source": "future_depth",
@@ -579,16 +1051,899 @@ def test_session_selection_defers_raw_future_until_verified_depth_arrives(tmp_pa
             "pdoi": 1_999_000, "expiry": "2026-09-29",
         }}},
     }
-    (data / f"oi/{session}/oi_09.jsonl").write_text(json.dumps(depth) + "\n")
-    rows = ingestor.poll()
-    assert [row.instrument_class for row in rows] == ["FUTURES", "FUTURES_OI"]
-    assert rows[0].price == 58_130.2
+    with oi_path.open("a") as handle:
+        handle.write(json.dumps(depth) + "\n")
+    assert ingestor.poll(source_paths=[oi_path]) == []
+    assert ingestor.db.execute(
+        "select replay_target from futures_selection_probe where source_file=?",
+        (str(oi_path.relative_to(data)),),
+    ).fetchone()[0] == oi_path.stat().st_size
+    # Only after primary ingestion has replayed every probed record may the
+    # raw candidate and its held peers cross the callback boundary.
+    rows = ingestor.poll(source_paths=[oi_path])
+    assert [row.instrument_class for row in rows] == [
+        "INDEX", "FUTURES", "INDEX", "CE", "FUTURES_OI",
+    ]
+    assert rows[1].price == 58_130.2
+    assert [row.receipt_timestamp for row in rows] == [
+        tied_index_receipt, raw_receipt, index_receipt, option_receipt, oi_receipt,
+    ]
+    assert ingestor.metrics["candidate_selection_lookahead_reads"] == 1
+    assert all(not row.out_of_order for row in rows)
     assert ingestor.db.execute("select count(*) from futures_candidate_outbox").fetchone()[0] == 0
     assert not any(
         row["reason"] == "FUTURES_SELECTION_PENDING"
         for row in ingestor.unknown_symbol_audit()
     )
+    assert not any(
+        row["reason"] in {"OUT_OF_ORDER_RECEIPT", "OUT_OF_ORDER_ANALYTICAL_RECEIPT"}
+        for row in ingestor.ledgers["refusals_data_quality"].rows()
+    )
+    assert ingestor.poll() == []
+    normalized = ingestor.ledgers["normalized_raw_events"].rows()
+    assert len({row["event_id"] for row in normalized}) == 5
     ingestor.close()
+
+
+def test_selected_candidate_waits_for_equal_clock_raw_chunk_and_callback_order(tmp_path):
+    data, contract = _contract(tmp_path)
+    contract["config"]["selected_futures_by_session"] = {}
+    session = "2026-08-26"
+    (data / f"raw/{session}").mkdir(parents=True)
+    (data / f"oi/{session}").mkdir(parents=True)
+    receipt = f"{session}T09:15:00.100000+05:30"
+    candidate_line = _market(
+        receipt, "NSE:BANKNIFTY26SEPFUT", 58_130.2, 100,
+    ) + (" " * 1024) + "\n"
+    raw_path = data / f"raw/{session}/events_09.jsonl"
+    raw_path.write_text(
+        candidate_line
+        + _market(receipt, CANONICAL_INDEX_SYMBOL, 58_100.0, 200)
+        + "\n"
+    )
+    contract["config"]["max_read_bytes_per_file_per_poll"] = len(
+        candidate_line.encode()
+    )
+    ingestor = IncrementalJSONLIngestor(contract)
+    orchestrator = LiveAnalyticalOrchestrator(contract, ledgers=ingestor.ledgers)
+    ingestor.register_callback(orchestrator)
+
+    assert ingestor.poll(source_paths=[raw_path]) == []
+    assert ingestor.checkpoints[str(raw_path.relative_to(data))]["row"] == 1
+    depth = {
+        "source": "future_depth", "request_time": receipt,
+        "received_at": receipt, "requested_symbol": "NSE:BANKNIFTY26SEPFUT",
+        "response": {"d": {"NSE:BANKNIFTY26SEPFUT": {
+            "ltp": 58_131.0, "v": 200, "oi": 2_000_000,
+            "pdoi": 1_999_000, "expiry": "2026-09-29",
+        }}},
+    }
+    oi_path = data / f"oi/{session}/oi_09.jsonl"
+    oi_path.write_text(json.dumps(depth) + "\n")
+    assert ingestor.poll(source_paths=[oi_path]) == []  # selection-only probe
+    ingestor.close()
+
+    # Selection authority and replay targets survive a restart before primary
+    # OI ingestion and before any candidate callback acknowledgement.
+    ingestor = IncrementalJSONLIngestor(contract)
+    orchestrator = LiveAnalyticalOrchestrator(contract, ledgers=ingestor.ledgers)
+    ingestor.register_callback(orchestrator)
+    assert ingestor.poll(source_paths=[oi_path]) == []  # primary OI replay
+    rows = ingestor.poll(source_paths=[raw_path])
+    assert [row.instrument_class for row in rows] == [
+        "INDEX", "FUTURES", "FUTURES_OI",
+    ]
+    assert all(row.receipt_timestamp == receipt for row in rows)
+    assert not any(
+        row["reason"] in {"OUT_OF_ORDER_RECEIPT", "OUT_OF_ORDER_ANALYTICAL_RECEIPT"}
+        for row in ingestor.ledgers["refusals_data_quality"].rows()
+    )
+    ingestor.close()
+
+
+def test_selection_probe_budget_is_durable_bounded_and_restores_market_liveness(tmp_path):
+    data, contract = _contract(tmp_path)
+    contract["config"]["selected_futures_by_session"] = {}
+    session = "2026-08-26"
+    (data / f"raw/{session}").mkdir(parents=True)
+    (data / f"oi/{session}").mkdir(parents=True)
+    candidate_receipt = f"{session}T09:15:00.100000+05:30"
+    option_receipt = f"{session}T09:15:00.150000+05:30"
+    index_receipt = f"{session}T09:15:00.200000+05:30"
+    raw_path = data / f"raw/{session}/events_09.jsonl"
+    raw_path.write_text(
+        _market(candidate_receipt, "NSE:BANKNIFTY26SEPFUT", 58_130.2, 100)
+        + "\n" + _market(index_receipt, CANONICAL_INDEX_SYMBOL, 58_100.0, 200) + "\n"
+    )
+    option = {
+        "source": "option_chain", "request_time": option_receipt,
+        "received_at": option_receipt, "requested_symbol": CANONICAL_INDEX_SYMBOL,
+        "response": {"data": {"optionsChain": [{
+            "symbol": "NSE:BANKNIFTY26SEP58100CE", "ltp": 101.0,
+            "oi": 500_000, "pdoi": 499_000, "strike_price": 58_100,
+            "option_type": "CE", "expiry": "2026-09-29",
+        }]}},
+    }
+    option_line = json.dumps(option) + "\n"
+    contract["config"]["max_read_bytes_per_file_per_poll"] = len(option_line.encode())
+    contract["config"]["max_buffer_bytes_per_file"] = len(option_line.encode())
+    oi_path = data / f"oi/{session}/oi_09.jsonl"
+    oi_path.write_text(option_line)
+
+    ingestor = IncrementalJSONLIngestor(contract)
+    assert ingestor.poll(source_paths=[raw_path]) == []
+    assert ingestor.poll(source_paths=[oi_path]) == []
+    assert ingestor.metrics["candidate_selection_probe_bytes"] == len(option_line.encode())
+    assert ingestor.metrics["candidate_selection_probe_refusals"] == 0
+    assert ingestor.db.execute("select count(*) from futures_candidate_outbox").fetchone()[0] == 1
+    assert str(oi_path.relative_to(data)) not in ingestor.checkpoints
+    rows = ingestor.poll(source_paths=[oi_path])
+    assert [row.instrument_class for row in rows] == ["CE"]
+    rows = ingestor.poll(source_paths=[raw_path])
+    assert [row.instrument_class for row in rows] == ["INDEX"]
+    assert ingestor.metrics["candidate_selection_probe_refusals"] == 1
+    assert ingestor.db.execute("select count(*) from futures_candidate_outbox").fetchone()[0] == 0
+    assert any(
+        row["reason"] == "FUTURES_SELECTION_SEARCH_LIMIT"
+        for row in ingestor.unknown_symbol_audit()
+    )
+    ingestor.close()
+
+    restarted = IncrementalJSONLIngestor(contract)
+    assert restarted.poll(source_paths=[oi_path]) == []
+    assert restarted.metrics["candidate_selection_lookahead_reads"] == 0
+    assert restarted.poll(source_paths=[oi_path]) == []
+    restarted.close()
+
+
+def test_selection_probe_replacement_before_selection_is_quarantined_and_unblocks_index(
+    tmp_path,
+):
+    data, contract = _contract(tmp_path)
+    contract["config"]["selected_futures_by_session"] = {}
+    session = "2026-08-26"
+    (data / f"raw/{session}").mkdir(parents=True)
+    (data / f"oi/{session}").mkdir(parents=True)
+    future_receipt = f"{session}T09:15:00.100000+05:30"
+    option_receipt = f"{session}T09:15:00.150000+05:30"
+    index_receipt = f"{session}T09:15:00.200000+05:30"
+    raw_path = data / f"raw/{session}/events_09.jsonl"
+    raw_path.write_text(
+        _market(future_receipt, "NSE:BANKNIFTY26SEPFUT", 58_130.2, 100)
+        + "\n" + _market(index_receipt, CANONICAL_INDEX_SYMBOL, 58_100.0, 200)
+        + "\n"
+    )
+    option = {
+        "source": "option_chain", "request_time": option_receipt,
+        "received_at": option_receipt, "requested_symbol": CANONICAL_INDEX_SYMBOL,
+        "response": {"data": {"optionsChain": [{
+            "symbol": "NSE:BANKNIFTY26SEP58100CE", "ltp": 101.0,
+            "oi": 500_000, "pdoi": 499_000, "strike_price": 58_100,
+            "option_type": "CE", "expiry": "2026-09-29",
+        }]}},
+    }
+    oi_path = data / f"oi/{session}/oi_09.jsonl"
+    oi_path.write_text(json.dumps(option) + "\n")
+    ingestor = IncrementalJSONLIngestor(contract)
+    assert ingestor.poll(source_paths=[raw_path]) == []
+    assert ingestor.poll(source_paths=[oi_path]) == []
+    target = ingestor.db.execute(
+        "select probe_offset from futures_selection_probe where source_file=?",
+        (str(oi_path.relative_to(data)),),
+    ).fetchone()[0]
+    replacement = oi_path.with_suffix(".replacement")
+    replacement.write_text("\n")
+    os.replace(replacement, oi_path)
+
+    rows = ingestor.poll(source_paths=[oi_path])
+    assert [row.instrument_class for row in rows] == ["INDEX"]
+    assert ingestor.db.execute(
+        "select count(*) from futures_candidate_outbox"
+    ).fetchone()[0] == 0
+    assert ingestor.db.execute(
+        "select count(*) from futures_selection_probe"
+    ).fetchone()[0] == 0
+    quarantine = ingestor.db.execute(
+        "select reason,expected_offset,detected_size from quarantined_source"
+    ).fetchone()
+    assert quarantine == ("FUTURES_SELECTION_PROBE_FILE_REPLACED", target, 1)
+    assert not ingestor.symbols.selected_futures_for_session(session)
+    assert any(
+        row["reason"] == "FUTURES_SELECTION_EVIDENCE_QUARANTINED"
+        for row in ingestor.unknown_symbol_audit()
+    )
+    assert [
+        row["reason"] for row in ingestor.ledgers["refusals_data_quality"].rows()
+        if row["reason"].startswith("FUTURES_SELECTION_PROBE_")
+    ] == ["FUTURES_SELECTION_PROBE_FILE_REPLACED"]
+    ingestor.close()
+
+    restarted = IncrementalJSONLIngestor(contract)
+    assert restarted.poll(source_paths=[oi_path]) == []
+    assert str(oi_path.relative_to(data)) in restarted._quarantined_sources
+    assert [
+        row["reason"] for row in restarted.ledgers["refusals_data_quality"].rows()
+        if row["reason"].startswith("FUTURES_SELECTION_PROBE_")
+    ] == ["FUTURES_SELECTION_PROBE_FILE_REPLACED"]
+    restarted.close()
+
+
+def test_selected_probe_replacement_never_publishes_contract_from_vanished_evidence(
+    tmp_path,
+):
+    data, contract = _contract(tmp_path)
+    contract["config"]["selected_futures_by_session"] = {}
+    session = "2026-08-26"
+    (data / f"raw/{session}").mkdir(parents=True)
+    (data / f"oi/{session}").mkdir(parents=True)
+    receipt = f"{session}T09:15:00.100000+05:30"
+    raw_path = data / f"raw/{session}/events_09.jsonl"
+    raw_path.write_text(
+        _market(receipt, "NSE:BANKNIFTY26SEPFUT", 58_130.2, 100)
+        + "\n" + _market(receipt, CANONICAL_INDEX_SYMBOL, 58_100.0, 200) + "\n"
+    )
+    depth = {
+        "source": "future_depth", "request_time": receipt,
+        "received_at": receipt, "requested_symbol": "NSE:BANKNIFTY26SEPFUT",
+        "response": {"d": {"NSE:BANKNIFTY26SEPFUT": {
+            "ltp": 58_131.0, "v": 200, "oi": 2_000_000,
+            "pdoi": 1_999_000, "expiry": "2026-09-29",
+        }}},
+    }
+    oi_path = data / f"oi/{session}/oi_09.jsonl"
+    original = (json.dumps(depth) + "\n").encode()
+    oi_path.write_bytes(original)
+    ingestor = IncrementalJSONLIngestor(contract)
+    assert ingestor.poll(source_paths=[raw_path]) == []
+    assert ingestor.poll(source_paths=[oi_path]) == []
+    assert ingestor.symbols.selected_futures_for_session(session) == {
+        "NSE:BANKNIFTY26SEPFUT"
+    }
+    replacement = oi_path.with_suffix(".replacement")
+    replacement.write_bytes(b" " * (len(original) - 1) + b"\n")
+    os.replace(replacement, oi_path)
+
+    rows = ingestor.poll(source_paths=[oi_path])
+    assert [row.instrument_class for row in rows] == ["INDEX"]
+    assert not ingestor.symbols.selected_futures_for_session(session)
+    assert ingestor.db.execute(
+        "select value from runtime_meta where key=?",
+        (f"selected_futures:{session}",),
+    ).fetchone() is None
+    assert ingestor.db.execute(
+        "select count(*) from futures_candidate_outbox"
+    ).fetchone()[0] == 0
+    assert not any(
+        row.instrument_class in {"FUTURES", "FUTURES_OI"} for row in rows
+    )
+    assert not ingestor.ledgers["normalized_raw_events"].rows()[-1].get(
+        "source_file", ""
+    ).startswith("oi/")
+    ingestor.close()
+
+
+def test_selected_candidate_raw_replacement_is_quarantined_without_freezing_index(
+    tmp_path,
+):
+    data, contract = _contract(tmp_path)
+    contract["config"]["selected_futures_by_session"] = {}
+    session = "2026-08-26"
+    (data / f"raw/{session}").mkdir(parents=True)
+    (data / f"oi/{session}").mkdir(parents=True)
+    receipt = f"{session}T09:15:00.100000+05:30"
+    raw_path = data / f"raw/{session}/events_09.jsonl"
+    original = (
+        _market(receipt, "NSE:BANKNIFTY26SEPFUT", 58_130.2, 100)
+        + "\n" + _market(receipt, CANONICAL_INDEX_SYMBOL, 58_100.0, 200) + "\n"
+    ).encode()
+    raw_path.write_bytes(original)
+    depth = {
+        "source": "future_depth", "request_time": receipt,
+        "received_at": receipt, "requested_symbol": "NSE:BANKNIFTY26SEPFUT",
+        "response": {"d": {"NSE:BANKNIFTY26SEPFUT": {
+            "ltp": 58_131.0, "v": 200, "oi": 2_000_000,
+            "pdoi": 1_999_000, "expiry": "2026-09-29",
+        }}},
+    }
+    oi_path = data / f"oi/{session}/oi_09.jsonl"
+    oi_path.write_text(json.dumps(depth) + "\n")
+    ingestor = IncrementalJSONLIngestor(contract)
+    assert ingestor.poll(source_paths=[raw_path]) == []
+    assert ingestor.poll(source_paths=[oi_path]) == []
+    replacement = raw_path.with_suffix(".replacement")
+    replacement.write_bytes(b" " * (len(original) - 1) + b"\n")
+    os.replace(replacement, raw_path)
+
+    rows = ingestor.poll(source_paths=[raw_path])
+    assert [row.instrument_class for row in rows] == ["INDEX"]
+    assert not ingestor.symbols.selected_futures_for_session(session)
+    assert ingestor.db.execute(
+        "select count(*) from futures_candidate_outbox"
+    ).fetchone()[0] == 0
+    assert ingestor.db.execute(
+        "select reason from quarantined_source where source_file=?",
+        (str(raw_path.relative_to(data)),),
+    ).fetchone()[0] == "FUTURES_CANDIDATE_SOURCE_FILE_REPLACED"
+    assert any(
+        row["reason"] == "FUTURES_SELECTION_EVIDENCE_QUARANTINED"
+        for row in ingestor.unknown_symbol_audit()
+    )
+
+    # The unmodified OI source is ingested through the primary cursor, so the
+    # dynamic selection becomes authoritative again without ever consuming
+    # bytes from the quarantined raw replacement.
+    oi_rows = ingestor.poll(source_paths=[oi_path])
+    assert [row.instrument_class for row in oi_rows] == ["FUTURES_OI"]
+    assert ingestor.symbols.selected_futures_for_session(session) == {
+        "NSE:BANKNIFTY26SEPFUT"
+    }
+    later = f"{session}T10:00:00.100000+05:30"
+    later_raw = data / f"raw/{session}/events_10.jsonl"
+    later_raw.write_text(
+        _market(later, "NSE:BANKNIFTY26SEPFUT", 58_140.0, 300) + "\n"
+    )
+    later_rows = ingestor.poll(source_paths=[later_raw])
+    assert [row.instrument_class for row in later_rows] == ["FUTURES"]
+    ingestor.close()
+
+    restarted = IncrementalJSONLIngestor(contract)
+    assert restarted.poll(source_paths=[raw_path]) == []
+    assert [
+        row["reason"] for row in restarted.ledgers["refusals_data_quality"].rows()
+        if row["reason"].startswith("FUTURES_CANDIDATE_SOURCE_")
+    ] == ["FUTURES_CANDIDATE_SOURCE_FILE_REPLACED"]
+    restarted.close()
+
+
+def test_unselected_candidate_remains_barrier_until_selection_authority_replays(
+    tmp_path,
+):
+    data, contract = _contract(tmp_path)
+    contract["config"]["selected_futures_by_session"] = {}
+    session = "2026-08-26"
+    (data / f"raw/{session}").mkdir(parents=True)
+    (data / f"oi/{session}").mkdir(parents=True)
+    candidate_receipt = f"{session}T09:15:00.100000+05:30"
+    depth_receipt = f"{session}T09:15:00.150000+05:30"
+    index_receipt = f"{session}T09:15:00.200000+05:30"
+    raw_path = data / f"raw/{session}/events_09.jsonl"
+    raw_path.write_text(
+        _market(candidate_receipt, "NSE:BANKNIFTY26OCTFUT", 58_160.0, 100)
+        + "\n" + _market(index_receipt, CANONICAL_INDEX_SYMBOL, 58_100.0, 200)
+        + "\n"
+    )
+    depth = {
+        "source": "future_depth", "request_time": depth_receipt,
+        "received_at": depth_receipt, "requested_symbol": "NSE:BANKNIFTY26SEPFUT",
+        "response": {"d": {"NSE:BANKNIFTY26SEPFUT": {
+            "ltp": 58_131.0, "v": 200, "oi": 2_000_000,
+            "pdoi": 1_999_000, "expiry": "2026-09-29",
+        }}},
+    }
+    oi_path = data / f"oi/{session}/oi_09.jsonl"
+    oi_path.write_text(json.dumps(depth) + "\n")
+    ingestor = IncrementalJSONLIngestor(contract)
+    assert ingestor.poll(source_paths=[raw_path]) == []
+    assert ingestor.poll(source_paths=[oi_path]) == []
+    assert ingestor.symbols.selected_futures_for_session(session) == {
+        "NSE:BANKNIFTY26SEPFUT"
+    }
+    assert ingestor.db.execute(
+        "select count(*) from futures_candidate_outbox"
+    ).fetchone()[0] == 1
+    assert ingestor.db.execute(
+        "select count(*) from futures_selection_probe"
+    ).fetchone()[0] == 1
+
+    # Catching up the raw candidate source cannot classify or delete a
+    # non-selected candidate while the selecting OI bytes are probe-only.
+    assert ingestor.poll(source_paths=[raw_path]) == []
+    assert ingestor.db.execute(
+        "select count(*) from futures_candidate_outbox"
+    ).fetchone()[0] == 1
+    assert not any(
+        row["reason"] == "UNSELECTED_FUTURES_CONTRACT"
+        for row in ingestor.unknown_symbol_audit()
+    )
+
+    rows = ingestor.poll(source_paths=[oi_path])
+    assert [row.instrument_class for row in rows] == ["FUTURES_OI", "INDEX"]
+    assert ingestor.db.execute(
+        "select count(*) from futures_candidate_outbox"
+    ).fetchone()[0] == 0
+    assert ingestor.db.execute(
+        "select count(*) from futures_selection_probe"
+    ).fetchone()[0] == 0
+    assert any(
+        row["reason"] == "UNSELECTED_FUTURES_CONTRACT"
+        for row in ingestor.unknown_symbol_audit()
+    )
+    ingestor.close()
+
+
+def test_missing_candidate_source_is_quarantined_after_restart_and_unblocks_index(
+    tmp_path,
+):
+    data, contract = _contract(tmp_path)
+    contract["config"]["selected_futures_by_session"] = {}
+    session = "2026-08-26"
+    (data / f"raw/{session}").mkdir(parents=True)
+    receipt = f"{session}T09:15:00.100000+05:30"
+    index_receipt = f"{session}T09:15:00.200000+05:30"
+    raw_path = data / f"raw/{session}/events_09.jsonl"
+    raw_path.write_text(
+        _market(receipt, "NSE:BANKNIFTY26SEPFUT", 58_130.0, 100)
+        + "\n" + _market(index_receipt, CANONICAL_INDEX_SYMBOL, 58_100.0, 200)
+        + "\n"
+    )
+    ingestor = IncrementalJSONLIngestor(contract)
+    assert ingestor.poll(source_paths=[raw_path]) == []
+    ingestor.close()
+    raw_path.unlink()
+
+    restarted = IncrementalJSONLIngestor(contract)
+    rows = restarted.poll()
+    assert [row.instrument_class for row in rows] == ["INDEX"]
+    rel = str(raw_path.relative_to(data))
+    assert restarted.db.execute(
+        "select reason,detected_identity,detected_size "
+        "from quarantined_source where source_file=?",
+        (rel,),
+    ).fetchone() == ("FUTURES_CANDIDATE_SOURCE_MISSING", "<MISSING>", -1)
+    assert restarted.db.execute(
+        "select count(*) from futures_candidate_outbox"
+    ).fetchone()[0] == 0
+    assert any(
+        row["reason"] == "FUTURES_CANDIDATE_SOURCE_QUARANTINED"
+        for row in restarted.unknown_symbol_audit()
+    )
+    restarted.close()
+
+    second_restart = IncrementalJSONLIngestor(contract)
+    assert second_restart.poll() == []
+    assert [
+        row["reason"]
+        for row in second_restart.ledgers["refusals_data_quality"].rows()
+        if row["reason"] == "FUTURES_CANDIDATE_SOURCE_MISSING"
+    ] == ["FUTURES_CANDIDATE_SOURCE_MISSING"]
+    second_restart.close()
+
+
+def test_unrelated_committed_mutation_does_not_invalidate_pending_selection(
+    tmp_path,
+):
+    data, contract = _contract(tmp_path)
+    contract["config"]["selected_futures_by_session"] = {}
+    session = "2026-08-26"
+    (data / f"raw/{session}").mkdir(parents=True)
+    (data / f"oi/{session}").mkdir(parents=True)
+    early = f"{session}T09:15:00.050000+05:30"
+    candidate_receipt = f"{session}T09:15:00.100000+05:30"
+    depth_receipt = f"{session}T09:15:00.150000+05:30"
+    later = f"{session}T09:15:00.200000+05:30"
+    unrelated = data / f"raw/{session}/events_08.jsonl"
+    original = (
+        _market(early, CANONICAL_INDEX_SYMBOL, 58_090.0, 10) + "\n"
+    ).encode()
+    replacement = (
+        _market(early, CANONICAL_INDEX_SYMBOL, 58_091.0, 10) + "\n"
+    ).encode()
+    assert len(original) == len(replacement)
+    unrelated.write_bytes(original)
+    candidate = data / f"raw/{session}/events_09.jsonl"
+    candidate.write_text(
+        _market(candidate_receipt, "NSE:BANKNIFTY26SEPFUT", 58_130.0, 100)
+        + "\n" + _market(later, CANONICAL_INDEX_SYMBOL, 58_100.0, 200) + "\n"
+    )
+    depth = {
+        "source": "future_depth", "request_time": depth_receipt,
+        "received_at": depth_receipt, "requested_symbol": "NSE:BANKNIFTY26SEPFUT",
+        "response": {"d": {"NSE:BANKNIFTY26SEPFUT": {
+            "ltp": 58_131.0, "v": 200, "oi": 2_000_000,
+            "pdoi": 1_999_000, "expiry": "2026-09-29",
+        }}},
+    }
+    oi_path = data / f"oi/{session}/oi_09.jsonl"
+    oi_path.write_text(json.dumps(depth) + "\n")
+    ingestor = IncrementalJSONLIngestor(contract)
+    assert [row.price for row in ingestor.poll(
+        source_paths=[unrelated, candidate]
+    )] == [58_090.0]
+    assert ingestor.poll(source_paths=[oi_path]) == []
+    selected = ingestor.symbols.selected_futures_for_session(session)
+    with unrelated.open("r+b") as handle:
+        handle.write(replacement)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+    assert ingestor.poll(source_paths=[unrelated]) == []
+    assert ingestor.symbols.selected_futures_for_session(session) == selected
+    assert ingestor.db.execute(
+        "select count(*) from futures_candidate_outbox"
+    ).fetchone()[0] == 1
+    assert ingestor.db.execute(
+        "select count(*) from futures_selection_probe"
+    ).fetchone()[0] == 1
+    rows = ingestor.poll(source_paths=[oi_path])
+    assert [row.instrument_class for row in rows] == [
+        "FUTURES", "FUTURES_OI", "INDEX",
+    ]
+    ingestor.close()
+
+
+def test_incomplete_probe_budget_is_durable_across_restart_and_finitely_refused(
+    tmp_path,
+):
+    data, contract = _contract(tmp_path)
+    contract["config"]["selected_futures_by_session"] = {}
+    session = "2026-08-26"
+    (data / f"raw/{session}").mkdir(parents=True)
+    (data / f"oi/{session}").mkdir(parents=True)
+    receipt = f"{session}T09:15:00.100000+05:30"
+    later = f"{session}T09:15:00.200000+05:30"
+    raw_path = data / f"raw/{session}/events_09.jsonl"
+    raw_path.write_text(
+        _market(receipt, "NSE:BANKNIFTY26SEPFUT", 58_130.0, 100)
+        + "\n" + _market(later, CANONICAL_INDEX_SYMBOL, 58_100.0, 200) + "\n"
+    )
+    partial = b'{"source":"future_depth"'
+    oi_path = data / f"oi/{session}/oi_09.jsonl"
+    oi_path.write_bytes(partial)
+    ingestor = IncrementalJSONLIngestor(contract)
+    assert ingestor.poll(source_paths=[raw_path]) == []
+    ingestor.close()
+    contract["config"]["max_read_bytes_per_file_per_poll"] = len(partial) * 2
+    contract["config"]["max_buffer_bytes_per_file"] = len(partial) * 2
+    ingestor = IncrementalJSONLIngestor(contract)
+    assert ingestor.poll(source_paths=[oi_path]) == []
+    assert ingestor.db.execute(
+        "select probe_offset,inspected_offset,bytes_consumed "
+        "from futures_selection_probe"
+    ).fetchone() == (0, len(partial), len(partial))
+    ingestor.close()
+
+    restarted = IncrementalJSONLIngestor(contract)
+    # The exact incomplete-tail identity and inspected end survive restart.
+    # An unchanged poll performs no selection-probe read and charges no byte a
+    # second time.
+    assert restarted.poll(source_paths=[oi_path]) == []
+    assert restarted.metrics["candidate_selection_lookahead_reads"] == 0
+    assert restarted.metrics["candidate_selection_probe_bytes"] == 0
+    assert restarted.db.execute(
+        "select probe_offset,inspected_offset,bytes_consumed "
+        "from futures_selection_probe"
+    ).fetchone() == (0, len(partial), len(partial))
+
+    with oi_path.open("ab") as handle:
+        handle.write(partial)
+        handle.flush()
+        os.fsync(handle.fileno())
+    rows = restarted.poll(source_paths=[oi_path])
+    assert [row.instrument_class for row in rows] == ["INDEX"]
+    # The append read includes the bounded old tail for exact validation and
+    # parsing, but only the newly appended half consumes the durable budget.
+    assert restarted.metrics["candidate_selection_probe_bytes"] == len(partial) * 2
+    assert restarted.db.execute(
+        "select count(*) from futures_selection_probe"
+    ).fetchone()[0] == 0
+    assert restarted.db.execute(
+        "select reason from quarantined_source where source_file=?",
+        (str(oi_path.relative_to(data)),),
+    ).fetchone()[0] == (
+        "FUTURES_SELECTION_PROBE_INCOMPLETE_LINE_BUDGET_EXHAUSTED"
+    )
+    assert restarted.poll(source_paths=[oi_path]) == []
+    assert restarted.metrics["candidate_selection_probe_bytes"] == len(partial) * 2
+    restarted.close()
+
+
+def test_incomplete_probe_cursor_schema_migration_reparses_once_then_stays_static(
+    tmp_path,
+):
+    data, contract = _contract(tmp_path)
+    contract["config"]["selected_futures_by_session"] = {}
+    session = "2026-08-26"
+    (data / f"raw/{session}").mkdir(parents=True)
+    (data / f"oi/{session}").mkdir(parents=True)
+    raw_path = data / f"raw/{session}/events_09.jsonl"
+    raw_path.write_text(
+        _market(
+            f"{session}T09:15:00.100000+05:30",
+            "NSE:BANKNIFTY26SEPFUT",
+            58_130.0,
+            100,
+        )
+        + "\n"
+    )
+    partial = b'{"source":"future_depth"'
+    oi_path = data / f"oi/{session}/oi_09.jsonl"
+    oi_path.write_bytes(partial)
+    ingestor = IncrementalJSONLIngestor(contract)
+    assert ingestor.poll(source_paths=[raw_path]) == []
+    assert ingestor.poll(source_paths=[oi_path]) == []
+    with ingestor.db:
+        ingestor.db.execute(
+            "alter table futures_selection_probe rename to probe_with_cursor"
+        )
+        ingestor.db.execute(
+            "create table futures_selection_probe("
+            "source_file text primary key,session_date text not null,"
+            "start_offset integer not null,probe_offset integer not null,"
+            "identity text not null,prefix_fingerprint text not null,"
+            "mtime_ns_at_probe integer not null,replay_target integer,"
+            "bytes_consumed integer not null default 0)"
+        )
+        ingestor.db.execute(
+            "insert into futures_selection_probe("
+            "source_file,session_date,start_offset,probe_offset,identity,"
+            "prefix_fingerprint,mtime_ns_at_probe,replay_target,bytes_consumed) "
+            "select source_file,session_date,start_offset,probe_offset,identity,"
+            "prefix_fingerprint,mtime_ns_at_probe,replay_target,bytes_consumed "
+            "from probe_with_cursor"
+        )
+        ingestor.db.execute("drop table probe_with_cursor")
+    ingestor.close()
+
+    migrated = IncrementalJSONLIngestor(contract)
+    assert migrated.db.execute(
+        "select probe_offset,inspected_offset,bytes_consumed "
+        "from futures_selection_probe"
+    ).fetchone() == (0, 0, 0)
+    assert migrated.poll(source_paths=[oi_path]) == []
+    assert migrated.metrics["candidate_selection_lookahead_reads"] == 1
+    assert migrated.metrics["candidate_selection_probe_bytes"] == len(partial)
+    assert migrated.poll(source_paths=[oi_path]) == []
+    assert migrated.metrics["candidate_selection_lookahead_reads"] == 1
+    assert migrated.metrics["candidate_selection_probe_bytes"] == len(partial)
+    migrated.close()
+
+
+def test_static_incomplete_probe_after_complete_prefix_performs_no_raw_open(
+    tmp_path, monkeypatch,
+):
+    data, contract = _contract(tmp_path)
+    contract["config"]["selected_futures_by_session"] = {}
+    session = "2026-08-26"
+    (data / f"raw/{session}").mkdir(parents=True)
+    (data / f"oi/{session}").mkdir(parents=True)
+    raw_path = data / f"raw/{session}/events_09.jsonl"
+    raw_path.write_text(
+        _market(
+            f"{session}T09:15:00.100000+05:30",
+            "NSE:BANKNIFTY26SEPFUT",
+            58_130.0,
+            100,
+        )
+        + "\n"
+    )
+    partial = b'{"source":"future_depth"'
+    oi_path = data / f"oi/{session}/oi_09.jsonl"
+    oi_path.write_bytes(b"{}\n" + partial)
+    ingestor = IncrementalJSONLIngestor(contract)
+    assert ingestor.poll(source_paths=[raw_path]) == []
+    assert ingestor.poll(source_paths=[oi_path]) == []
+    assert ingestor.db.execute(
+        "select probe_offset,inspected_offset from futures_selection_probe"
+    ).fetchone() == (3, 3 + len(partial))
+    ingestor.close()
+
+    restarted = IncrementalJSONLIngestor(contract)
+    original_open = Path.open
+    raw_opens = []
+
+    def measured_open(path, *args, **kwargs):
+        if path == oi_path:
+            raw_opens.append((args, kwargs))
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", measured_open)
+    assert restarted.poll(source_paths=[oi_path]) == []
+    assert raw_opens == []
+    assert restarted.metrics["candidate_selection_probe_bytes"] == 0
+    restarted.close()
+
+
+def test_inspected_probe_tail_rewrite_plus_append_is_quarantined(tmp_path):
+    data, contract = _contract(tmp_path)
+    contract["config"]["selected_futures_by_session"] = {}
+    session = "2026-08-26"
+    (data / f"raw/{session}").mkdir(parents=True)
+    (data / f"oi/{session}").mkdir(parents=True)
+    raw_path = data / f"raw/{session}/events_09.jsonl"
+    raw_path.write_text(
+        _market(
+            f"{session}T09:15:00.100000+05:30",
+            "NSE:BANKNIFTY26SEPFUT",
+            58_130.0,
+            100,
+        )
+        + "\n"
+        + _market(
+            f"{session}T09:15:00.200000+05:30",
+            CANONICAL_INDEX_SYMBOL,
+            58_100.0,
+            200,
+        )
+        + "\n"
+    )
+    partial = b'{"source":"future_depth"'
+    oi_path = data / f"oi/{session}/oi_09.jsonl"
+    oi_path.write_bytes(partial)
+    ingestor = IncrementalJSONLIngestor(contract)
+    assert ingestor.poll(source_paths=[raw_path]) == []
+    assert ingestor.poll(source_paths=[oi_path]) == []
+    with oi_path.open("r+b") as handle:
+        handle.seek(5)
+        handle.write(b"X")
+        handle.seek(0, os.SEEK_END)
+        handle.write(b"}\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    rows = ingestor.poll(source_paths=[oi_path])
+    assert [row.instrument_class for row in rows] == ["INDEX"]
+    assert ingestor.db.execute(
+        "select reason from quarantined_source where source_file=?",
+        (str(oi_path.relative_to(data)),),
+    ).fetchone() == ("FUTURES_SELECTION_PROBE_FILE_REPLACED_IN_PLACE",)
+    assert not ingestor.symbols.selected_futures_for_session(session)
+    ingestor.close()
+
+
+def test_complete_probe_authority_middle_rewrite_with_append_is_quarantined(
+    tmp_path,
+):
+    data, contract = _contract(tmp_path)
+    contract["config"]["selected_futures_by_session"] = {}
+    session = "2026-08-26"
+    (data / f"raw/{session}").mkdir(parents=True)
+    (data / f"oi/{session}").mkdir(parents=True)
+    receipt = f"{session}T09:15:00.100000+05:30"
+    raw_path = data / f"raw/{session}/events_09.jsonl"
+    raw_path.write_text(
+        _market(receipt, "NSE:BANKNIFTY26SEPFUT", 58_130.0, 100)
+        + "\n"
+        + _market(
+            f"{session}T09:15:00.200000+05:30",
+            CANONICAL_INDEX_SYMBOL,
+            58_100.0,
+            200,
+        )
+        + "\n"
+    )
+    block_size = IncrementalJSONLIngestor._INTEGRITY_BLOCK_BYTES
+    oi_path = data / f"oi/{session}/oi_09.jsonl"
+    oi_path.write_bytes((b" " * (block_size - 1) + b"\n") * 3 + b"{}\n")
+    ingestor = IncrementalJSONLIngestor(contract)
+    assert ingestor.poll(source_paths=[raw_path]) == []
+    assert ingestor.poll(source_paths=[oi_path]) == []
+    depth = {
+        "source": "future_depth", "request_time": receipt,
+        "received_at": receipt, "requested_symbol": "NSE:BANKNIFTY26SEPFUT",
+        "response": {"d": {"NSE:BANKNIFTY26SEPFUT": {
+            "ltp": 58_131.0, "v": 200, "oi": 2_000_000,
+            "pdoi": 1_999_000, "expiry": "2026-09-29",
+        }}},
+    }
+    with oi_path.open("r+b") as handle:
+        handle.seek(block_size + 8192)
+        handle.write(b"\t")
+        handle.seek(0, os.SEEK_END)
+        handle.write((json.dumps(depth) + "\n").encode())
+        handle.flush()
+        os.fsync(handle.fileno())
+    rows = ingestor.poll(source_paths=[oi_path])
+    assert [row.instrument_class for row in rows] == ["INDEX"]
+    assert ingestor.db.execute(
+        "select reason from quarantined_source where source_file=?",
+        (str(oi_path.relative_to(data)),),
+    ).fetchone() == ("FUTURES_SELECTION_PROBE_FILE_REPLACED_IN_PLACE",)
+    assert not ingestor.symbols.selected_futures_for_session(session)
+    ingestor.close()
+
+
+def test_missing_selection_probe_authority_is_quarantined_after_restart(
+    tmp_path,
+):
+    data, contract = _contract(tmp_path)
+    contract["config"]["selected_futures_by_session"] = {}
+    session = "2026-08-26"
+    (data / f"raw/{session}").mkdir(parents=True)
+    (data / f"oi/{session}").mkdir(parents=True)
+    receipt = f"{session}T09:15:00.100000+05:30"
+    raw_path = data / f"raw/{session}/events_09.jsonl"
+    raw_path.write_text(
+        _market(receipt, "NSE:BANKNIFTY26SEPFUT", 58_130.0, 100)
+        + "\n"
+        + _market(
+            f"{session}T09:15:00.200000+05:30",
+            CANONICAL_INDEX_SYMBOL,
+            58_100.0,
+            200,
+        )
+        + "\n"
+    )
+    depth = {
+        "source": "future_depth", "request_time": receipt,
+        "received_at": receipt, "requested_symbol": "NSE:BANKNIFTY26SEPFUT",
+        "response": {"d": {"NSE:BANKNIFTY26SEPFUT": {
+            "ltp": 58_131.0, "v": 200, "oi": 2_000_000,
+            "pdoi": 1_999_000, "expiry": "2026-09-29",
+        }}},
+    }
+    oi_path = data / f"oi/{session}/oi_09.jsonl"
+    oi_path.write_text(json.dumps(depth) + "\n")
+    ingestor = IncrementalJSONLIngestor(contract)
+    assert ingestor.poll(source_paths=[raw_path]) == []
+    assert ingestor.poll(source_paths=[oi_path]) == []
+    assert ingestor.db.execute(
+        "select replay_target from futures_selection_probe"
+    ).fetchone()[0] is not None
+    ingestor.close()
+    oi_path.unlink()
+
+    restarted = IncrementalJSONLIngestor(contract)
+    rows = restarted.poll()
+    assert [row.instrument_class for row in rows] == ["INDEX"]
+    assert restarted.db.execute(
+        "select reason from quarantined_source where source_file=?",
+        (str(oi_path.relative_to(data)),),
+    ).fetchone() == ("FUTURES_SELECTION_PROBE_MISSING",)
+    assert restarted.db.execute(
+        "select count(*) from futures_candidate_outbox"
+    ).fetchone()[0] == 0
+    assert restarted.db.execute(
+        "select count(*) from futures_selection_probe"
+    ).fetchone()[0] == 0
+    restarted.close()
+
+
+def test_quarantine_audit_uses_persisted_detection_clock_after_crash(
+    tmp_path, monkeypatch,
+):
+    data, contract = _contract(tmp_path)
+    contract["config"]["selected_futures_by_session"] = {}
+    session = "2026-08-26"
+    (data / f"raw/{session}").mkdir(parents=True)
+    receipt = f"{session}T09:15:00.100000+05:30"
+    later = f"{session}T09:15:00.200000+05:30"
+    raw_path = data / f"raw/{session}/events_09.jsonl"
+    raw_path.write_text(
+        _market(receipt, "NSE:BANKNIFTY26SEPFUT", 58_130.0, 100)
+        + "\n" + _market(later, CANONICAL_INDEX_SYMBOL, 58_100.0, 200) + "\n"
+    )
+    ingestor = IncrementalJSONLIngestor(contract)
+    assert ingestor.poll(source_paths=[raw_path]) == []
+    raw_path.unlink()
+
+    def crash_before_audit_flush():
+        if ingestor._quality_pending:
+            raise RuntimeError("synthetic crash before quarantine audit flush")
+
+    monkeypatch.setattr(ingestor, "_flush_quality", crash_before_audit_flush)
+    with pytest.raises(RuntimeError, match="quarantine audit flush"):
+        ingestor.poll()
+    detected_at = ingestor.db.execute(
+        "select detected_at from quarantined_source"
+    ).fetchone()[0]
+    pending = dict(ingestor._quality_pending[0])
+    assert pending["effective_timestamp"] == detected_at
+    ingestor.db.close()  # simulate process death; do not flush the pending ledger
+
+    restarted = IncrementalJSONLIngestor(contract)
+    rows = restarted.poll()
+    assert [row.instrument_class for row in rows] == ["INDEX"]
+    audit = [
+        row for row in restarted.ledgers["refusals_data_quality"].rows()
+        if row["reason"] == "FUTURES_CANDIDATE_SOURCE_MISSING"
+    ]
+    assert len(audit) == 1
+    assert audit[0]["effective_timestamp"] == detected_at
+    assert audit[0]["event_id"] == pending["event_id"]
+    assert audit[0]["detail"] == pending["detail"]
+    assert parse_timestamp(audit[0]["publication_timestamp"]) >= parse_timestamp(
+        audit[0]["effective_timestamp"]
+    )
+    restarted.close()
 
 
 def test_registry_selects_nearest_unexpired_then_oi_and_refuses_unselected():

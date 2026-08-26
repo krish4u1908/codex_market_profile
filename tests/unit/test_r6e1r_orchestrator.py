@@ -572,15 +572,28 @@ def test_registered_callback_stages_linearly_until_explicit_snapshot(tmp_path, m
     rows = full_stack_fixture()[:24]
     orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
     calls = []
+    order_key_calls = 0
     original = orchestrator._compute_sessions
+    original_order_key = orchestrator._order_key
+
+    def counted_order_key(row):
+        nonlocal order_key_calls
+        order_key_calls += 1
+        return original_order_key(row)
+
     monkeypatch.setattr(
         orchestrator,
         "_compute_sessions",
         lambda targets: (calls.append(set(targets)), original(targets))[1],
     )
+    monkeypatch.setattr(orchestrator, "_order_key", counted_order_key)
     for row in rows:
         orchestrator.process_observations([row])
     assert calls == []
+    # A one-record increment may inspect that record while validating, sorting,
+    # and accepting it, but must never rescan all prior session observations.
+    assert order_key_calls <= 3 * len(rows)
+    assert orchestrator._last_order_key[SESSION] == original_order_key(rows[-1])
     assert orchestrator.snapshot(SESSION, flush_dirty=False)["counts"]["observations"] == 0
     assert orchestrator.snapshot(SESSION)["counts"]["observations"] == len(rows)
     assert calls == [{SESSION}]

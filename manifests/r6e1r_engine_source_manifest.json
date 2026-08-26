@@ -28,7 +28,7 @@
     "src/banknifty_profiler/shadow/symbols.py"
   ],
   "classification": "LIVE MARKET-PROFILING DIAGNOSTIC \u2014 NOT A BUY/SELL SIGNAL",
-  "engine_hash": "200cd84e3e26049494653b1f349a9c87938f9c0c731c59718a80a4df128e0629",
+  "engine_hash": "5a954d3a821eca5db78701f5bed387d67d20d88481f2b934a3268ecd8032285e",
   "file_count": 26,
   "files": [
     {
@@ -43,8 +43,8 @@
     },
     {
       "path": "scripts/run_r6e_shadow.py",
-      "sha256": "4e2cff426cfb97bf4edc9cf8d5490f8a4c8ee645797dd2575cae99a04d613ff8",
-      "size": 2566
+      "sha256": "d4e7d34ed6afebd1546c0318fa3ce7f18f8c4a4db17e6637ef3356863d85af23",
+      "size": 6285
     },
     {
       "path": "src/banknifty_profiler/context/availability.py",
@@ -73,8 +73,8 @@
     },
     {
       "path": "src/banknifty_profiler/gui/static/live.js",
-      "sha256": "a098efab3a7640550f9f5f7bb870a7e7296e8f28766b805ed96c587a4c816274",
-      "size": 27528
+      "sha256": "87936f138f45476f3d081574d5cdb6c96fe36258baf8ee2c147784bf785ae10c",
+      "size": 28072
     },
     {
       "path": "src/banknifty_profiler/gui/static/live_page.template",
@@ -133,8 +133,8 @@
     },
     {
       "path": "src/banknifty_profiler/shadow/ingest.py",
-      "sha256": "fda915f26c82dd7169a228962ec542bd3ecb699547bfd0eeaa45a7b095b06b41",
-      "size": 60782
+      "sha256": "eb18c30f08c7cc35d786f1ca157b51fd81e5569f6b25dcef2ee8b693a4dcf5fc",
+      "size": 127560
     },
     {
       "path": "src/banknifty_profiler/shadow/ledger.py",
@@ -148,8 +148,8 @@
     },
     {
       "path": "src/banknifty_profiler/shadow/orchestrator.py",
-      "sha256": "ed1eb6b78f04b299f6088c94561ff965b25a7b60c2dea245f5cc9e3bdf1cf652",
-      "size": 76097
+      "sha256": "5fcc9339908f3954ac9d6a8184dba6e07b75b535c42d0eb8ff62bad7f486aff0",
+      "size": 76656
     },
     {
       "path": "src/banknifty_profiler/shadow/state.py",
