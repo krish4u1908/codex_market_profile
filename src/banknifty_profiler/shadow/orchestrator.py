@@ -16,6 +16,7 @@ from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 from pathlib import Path
 from typing import Iterable, Mapping, MutableMapping
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -34,6 +35,7 @@ from banknifty_profiler.shadow.ledger import AppendOnlyLedger, atomic_json
 
 
 INDEX_SYMBOL = "NSE:NIFTYBANK-INDEX"
+IST = ZoneInfo("Asia/Kolkata")
 KNOWN_CLASSES = frozenset({"INDEX", "FUTURES", "FUTURES_OI", "CE", "PE"})
 CLASS_ORDER = {"INDEX": 0, "FUTURES": 1, "FUTURES_OI": 2, "CE": 3, "PE": 4}
 LEDGER_NAMES = (
@@ -55,6 +57,7 @@ OBSERVATION_FIELDS = (
     "expiry", "underlying_price", "forward_price", "source_file",
     "source_byte_offset", "source_row_number", "raw_record_id",
     "availability_status", "freshness_status", "out_of_order",
+    "source_stream", "bid_price", "ask_price",
 )
 
 
@@ -135,6 +138,9 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
 
 def _source_stream(row: Mapping[str, object]) -> str:
     """Return the physical collector stream, never an inferred instrument."""
+    explicit = str(row.get("source_stream", "")).lower()
+    if explicit in {"raw", "oi"}:
+        return explicit
     parts = str(row.get("source_file", "")).replace("\\", "/").split("/")
     if "raw" in parts:
         return "raw"
@@ -173,6 +179,9 @@ class LiveAnalyticalOrchestrator:
         self._fixed_cache_info: dict[str, dict] = {}
         self._fixed_profiles_memory: dict[tuple[str, str], tuple[str, dict]] = {}
         self._raw_hash_memory: dict[str, tuple[int, int, str]] = {}
+        self.raw_hash_cache_path = self.state_root / "fixed_raw_source_hashes.json"
+        self._raw_hash_cache = self._load_raw_hash_cache()
+        self._raw_hash_cache_dirty = False
         self._eligibility_memory: dict[tuple[str, str], dict] = {}
         self.callback_invocations = Counter()
         self._load()
@@ -192,15 +201,27 @@ class LiveAnalyticalOrchestrator:
         self._stage([observation])
         row = _as_mapping(observation)
         session = str(row.get("session_date", ""))
-        return self.snapshot(session) if session else self.snapshot()
+        return (
+            self.snapshot(session, flush_dirty=False)
+            if session else self.snapshot(flush_dirty=False)
+        )
 
     def process_observations(self, observations: Iterable[object]) -> dict[str, dict]:
         return self.process(observations)
 
     def process(self, observations: Iterable[object]) -> dict[str, dict]:
-        """Stage a complete poll and recompute each affected session once."""
-        changed = self._stage(observations)
-        return self.flush(changed)
+        """Durably stage a complete poll without rebuilding the live session."""
+        self._stage(observations)
+        # Analytical work is intentionally coalesced until an explicit flush,
+        # snapshot, or session-finalization boundary.  This keeps one-record
+        # checkpoint schedules linear instead of rebuilding the full session
+        # after every poll.  The fsynced stage is sufficient for safe ACK and
+        # is recovered as dirty after a crash.
+        return {}
+
+    def stage_observations(self, observations: Iterable[object]) -> set[str]:
+        """Durably stage a batch for callers that intentionally coalesce flushes."""
+        return self._stage(observations)
 
     def _stage(self, observations: Iterable[object]) -> set[str]:
         """Validate, order, and durably stage rows without analytical work."""
@@ -267,15 +288,112 @@ class LiveAnalyticalOrchestrator:
         self._persist()
         return self.snapshot(session_date)
 
-    def snapshot(self, session_date: str | None = None) -> dict:
+    def snapshot(
+        self,
+        session_date: str | None = None,
+        *,
+        flush_dirty: bool = True,
+    ) -> dict:
+        if flush_dirty:
+            if session_date is None:
+                self.flush()
+            elif session_date in self._dirty_sessions:
+                self.flush([session_date])
         if not self._outputs:
             return self._empty_snapshot(session_date or "")
         selected = session_date or max(self._outputs)
         value = self._outputs.get(selected)
         return json.loads(json.dumps(value if value is not None else self._empty_snapshot(selected), default=str))
 
-    def snapshot_all(self) -> dict[str, dict]:
-        return {session: self.snapshot(session) for session in sorted(self._outputs)}
+    def snapshot_all(self, *, flush_dirty: bool = True) -> dict[str, dict]:
+        if flush_dirty:
+            self.flush()
+        sessions = sorted(set(self._outputs) | set(self._sessions))
+        return {
+            session: self.snapshot(session, flush_dirty=False)
+            for session in sessions
+        }
+
+    def operational_availability(self, at: object | None = None) -> dict:
+        """Project current-session freshness against a timezone-aware wall clock."""
+        if not self._outputs:
+            return self._empty_snapshot("")["availability"]
+        session = max(self._outputs)
+        current = self._outputs[session].get("availability", {})
+        reference = parse_timestamp(
+            at if at is not None else datetime.now(IST),
+            field_name="operational availability clock",
+        )
+        # Historical replay availability is evaluated at its causal receipt
+        # frontier.  Wall-clock staleness applies only to today's live session.
+        if session != reference.date().isoformat() or session not in self._sessions:
+            return json.loads(json.dumps(current, default=str))
+        output = self._outputs[session]
+        return self._availability(
+            session,
+            list(self._sessions[session].values()),
+            list(output.get("inventory", [])),
+            reference_time=reference,
+        )
+
+    def refresh_staleness(self, at: object | None = None) -> bool:
+        """Persist a material live freshness transition on an empty poll."""
+        if not self._outputs:
+            return False
+        session = max(self._outputs)
+        reference = parse_timestamp(
+            at if at is not None else datetime.now(IST),
+            field_name="staleness refresh clock",
+        )
+        if session != reference.date().isoformat() or session not in self._sessions:
+            return False
+        old_result = self._outputs[session]
+        availability = self._availability(
+            session,
+            list(self._sessions[session].values()),
+            list(old_result.get("inventory", [])),
+            reference_time=reference,
+        )
+        if self._availability_states(availability) == self._availability_states(
+            old_result.get("availability", {})
+        ):
+            return False
+        result = dict(old_result)
+        result["availability"] = availability
+        invocation_counts = self.callback_invocations.copy()
+        result["gui_payload"] = self._gui_payload(result)
+        self.callback_invocations = invocation_counts
+        self._publish_availability(
+            session, availability, old_result.get("availability", {})
+        )
+        self._outputs[session] = _jsonable(result)
+        self._persist()
+        return True
+
+    def causality_metrics(self) -> dict[str, int]:
+        """Measure basis causality from published receipt clocks."""
+        future_joins = 0
+        tolerance_violations = 0
+        valid_pairs = 0
+        for output in self._outputs.values():
+            for row in output.get("basis", []):
+                if row.get("validity_status") != "VALID":
+                    continue
+                index_receipt = parse_timestamp(
+                    row["index_receipt_timestamp"], field_name="basis Index receipt"
+                )
+                futures_receipt = parse_timestamp(
+                    row["futures_receipt_timestamp"], field_name="basis Futures receipt"
+                )
+                delta_ms = (futures_receipt - index_receipt).total_seconds() * 1000
+                valid_pairs += 1
+                future_joins += int(delta_ms < 0)
+                tolerance_violations += int(not 0 <= delta_ms <= 2000)
+        return {
+            "valid_basis_pairs": valid_pairs,
+            "future_joins": future_joins,
+            "synchronization_tolerance_violations": tolerance_violations,
+        }
 
     def _prepare(self, observation: object) -> dict:
         raw = _as_mapping(observation)
@@ -305,12 +423,21 @@ class LiveAnalyticalOrchestrator:
         row["option_type"] = str(raw.get("option_type") or (row["instrument_class"] if row["instrument_class"] in {"CE", "PE"} else "FUT" if row["instrument_class"] == "FUTURES_OI" else ""))
         row["expiry"] = _jsonable(raw.get("expiry"))
         row["source_file"] = str(raw.get("source_file") or source_identifiers.get("file", ""))
+        row["source_stream"] = str(
+            raw.get("source_stream")
+            or source_identifiers.get("source_stream")
+            or row["source_file"].split("/", 1)[0]
+        ).lower()
+        if row["source_stream"] not in {"raw", "oi"}:
+            raise ValueError(f"unsafe physical source stream: {row['source_stream']!r}")
         row["source_byte_offset"] = int(raw.get("source_byte_offset") or source_identifiers.get("byte_offset", 0) or 0)
         row["source_row_number"] = int(raw.get("source_row_number") or source_identifiers.get("source_row", 0) or 0)
         row["raw_record_id"] = str(raw.get("raw_record_id") or raw.get("event_id") or row["observation_id"])
         row["availability_status"] = str(raw.get("availability_status") or raw.get("status") or "AVAILABLE")
         row["freshness_status"] = str(raw.get("freshness_status") or "FRESH")
         row["out_of_order"] = _truth(raw.get("out_of_order"))
+        row["bid_price"] = _number(raw.get("bid_price"))
+        row["ask_price"] = _number(raw.get("ask_price"))
         if row["instrument_class"] == "INDEX" and row["canonical_symbol"] != INDEX_SYMBOL:
             raise ValueError(f"unsafe Index identity: {row['canonical_symbol']!r}")
         return _jsonable(row)
@@ -545,6 +672,7 @@ class LiveAnalyticalOrchestrator:
             paths.extend(sorted((raw_root / source_session).glob("events_*.jsonl")))
             paths.extend(sorted((oi_root / source_session).glob("oi_*.jsonl")))
         raw_hashes = {str(path.relative_to(data_root)): self._raw_sha(path) for path in paths}
+        self._persist_raw_hash_cache()
         key = _hash("FIXED", self.c.get("engine_hash", ""), self.c.get("configuration_hash", ""), canonical_config, raw_hashes)
         cache_root = self.state_root / "fixed_inventory_cache"
         cache_root.mkdir(parents=True, exist_ok=True)
@@ -630,16 +758,53 @@ class LiveAnalyticalOrchestrator:
         return rows
 
     def _raw_sha(self, path: Path) -> str:
-        """Hash each immutable prior raw file at most once per process."""
+        """Hash each immutable prior raw file once per stable stat signature."""
         stat = path.stat()
-        key = str(path.resolve())
+        data_root = Path(self.c.get("data_root", path.parent)).resolve()
+        try:
+            key = str(path.resolve().relative_to(data_root))
+        except ValueError:
+            key = str(path.resolve())
         cached = self._raw_hash_memory.get(key)
         signature = (stat.st_size, stat.st_mtime_ns)
         if cached is not None and cached[:2] == signature:
             return cached[2]
+        durable = self._raw_hash_cache.get(key)
+        if durable is not None and (
+            int(durable.get("size", -1)), int(durable.get("mtime_ns", -1))
+        ) == signature:
+            digest = str(durable["sha256"])
+            self._raw_hash_memory[key] = (*signature, digest)
+            return digest
         digest = inventory_engine.sha(path)
         self._raw_hash_memory[key] = (*signature, digest)
+        self._raw_hash_cache[key] = {
+            "size": signature[0], "mtime_ns": signature[1], "sha256": digest,
+        }
+        self._raw_hash_cache_dirty = True
         return digest
+
+    def _load_raw_hash_cache(self) -> dict[str, dict]:
+        if not self.raw_hash_cache_path.is_file():
+            return {}
+        try:
+            value = json.loads(self.raw_hash_cache_path.read_text())
+        except (OSError, json.JSONDecodeError) as error:
+            raise ValueError(f"fixed raw source hash cache corrupt: {error}") from error
+        if value.get("version") != "R6E1R_FIXED_RAW_HASH_CACHE_V1" or not isinstance(
+            value.get("files"), dict
+        ):
+            raise ValueError("fixed raw source hash cache version mismatch")
+        return value["files"]
+
+    def _persist_raw_hash_cache(self) -> None:
+        if not self._raw_hash_cache_dirty:
+            return
+        atomic_json(self.raw_hash_cache_path, {
+            "version": "R6E1R_FIXED_RAW_HASH_CACHE_V1",
+            "files": self._raw_hash_cache,
+        })
+        self._raw_hash_cache_dirty = False
 
     def _divergence(self, session: str, market: pd.DataFrame, futures: str):
         self.callback_invocations["synchronization"] += 1
@@ -778,17 +943,41 @@ class LiveAnalyticalOrchestrator:
             compatibility = _read_csv(output / "legacy_compatibility_snapshot.csv")
         return {"dense": dense, "transitions": transitions, "summaries": summaries, "compatibility": compatibility, "seal": seal}
 
-    def _availability(self, session: str, rows: list[dict], inventory: list[dict]) -> dict:
+    def _availability(
+        self,
+        session: str,
+        rows: list[dict],
+        inventory: list[dict],
+        *,
+        reference_time: object | None = None,
+    ) -> dict:
+        evidence_cutoff = max(
+            (parse_timestamp(row["receipt_timestamp"]) for row in rows), default=None
+        )
+        reference = (
+            parse_timestamp(reference_time, field_name="availability reference clock")
+            if reference_time is not None
+            else evidence_cutoff
+        )
         latest = {}
-        cutoff = max((parse_timestamp(row["receipt_timestamp"]) for row in rows), default=None)
         for row in rows:
-            instant = parse_timestamp(row["receipt_timestamp"])
             kind = row["instrument_class"]
+            stream = _source_stream(row)
+            valid = (
+                stream == "raw" and kind in {"INDEX", "FUTURES"}
+                and row.get("price") is not None
+            ) or (
+                stream == "oi" and kind in {"FUTURES_OI", "CE", "PE"}
+                and row.get("open_interest") is not None
+            )
+            if not valid:
+                continue
+            instant = parse_timestamp(row["receipt_timestamp"])
             if kind not in latest or instant > latest[kind]:
                 latest[kind] = instant
         limits = self.config.get("freshness_seconds", {}) if isinstance(self.config.get("freshness_seconds"), Mapping) else {}
         def fresh(kind: str, seconds: float) -> bool:
-            return cutoff is not None and kind in latest and 0 <= (cutoff - latest[kind]).total_seconds() <= seconds
+            return reference is not None and kind in latest and 0 <= (reference - latest[kind]).total_seconds() <= seconds
         market = fresh("INDEX", float(limits.get("index", 10))) and fresh("FUTURES", float(limits.get("futures", 10)))
         layers = {}
         for horizon in ("1D", "2D", "3D"):
@@ -806,7 +995,13 @@ class LiveAnalyticalOrchestrator:
             "futures_oi_state": "AVAILABLE" if fresh("FUTURES_OI", float(limits.get("futures_oi", 180))) else "STALE_OR_MISSING",
             "ce_state": "AVAILABLE" if fresh("CE", float(limits.get("ce", 180))) else "STALE_OR_MISSING",
             "pe_state": "AVAILABLE" if fresh("PE", float(limits.get("pe", 180))) else "STALE_OR_MISSING",
-            "calculation_timestamp": cutoff.isoformat() if cutoff is not None else "",
+            "evidence_cutoff_timestamp": evidence_cutoff.isoformat() if evidence_cutoff is not None else "",
+            "calculation_timestamp": datetime.now(IST).isoformat(),
+            "reference_timestamp": reference.isoformat() if reference is not None else "",
+            "receipt_ages_seconds": {
+                kind: (reference - instant).total_seconds()
+                for kind, instant in latest.items()
+            } if reference is not None else {},
         }
 
     def _gui_payload(self, result: Mapping[str, object]) -> dict:
@@ -851,22 +1046,48 @@ class LiveAnalyticalOrchestrator:
                 self._append_once("participation_transitions", row, str(row["transition_id"]), cutoff)
             for row in result["cross_layer_transitions"]:
                 self._append_once("cross_layer_transitions", row, str(row["transition_id"]), cutoff)
-            old = previous.get(session, {}).get("availability", {})
-            current = result["availability"]
-            for component, state in self._availability_states(current).items():
-                prior = self._availability_states(old).get(component, "NOT_YET_AVAILABLE")
-                if prior == state:
-                    continue
-                effective = current.get("calculation_timestamp") or cutoff
-                event = {
-                    "session_date": session, "component": component, "previous_state": prior,
-                    "new_state": state, "effective_timestamp": effective,
-                    "reason": "MATERIAL_AVAILABILITY_CHANGE",
-                }
-                identity = _hash("AVAILABILITY", session, component, effective, state)
-                self._append_once("availability_transitions", event, identity, cutoff)
-                if "STALE" in prior or "STALE" in state:
-                    self._append_once("stale_recovery_transitions", event, _hash("STALE", session, component, effective, state), cutoff)
+            self._publish_availability(
+                session,
+                result["availability"],
+                previous.get(session, {}).get("availability", {}),
+            )
+
+    def _publish_availability(
+        self,
+        session: str,
+        current: Mapping[str, object],
+        old: Mapping[str, object],
+    ) -> None:
+        calculation = str(current.get("calculation_timestamp", ""))
+        effective = str(
+            current.get("reference_timestamp")
+            or current.get("evidence_cutoff_timestamp")
+            or calculation
+        )
+        prior_states = self._availability_states(old)
+        for component, state in self._availability_states(current).items():
+            prior = prior_states.get(component, "NOT_YET_AVAILABLE")
+            if prior == state:
+                continue
+            event = {
+                "session_date": session,
+                "component": component,
+                "previous_state": prior,
+                "new_state": state,
+                "effective_timestamp": effective,
+                "reason": "MATERIAL_AVAILABILITY_CHANGE",
+            }
+            identity = _hash("AVAILABILITY", session, component, effective, state)
+            self._append_once(
+                "availability_transitions", event, identity, calculation
+            )
+            if "STALE" in prior or "STALE" in state:
+                self._append_once(
+                    "stale_recovery_transitions",
+                    event,
+                    _hash("STALE", session, component, effective, state),
+                    calculation,
+                )
 
     @staticmethod
     def _availability_states(value: Mapping[str, object]) -> dict[str, str]:
@@ -885,7 +1106,7 @@ class LiveAnalyticalOrchestrator:
         value = _jsonable(dict(row))
         value.setdefault("event_id", event_id)
         value.setdefault("calculation_timestamp", calculation_timestamp)
-        value.setdefault("publication_timestamp", calculation_timestamp)
+        value["publication_timestamp"] = datetime.now(IST).isoformat()
         value.setdefault("engine_hash", self.c.get("engine_hash", ""))
         value.setdefault("configuration_hash", self.c.get("configuration_hash", ""))
         value.setdefault("raw_run_id", self.c.get("raw_run_id", ""))
@@ -901,10 +1122,11 @@ class LiveAnalyticalOrchestrator:
         try:
             effective = parse_timestamp(receipt).isoformat()
         except ValueError:
-            effective = datetime.now().astimezone().isoformat()
+            effective = datetime.now(IST).isoformat()
+        publication = datetime.now(IST).isoformat()
         value = {
             "event_id": event_id, "session_date": str(row.get("session_date", "")),
-            "effective_timestamp": effective, "publication_timestamp": effective,
+            "effective_timestamp": effective, "publication_timestamp": publication,
             "source_receipt_identifiers": {"file": row.get("source_file", ""), "byte_offset": row.get("source_byte_offset", 0), "source_row": row.get("source_row_number", 0)},
             "engine_hash": self.c.get("engine_hash", ""), "configuration_hash": self.c.get("configuration_hash", ""),
             "raw_run_id": self.c.get("raw_run_id", ""), "status": "REFUSED", "reason": reason, "detail": detail,
@@ -977,7 +1199,7 @@ class LiveAnalyticalOrchestrator:
     @staticmethod
     def _empty_snapshot(session: str) -> dict:
         empty = {name: [] for name in ("basis", "inventory", "episodes", "dependencies", "lifecycle", "resolution", "responses", "participation_dense", "participation_transitions", "participation_summaries", "compatibility_snapshots", "cross_layer_transitions")}
-        return {"session_date": session, **empty, "availability": {"overall_state": "NO_VALID_MARKET_DATA"}, "gui_payload": {}, "callback_invocations": {}, "counts": {key: 0 for key in empty}}
+        return {"session_date": session, **empty, "availability": {"overall_state": "NO_VALID_MARKET_DATA"}, "gui_payload": {}, "callback_invocations": {}, "counts": {"observations": 0, **{key: 0 for key in empty}}}
 
 
 __all__ = ["LiveAnalyticalOrchestrator"]

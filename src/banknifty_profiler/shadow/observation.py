@@ -69,6 +69,11 @@ class TypedObservation(Mapping[str, Any]):
     status: str
     reason: str
     classification_reason: str
+    # Added at the end so durable R6E1R outbox rows written by the preservation
+    # checkpoint remain readable after this schema extension.
+    source_stream: str = ""
+    bid_price: Number | None = None
+    ask_price: Number | None = None
 
     def __getitem__(self, key: str) -> Any:
         if key not in self.keys():

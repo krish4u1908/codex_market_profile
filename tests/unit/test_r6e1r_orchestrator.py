@@ -3,14 +3,18 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+import pytest
 
 from banknifty_profiler.participation import views as participation_views
 from banknifty_profiler.shadow import orchestrator as orchestrator_module
 from banknifty_profiler.shadow.ingest import IncrementalJSONLIngestor
 from banknifty_profiler.shadow.orchestrator import LiveAnalyticalOrchestrator
+from banknifty_profiler.shadow.state import ShadowState
+from banknifty_profiler.runtime.timestamps import parse_timestamp
 
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -308,7 +312,7 @@ def test_callback_staging_is_durable_and_flushes_once(tmp_path, monkeypatch):
     staged = LiveAnalyticalOrchestrator(contract(tmp_path))
     for row in rows:
         staged.on_observation(row)
-    assert staged.snapshot(SESSION)["availability"]["overall_state"] == "NO_VALID_MARKET_DATA"
+    assert staged.snapshot(SESSION, flush_dirty=False)["availability"]["overall_state"] == "NO_VALID_MARKET_DATA"
 
     restarted = LiveAnalyticalOrchestrator(contract(tmp_path))
     calls = []
@@ -317,6 +321,194 @@ def test_callback_staging_is_durable_and_flushes_once(tmp_path, monkeypatch):
     restarted.flush()
     assert calls == [{SESSION}]
     assert restarted.snapshot(SESSION)["counts"]["observations"] == len(rows)
+
+
+def test_registered_callback_stages_linearly_until_explicit_snapshot(tmp_path, monkeypatch):
+    rows = full_stack_fixture()[:24]
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    calls = []
+    original = orchestrator._compute_sessions
+    monkeypatch.setattr(
+        orchestrator,
+        "_compute_sessions",
+        lambda targets: (calls.append(set(targets)), original(targets))[1],
+    )
+    for row in rows:
+        orchestrator.process_observations([row])
+    assert calls == []
+    assert orchestrator.snapshot(SESSION, flush_dirty=False)["counts"]["observations"] == 0
+    assert orchestrator.snapshot(SESSION)["counts"]["observations"] == len(rows)
+    assert calls == [{SESSION}]
+
+
+def test_callback_crash_after_durable_stage_replays_and_flushes_before_final_seal(
+    tmp_path, monkeypatch,
+):
+    base = datetime(2026, 8, 20, 9, 15, tzinfo=IST)
+    data = tmp_path / "collector"
+    session_root = data / "raw" / SESSION
+    session_root.mkdir(parents=True)
+    (data / "oi" / SESSION).mkdir(parents=True)
+    runtime = contract(tmp_path)
+    runtime.update({
+        "data_root": data,
+        "minimum_session_date": SESSION,
+        "selected_futures_symbols": [FUTURES],
+    })
+    runtime["config"].update({
+        "max_buffer_bytes_per_file": 1_048_576,
+        "max_read_bytes_per_file_per_poll": 1_048_576,
+    })
+    records = []
+    for offset, (symbol, price) in enumerate(
+        ((INDEX, 57_000), (FUTURES, 57_020), (INDEX, 57_001), (FUTURES, 57_021))
+    ):
+        instant = base + timedelta(milliseconds=500 * offset)
+        records.append(json.dumps({
+            "received_at": instant.isoformat(),
+            "event_time": instant.isoformat(),
+            "message": {
+                "symbol": symbol, "ltp": price, "vol_traded_today": offset,
+            },
+        }))
+    (session_root / "events_09.jsonl").write_text("\n".join(records) + "\n")
+
+    failed_ingestor = IncrementalJSONLIngestor(runtime)
+    failed_orchestrator = LiveAnalyticalOrchestrator(
+        runtime, failed_ingestor.ledgers
+    )
+    failed_ingestor.register_callback(failed_orchestrator)
+    # Staging callbacks do not invoke the analytical batch primitives, so a
+    # simulated compute failure remains dormant until an explicit seal.
+    monkeypatch.setattr(
+        failed_orchestrator,
+        "_compute_sessions",
+        lambda _targets: (_ for _ in ()).throw(RuntimeError("synthetic flush crash")),
+    )
+    committed = failed_ingestor.poll()
+    assert len(committed) == 4
+    assert failed_ingestor.db.execute(
+        "select count(*) from observation_outbox"
+    ).fetchone()[0] == 0
+    with pytest.raises(RuntimeError, match="synthetic flush crash"):
+        failed_orchestrator.flush()
+    failed_ingestor.close()
+
+    restarted_ingestor = IncrementalJSONLIngestor(runtime)
+    restarted_orchestrator = LiveAnalyticalOrchestrator(
+        runtime, restarted_ingestor.ledgers
+    )
+    restarted_ingestor.register_callback(restarted_orchestrator)
+    assert restarted_ingestor.poll() == []
+    sealed = restarted_orchestrator.snapshot(SESSION)
+    assert sealed["counts"]["observations"] == 4
+    assert sealed["counts"]["basis"] == 2
+    restarted_ingestor.close()
+
+
+def test_basis_backward_asof_accepts_exact_2000ms_and_never_joins_future(tmp_path):
+    base = datetime(2026, 8, 20, 9, 15, tzinfo=IST)
+    rows = [
+        observation("O0001", "INDEX", INDEX, base, price=57_000, volume=0),
+        observation("O0002", "FUTURES", FUTURES, base, price=57_020, volume=1),
+        observation(
+            "O0003", "FUTURES", FUTURES,
+            base + timedelta(milliseconds=2000), price=57_021, volume=2,
+        ),
+        observation(
+            "O0004", "FUTURES", FUTURES,
+            base + timedelta(microseconds=2_000_001), price=57_022, volume=3,
+        ),
+    ]
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    orchestrator.process(rows)
+    basis = orchestrator.snapshot(SESSION)["basis"]
+    assert [row["validity_status"] for row in basis] == [
+        "VALID", "VALID", "UNMATCHED_TOLERANCE_EXCEEDED",
+    ]
+    assert basis[0]["absolute_receipt_difference_ms"] == 0
+    assert basis[1]["absolute_receipt_difference_ms"] == 2000
+    assert orchestrator.causality_metrics() == {
+        "valid_basis_pairs": 2,
+        "future_joins": 0,
+        "synchronization_tolerance_violations": 0,
+    }
+
+
+def test_empty_poll_wall_clock_staleness_is_material_and_not_backdated(tmp_path):
+    base = datetime(2026, 8, 20, 9, 15, tzinfo=IST)
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    orchestrator.process([
+        observation("O0001", "INDEX", INDEX, base, price=57_000, volume=0),
+        observation(
+            "O0002", "FUTURES", FUTURES,
+            base + timedelta(milliseconds=500), price=57_020, volume=1,
+        ),
+    ])
+    assert orchestrator.snapshot(SESSION)["availability"]["layers"]["ID"]["state"] == "AVAILABLE"
+    stale_at = base + timedelta(seconds=20)
+    assert orchestrator.refresh_staleness(stale_at)
+    stale = orchestrator.snapshot(SESSION, flush_dirty=False)["availability"]
+    assert stale["layers"]["ID"]["state"] == "STALE_DATA"
+    assert stale["reference_timestamp"] == stale_at.isoformat()
+    assert not orchestrator.refresh_staleness(stale_at + timedelta(seconds=1))
+    rows = orchestrator.ledgers["stale_recovery_transitions"].rows()
+    assert rows
+    assert all(
+        parse_timestamp(row["publication_timestamp"])
+        >= parse_timestamp(row["effective_timestamp"])
+        for row in rows
+    )
+
+
+def test_null_futures_price_does_not_report_market_ready(tmp_path):
+    base = datetime(2026, 8, 20, 9, 15, tzinfo=IST)
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    orchestrator.process([
+        observation("O0001", "INDEX", INDEX, base, price=57_000, volume=0),
+        observation(
+            "O0002", "FUTURES", FUTURES,
+            base + timedelta(milliseconds=500), price=None, volume=100,
+        ),
+    ])
+    availability = orchestrator.snapshot(SESSION)["availability"]
+    assert availability["layers"]["ID"]["state"] == "STALE_DATA"
+    assert availability["futures_state"] == "STALE_OR_MISSING"
+    assert availability["divergence_state"] == "SUSPENDED_REQUIRED_INPUT_UNAVAILABLE"
+
+
+def test_operational_state_reads_never_trigger_dirty_analytical_flush(
+    tmp_path, monkeypatch,
+):
+    base = datetime(2026, 8, 20, 9, 15, tzinfo=IST)
+    runtime = contract(tmp_path)
+    orchestrator = LiveAnalyticalOrchestrator(runtime)
+    orchestrator.process_observations([
+        observation("O0001", "INDEX", INDEX, base, price=57_000, volume=0),
+        observation(
+            "O0002", "FUTURES", FUTURES,
+            base + timedelta(milliseconds=500), price=57_020, volume=1,
+        ),
+    ])
+    calls = []
+    original = orchestrator._compute_sessions
+    monkeypatch.setattr(
+        orchestrator,
+        "_compute_sessions",
+        lambda targets: (calls.append(set(targets)), original(targets))[1],
+    )
+    ingestor = SimpleNamespace(
+        latest={}, latest_valid={}, metrics={},
+        c={**runtime, "raw_run_id": "RAW-RUN"},
+    )
+    state = ShadowState(ingestor, {}, orchestrator)
+    for _ in range(3):
+        state.analytical_snapshot()
+        state.availability()
+        state.status()
+    assert calls == []
+    orchestrator.flush()
+    assert calls == [{SESSION}]
 
 
 def test_promoted_breadth_primitive_preserves_frozen_rows():

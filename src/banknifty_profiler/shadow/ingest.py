@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import datetime, timedelta
 import hashlib
@@ -32,7 +32,8 @@ _OBSERVED_CLASSES = {
     InstrumentClass.PE.value,
 }
 _MARKET_PAYLOAD_FIELDS = (
-    "type", "ltp", "vol_traded_today", "last_traded_qty", "bid_price1", "ask_price1",
+    "type", "ltp", "vol_traded_today", "last_traded_qty",
+    "bid_price", "ask_price", "bid_price1", "ask_price1",
 )
 _OI_PAYLOAD_FIELDS = (
     "ltp", "volume", "v", "oi", "prev_oi", "pdoi", "oich", "strike_price",
@@ -72,6 +73,27 @@ def _oi_change(current: int | float | None, previous: int | float | None, explic
     if current is None or previous is None:
         return None
     return current - previous
+
+
+def _quote_price(item: dict[str, Any], side: str) -> int | float | None:
+    """Return the best allow-listed quote from collector market/depth shapes."""
+    direct = item.get(side)
+    if isinstance(direct, list):
+        for level in direct:
+            if isinstance(level, dict):
+                value = _number(level.get("price"))
+                if value is not None:
+                    return value
+        direct = None
+    value = _number(direct)
+    if value is not None:
+        return value
+    prefix = "bid" if side in {"bid", "bids"} else "ask"
+    for name in (f"{prefix}_price1", f"{prefix}_price"):
+        value = _number(item.get(name))
+        if value is not None:
+            return value
+    return None
 
 
 class IncrementalJSONLIngestor:
@@ -123,6 +145,18 @@ class IncrementalJSONLIngestor:
         self.db = sqlite3.connect(self.state / "dedup.sqlite3")
         self.db.execute("create table if not exists seen(id text primary key)")
         self.db.execute("create table if not exists runtime_meta(key text primary key,value text not null)")
+        persisted_run = self.db.execute(
+            "select value from runtime_meta where key='raw_run_id'"
+        ).fetchone()
+        if persisted_run is None:
+            self.db.execute(
+                "insert into runtime_meta(key,value) values ('raw_run_id',?)",
+                (str(self.c["raw_run_id"]),),
+            )
+        else:
+            # A process restart continues the same durable raw run.  Generating
+            # a fresh UUID would split one exactly-once publication history.
+            self.c["raw_run_id"] = persisted_run[0]
         self.db.execute(
             "create table if not exists observation_outbox("
             "id text primary key,payload text not null)"
@@ -171,6 +205,12 @@ class IncrementalJSONLIngestor:
                 "select key,value from runtime_meta where key like 'latest:%'"
             )
         }
+        self.latest_valid = {
+            key.removeprefix("latest_valid:"): value
+            for key, value in self.db.execute(
+                "select key,value from runtime_meta where key like 'latest_valid:%'"
+            )
+        }
         high_water = self.db.execute(
             "select value from runtime_meta where key='causal_high_water'"
         ).fetchone()
@@ -193,6 +233,8 @@ class IncrementalJSONLIngestor:
         })
         self._poll_incomplete: dict[str, bool] = {}
         self._inflight: list[str] = []
+        self._discovery_signature: tuple | None = None
+        self._discovery_paths: tuple[Path, ...] = ()
         self.callbacks: list[tuple[str, Callable[..., object]]] = []
         if on_observation is not None:
             self.register_callback(on_observation)
@@ -233,12 +275,64 @@ class IncrementalJSONLIngestor:
             raise ValueError(f"checkpoint state corrupt: {error}") from error
 
     def discover(self) -> list[Path]:
+        signature = self._directory_signature()
+        if signature == self._discovery_signature:
+            return list(self._discovery_paths)
         minimum = self.c.get("minimum_session_date", "")
         paths = [
             *self.data.glob("raw/*/events_*.jsonl"),
             *self.data.glob("oi/*/oi_*.jsonl"),
         ]
-        return sorted(path for path in paths if path.parent.name >= minimum)
+        self._discovery_paths = tuple(
+            sorted(path for path in paths if path.parent.name >= minimum)
+        )
+        self._discovery_signature = signature
+        return list(self._discovery_paths)
+
+    def _directory_signature(self) -> tuple:
+        """Detect session/hour rotation without globbing every file each poll."""
+        minimum = self.c.get("minimum_session_date", "")
+        values = []
+        for kind in ("raw", "oi"):
+            root = self.data / kind
+            stat = root.stat()
+            values.append((kind, stat.st_dev, stat.st_ino, stat.st_mtime_ns))
+            for session in sorted(
+                path for path in root.iterdir()
+                if path.is_dir() and path.name >= minimum
+            ):
+                session_stat = session.stat()
+                values.append((
+                    kind, session.name, session_stat.st_dev,
+                    session_stat.st_ino, session_stat.st_mtime_ns,
+                ))
+        return tuple(values)
+
+    def _validated_source_paths(self, paths: Iterable[Path]) -> list[Path]:
+        """Validate a caller-supplied changed-file hint for schedule replay."""
+        result = []
+        minimum = self.c.get("minimum_session_date", "")
+        for value in paths:
+            path = Path(value).resolve()
+            try:
+                relative = path.relative_to(self.data)
+            except ValueError as error:
+                raise ValueError("hinted source path is outside raw data root") from error
+            parts = relative.parts
+            valid_name = (
+                len(parts) == 3
+                and parts[0] in {"raw", "oi"}
+                and parts[1] >= minimum
+                and (
+                    parts[0] == "raw" and parts[2].startswith("events_")
+                    or parts[0] == "oi" and parts[2].startswith("oi_")
+                )
+                and parts[2].endswith(".jsonl")
+            )
+            if not valid_name or not path.is_file():
+                raise ValueError(f"invalid hinted physical source path: {relative}")
+            result.append(path)
+        return sorted(set(result))
 
     def _classify(self, path: Path, record: dict[str, Any]) -> tuple[str, object]:
         """Compatibility classifier backed by the canonical registry."""
@@ -257,6 +351,8 @@ class IncrementalJSONLIngestor:
     def poll(
         self,
         callback: Callable[[TypedObservation], object] | object | None = None,
+        *,
+        source_paths: Iterable[Path] | None = None,
     ) -> list[TypedObservation]:
         begun = time.monotonic()
         self.metrics["polls"] += 1
@@ -275,7 +371,11 @@ class IncrementalJSONLIngestor:
                 "select payload from futures_candidate_outbox"
             )
         )
-        paths = self.discover()
+        paths = (
+            self.discover()
+            if source_paths is None
+            else self._validated_source_paths(source_paths)
+        )
         self._poll_incomplete = {}
         for path in paths:
             rel = str(path.relative_to(self.data))
@@ -429,9 +529,35 @@ class IncrementalJSONLIngestor:
             prior = self.latest.get(kind)
             if prior is None or receipt >= parse_timestamp(prior, field_name="latest instrument receipt"):
                 self.latest[kind] = observation.receipt_timestamp
+            if self._has_valid_evidence(observation):
+                valid_prior = self.latest_valid.get(kind)
+                if valid_prior is None or receipt >= parse_timestamp(
+                    valid_prior, field_name="latest valid instrument receipt"
+                ):
+                    self.latest_valid[kind] = observation.receipt_timestamp
+
+    @staticmethod
+    def _has_valid_evidence(observation: TypedObservation) -> bool:
+        stream = observation.source_stream or observation.source_file.split("/", 1)[0]
+        if observation.instrument_class in {
+            InstrumentClass.INDEX.value,
+            InstrumentClass.FUTURES.value,
+        }:
+            return stream == "raw" and observation.price is not None
+        if observation.instrument_class in {
+            InstrumentClass.FUTURES_OI.value,
+            InstrumentClass.CE.value,
+            InstrumentClass.PE.value,
+        }:
+            return stream == "oi" and observation.open_interest is not None
+        return False
 
     def _persist_runtime_clocks(self) -> None:
         values = [(f"latest:{key}", value) for key, value in self.latest.items()]
+        values.extend(
+            (f"latest_valid:{key}", value)
+            for key, value in self.latest_valid.items()
+        )
         if self._causal_high_water is not None:
             values.append(("causal_high_water", self._causal_high_water))
         values.extend(
@@ -962,9 +1088,13 @@ class IncrementalJSONLIngestor:
         option_type = classification.option_type or (
             str(item.get("option_type")).upper() if item.get("option_type") else None
         )
+        source_stream = rel.split("/", 1)[0]
+        bid_price = _quote_price(item, "bids" if isinstance(item.get("bids"), list) else "bid")
+        ask_price = _quote_price(item, "ask")
         identifiers = {
             "file": rel, "byte_offset": byte_offset, "source_row": row_number,
             "raw_record_id": raw_record_id, "item_number": item_number,
+            "source_stream": source_stream,
         }
         return TypedObservation(
             observation_id=observation_id, event_id=observation_id, session_date=session_date,
@@ -987,6 +1117,7 @@ class IncrementalJSONLIngestor:
             status="OBSERVED" if known else "FILTERED",
             reason=classification.instrument_class.value,
             classification_reason=classification.reason,
+            source_stream=source_stream, bid_price=bid_price, ask_price=ask_price,
         )
 
     def _empty_container(
@@ -1085,6 +1216,39 @@ class IncrementalJSONLIngestor:
             reason, rel, checkpoint.get("row", 0), checkpoint.get("offset", 0),
             f"{stat.st_dev}:{stat.st_ino}", f"checkpoint={checkpoint} size={stat.st_size}",
         )
+
+    def checkpoint_health(self) -> dict[str, Any]:
+        """Return measured durable-state integrity without rescanning raw data."""
+        # HTTP readiness runs on a different thread from ingestion.  A short
+        # independent read connection avoids sharing sqlite connection state.
+        with sqlite3.connect(self.state / "dedup.sqlite3") as audit_db:
+            sqlite_result = audit_db.execute("pragma quick_check").fetchone()
+            canonical = {
+                row[0]: (int(row[1]), int(row[2]), str(row[3]))
+                for row in audit_db.execute(
+                    "select source_file,offset,row_number,identity from file_checkpoint"
+                )
+            }
+            pending = audit_db.execute(
+                "select count(*) from observation_outbox"
+            ).fetchone()[0]
+        sqlite_ok = sqlite_result == ("ok",)
+        memory = {
+            rel: (
+                int(checkpoint.get("offset", 0)),
+                int(checkpoint.get("row", 0)),
+                str(checkpoint.get("identity", "")),
+            )
+            for rel, checkpoint in self.checkpoints.items()
+        }
+        consistent = canonical == memory
+        return {
+            "valid": sqlite_ok and consistent,
+            "sqlite_quick_check": sqlite_result[0] if sqlite_result else "MISSING",
+            "checkpoint_count": len(canonical),
+            "memory_database_consistent": consistent,
+            "pending_observations": pending,
+        }
 
     def close(self) -> None:
         self._acknowledge(self._inflight)

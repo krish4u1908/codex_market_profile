@@ -24,3 +24,9 @@ RESULT: PASS; remote head 0a3587731f9b0b4a99543d1fb059307340b588d3
 
 2026-08-26 focused sample provenance revalidation
 RESULT: PASS; canonical contract NSE:BANKNIFTY26AUGFUT; 46,550/46,550 byte identities; raw=46,210; oi=340; 8/8 source hashes/stat unchanged
+
+2026-08-26 inherited focused incremental baseline performance probe
+RESULT: INTERRUPTED AFTER DEFECT CONFIRMATION; elapsed 8m56.43s; max RSS 343,064 KiB; filesystem output 2,862,368 KiB; cause was full dirty-session rebuild per poll
+
+2026-08-26 repaired backend focused verification
+RESULT: PASS; 74 backend/harness tests + 18 live GUI/API tests; py_compile PASS; git diff --check PASS

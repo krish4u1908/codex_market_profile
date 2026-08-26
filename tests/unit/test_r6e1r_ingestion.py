@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from banknifty_profiler.shadow.contracts import validate_shadow_contract
+from banknifty_profiler.shadow.contracts import engine_hash, engine_source_inventory
 from banknifty_profiler.shadow.ingest import IncrementalJSONLIngestor
 from banknifty_profiler.shadow.observation import TypedObservation
 from banknifty_profiler.shadow.symbols import (
@@ -96,6 +97,7 @@ def test_market_envelope_is_lossless_and_files_merge_by_receipt(tmp_path):
     assert rows[0].event_timestamp == earlier
     assert rows[0].price == 57_100.45
     assert rows[0].cumulative_volume == 98_765
+    assert rows[0].source_stream == "raw"
     assert rows[1].price == 57_125.2
     assert rows[1].cumulative_volume == 1_230
     assert "access_token" not in rows[1].canonical_payload
@@ -115,6 +117,8 @@ def test_oi_rows_expand_to_futures_ce_and_pe_without_field_loss(tmp_path):
         "response": {"d": {"NSE:BANKNIFTY26AUGFUT": {
             "ltp": 57_130.2, "v": 12_345, "oi": 1_984_800,
             "pdoi": 1_986_030, "expiry": "2026-08-25",
+            "bids": [{"price": 57_129.8, "volume": 30}],
+            "ask": [{"price": 57_130.4, "volume": 30}],
         }}},
     }
     option = {
@@ -144,6 +148,8 @@ def test_oi_rows_expand_to_futures_ce_and_pe_without_field_loss(tmp_path):
     assert futures.previous_open_interest == 1_986_030
     assert futures.open_interest_change == -1_230
     assert futures.expiry == "2026-08-25"
+    assert futures.source_stream == "oi"
+    assert (futures.bid_price, futures.ask_price) == (57_129.8, 57_130.4)
     ce = by_class["CE"]
     pe = by_class["PE"]
     assert (ce.price, ce.cumulative_volume, ce.oi, ce.delta_oi) == (520.5, 3_000, 20_000, 500)
@@ -481,3 +487,60 @@ def test_registry_selects_nearest_unexpired_then_oi_and_refuses_unselected():
         ],
         as_of_date="2026-08-26",
     ) == "NSE:BANKNIFTY26SEPFUT"
+
+
+def test_session_futures_selection_is_immutable_after_first_canonical_choice():
+    registry = SymbolRegistry()
+    assert registry.select_session_futures(
+        "2026-08-20",
+        [("NSE:BANKNIFTY26AUGFUT", "2026-08-25", 1_000_000)],
+    ) == "NSE:BANKNIFTY26AUGFUT"
+    assert registry.select_session_futures(
+        "2026-08-20",
+        [("NSE:BANKNIFTY26SEPFUT", "2026-09-29", 9_000_000)],
+    ) == "NSE:BANKNIFTY26AUGFUT"
+
+
+def test_raw_run_identity_survives_process_restart(tmp_path):
+    _, contract = _contract(tmp_path)
+    first = IncrementalJSONLIngestor(contract)
+    assert first.c["raw_run_id"] == "R6E1R-TEST"
+    first.close()
+
+    restarted_contract = dict(contract)
+    restarted_contract["raw_run_id"] = "SHOULD-NOT-REPLACE-DURABLE-RUN"
+    restarted = IncrementalJSONLIngestor(restarted_contract)
+    assert restarted.c["raw_run_id"] == "R6E1R-TEST"
+    restarted.close()
+
+
+def test_current_engine_hash_is_allowlisted_deterministic_and_content_sensitive(tmp_path):
+    (tmp_path / "a.py").write_text("A\n")
+    (tmp_path / "b.py").write_text("B\n")
+    allowlist = ("b.py", "a.py")
+    first = engine_hash(tmp_path, allowlist)
+    assert first == engine_hash(tmp_path, reversed(allowlist))
+    assert [row["path"] for row in engine_source_inventory(tmp_path, allowlist)] == [
+        "a.py", "b.py",
+    ]
+    (tmp_path / "b.py").write_text("CHANGED\n")
+    assert engine_hash(tmp_path, allowlist) != first
+    with pytest.raises(ValueError, match="unsafe engine source"):
+        engine_hash(tmp_path, ("../outside.py",))
+
+
+def test_validated_changed_path_hint_uses_same_checkpoint_path(tmp_path):
+    data, contract = _contract(tmp_path)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    path.write_text(
+        _market(_timestamp(-0.1), CANONICAL_INDEX_SYMBOL, 57_100, 100) + "\n"
+    )
+    ingestor = IncrementalJSONLIngestor(contract)
+    rows = ingestor.poll(source_paths=[path])
+    assert len(rows) == 1
+    assert ingestor.checkpoints[str(path.relative_to(data))]["offset"] == path.stat().st_size
+    outside = tmp_path / "outside.jsonl"
+    outside.write_text("{}\n")
+    with pytest.raises(ValueError, match="outside raw data root"):
+        ingestor.poll(source_paths=[outside])
+    ingestor.close()

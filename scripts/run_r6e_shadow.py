@@ -10,13 +10,31 @@ from banknifty_profiler.shadow.state import ShadowState
 
 def main():
  p=argparse.ArgumentParser();p.add_argument('--data-root',type=Path,required=True);p.add_argument('--state-root',type=Path,required=True);p.add_argument('--config',type=Path,required=True);p.add_argument('--bind',required=True);p.add_argument('--port',type=int,required=True);p.add_argument('--mode',required=True);p.add_argument('--activation',type=Path,required=True);a=p.parse_args()
- c=validate_shadow_contract(a.data_root,a.state_root,a.config,a.bind,a.mode);c['raw_run_id']='R6E-'+uuid.uuid4().hex.upper();activation=json.loads(a.activation.read_text());c['minimum_session_date']=activation['activation_day'];ingestor=IncrementalJSONLIngestor(c);orchestrator=LiveAnalyticalOrchestrator(c,ledgers=ingestor.ledgers);ingestor.register_callback(orchestrator);state=ShadowState(ingestor,activation,orchestrator);server=create_server(state,a.bind,a.port);stop=threading.Event()
+ c=validate_shadow_contract(a.data_root,a.state_root,a.config,a.bind,a.mode);c['raw_run_id']='R6E-'+uuid.uuid4().hex.upper();activation=json.loads(a.activation.read_text());c['minimum_session_date']=activation['activation_day'];ingestor=IncrementalJSONLIngestor(c);orchestrator=LiveAnalyticalOrchestrator(c,ledgers=ingestor.ledgers);ingestor.register_callback(orchestrator);state=ShadowState(ingestor,activation,orchestrator);server=create_server(state,a.bind,a.port);stop=threading.Event();last_refresh=0.0;refresh_seconds=float(c['config']['analytical_refresh_seconds']);active_session=None
  def halt(*_):stop.set();server.shutdown()
  signal.signal(signal.SIGTERM,halt);signal.signal(signal.SIGINT,halt);threading.Thread(target=server.serve_forever,daemon=True).start()
  try:
   while not stop.is_set():
-   try:ingestor.poll();state.last_error=''
+   try:
+    observations=ingestor.poll()
+    observed_sessions=sorted({row.session_date for row in observations})
+    if observed_sessions:
+     newest=observed_sessions[-1]
+     if active_session is not None and newest>active_session:
+      orchestrator.finalize_session(active_session)
+     active_session=newest
+    # Analytical rebuilds are bounded by the configured refresh interval;
+    # callback staging itself is already durable and API reads are read-only.
+    current=time.monotonic()
+    if current-last_refresh>=refresh_seconds:
+     orchestrator.flush()
+     last_refresh=current
+    orchestrator.refresh_staleness()
+    state.last_error=''
    except Exception as e:state.last_error=f'INGESTION_ERROR:{e}'
    stop.wait(float(c['config']['poll_interval_seconds']))
- finally:server.server_close();ingestor.close()
+ finally:
+  server.server_close()
+  try:orchestrator.flush()
+  finally:ingestor.close()
 if __name__=='__main__':main()

@@ -138,7 +138,10 @@ class SymbolRegistry:
     ) -> str | None:
         """Select nearest unexpired contract, then greatest OI, deterministically."""
         session = str(session_date)
-        if session in self._fixed_sessions:
+        # Contract identity is a session contract, not a per-poll preference.
+        # Once canonical evidence has selected it, later depth polls cannot
+        # silently switch the analytical stream to a different expiry.
+        if session in self.selected_by_session:
             return min(self.selected_by_session[session])
         as_of = datetime.strptime(as_of_date or session, "%Y-%m-%d").date()
         ranked: list[tuple[object, float, str]] = []
