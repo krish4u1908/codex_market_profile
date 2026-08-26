@@ -1,0 +1,89 @@
+# R6E1R Six-Session Equivalence Report
+
+Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
+
+Status: **FOCUSED V12 VERIFIED; FINAL SIX-SESSION EVIDENCE PENDING**
+
+## Evaluation contract
+
+The final run must process these evaluation sessions from the complete raw root:
+
+- 2026-08-11
+- 2026-08-12
+- 2026-08-13
+- 2026-08-18
+- 2026-08-19
+- 2026-08-20
+
+Predecessor sessions are discovered causally from raw bytes. August 17 remains present for canonical rejection and is never forced into the accepted predecessor chain. Derived R2-R6 analytical tables are prohibited as A/B input.
+
+Incremental A must use the production ingestor callback path, durable checkpoints, restarts, and explicit finalization. Clean B must start from a new state root and run the repository-owned chronological batch processors against the same selected raw bytes. Frozen reference packages may be opened only after both A and B are sealed.
+
+## Required schedules
+
+| Schedule | Required exercise evidence | Final result |
+|---|---|---|
+| Original source chunks | All evaluation files visible before the first poll; native bounded checkpoint progress measured | `PENDING_FINAL_EVIDENCE` |
+| One record per increment | Every selected outer JSON record exposed in a one-record increment | `PENDING_FINAL_EVIDENCE` |
+| Deterministic variable chunks | Configured deterministic size cycle exercised over the stream | `PENDING_FINAL_EVIDENCE` |
+| Boundaries inside JSONL lines | Partial-line deferral and completion measured at configured boundaries | `PENDING_FINAL_EVIDENCE` |
+| Empty/repeated polls | Configured repeated empty polls measured with no publication change | `PENDING_FINAL_EVIDENCE` |
+| Multiple checkpoint restarts | Every configured checkpoint restart measured | `PENDING_FINAL_EVIDENCE` |
+| Analytical transition restart | Durable append, restart, retry, and exactly-one identity measured | `PENDING_FINAL_EVIDENCE` |
+| Hourly rotation | A new hourly path introduced after earlier polling in each applicable stream | `PENDING_FINAL_EVIDENCE` |
+| Large chronological chunks | Configured large chronological groups measured | `PENDING_FINAL_EVIDENCE` |
+
+## Frozen count contract
+
+| Artifact | Required count |
+|---|---:|
+| Inventory | 255 |
+| Divergence episodes | 65 |
+| GREEN | 41 |
+| RED | 24 |
+| Dependency groups | 65 |
+| Dependent retriggers | 14 |
+| Lifecycle transitions | 14,201 |
+| Dense resolution observations | 164,668 |
+| Response observations | 65 |
+| Dense participation | 69,225 |
+| Participation transitions | 32,068 |
+| Participation summaries | 65 |
+| Compatibility snapshots | 65 |
+| Cross-layer material transitions | 60,659 |
+
+## Final equality matrix
+
+| Measure | Required | Final value |
+|---|---:|---|
+| Stream-versus-batch differences | 0 | `PENDING_FINAL_EVIDENCE` |
+| Canonical reference mismatches | 0 | `PENDING_FINAL_EVIDENCE` |
+| Analytical ledger identity/content differences | 0 | `PENDING_FINAL_EVIDENCE` |
+| GUI-visible state differences | 0 | `PENDING_FINAL_EVIDENCE` |
+| Future joins | 0 | `PENDING_FINAL_EVIDENCE` |
+| Synchronization tolerance violations | 0 | `PENDING_FINAL_EVIDENCE` |
+| Timestamp backdating | 0 | `PENDING_FINAL_EVIDENCE` |
+| Duplicate analytical IDs | 0 | `PENDING_FINAL_EVIDENCE` |
+| Analytical refusals | 0 | `PENDING_FINAL_EVIDENCE` |
+| Prohibited runtime opens | 0 | `PENDING_FINAL_EVIDENCE` |
+| Source mutations | 0 | `PENDING_FINAL_EVIDENCE` |
+
+## Evidence discipline
+
+Focused v8 is not final evidence even though it reported equality: subsequent review found append-only ledger, GUI/as-of, observed-open, and schedule-exercise gaps.
+
+The replacement focused v12 is accepted for focused scope. It passed 21/21 components, 8/8 ledgers, 9/9 schedules, 9/9 causality/GUI invariants, 72/72 checkpoint rows, 2/2 recovery probes, and 8/8 source hashes, with every difference/refusal/open/source-mutation gate at zero. Its summary SHA-256 is `19b6c15f426b925fa6ec018d65477f4364242d65cfaaa5425423098d3861de15`; this focused result does not populate any six-session final cell above.
+
+A fresh six-session v3 diagnostic sealed exact A/B baselines and frozen counts but was deliberately stopped before schedules after a reference-only availability-surface mismatch. The historical-availability comparator repair at pushed head `89f135064417ba537dc302027442a110477b5d03` passed 29/29 targeted tests; a separate preserved-material check matched incremental A and batch B 24/24 rows each against Reference C with zero remainder. The diagnostic remains rejected; the accepted six-session report must name the new sealed output root, seal hashes, command line, engine source identity, configuration identity, elapsed time, and peak RSS:
+
+- Final output root: `PENDING_FINAL_EVIDENCE`
+- Incremental A seal SHA-256: `PENDING_FINAL_EVIDENCE`
+- Clean B seal SHA-256: `PENDING_FINAL_EVIDENCE`
+- Current pinned engine hash: `980b6af26e9ca5957b97bafb235474e13d268c691f2cbf3797f1d53fff011602`; accepted-run record: `PENDING_FINAL_EVIDENCE`
+- Configuration hash: `PENDING_FINAL_EVIDENCE`
+- Command: `PENDING_FINAL_EVIDENCE`
+- Exit status: `PENDING_FINAL_EVIDENCE`
+- Elapsed time: `PENDING_FINAL_EVIDENCE`
+- Parent/child peak RSS: `PENDING_FINAL_EVIDENCE`
+
+Per-artifact status belongs in [R6E1R_ARTIFACT_EQUIVALENCE_MATRIX.md](R6E1R_ARTIFACT_EQUIVALENCE_MATRIX.md).
