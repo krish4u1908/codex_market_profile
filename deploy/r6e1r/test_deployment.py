@@ -145,9 +145,11 @@ def test_user_units_are_isolated_and_resource_bounded() -> None:
     ):
         assert hidden in gateway
 
-    assert "--attempts 300 --delay-seconds 1" in backend
-    assert "TimeoutStartSec=360s" in backend
-    assert "--attempts 30 --delay-seconds 1" in gateway
+    assert "--attempts 600 --delay-seconds 1 --timeout-seconds 0.25" in backend
+    assert "TimeoutStartSec=900s" in backend
+    assert "MemoryHigh=8G" in backend and "MemoryMax=10G" in backend
+    assert "MemorySwapMax=0" in backend
+    assert "--attempts 30 --delay-seconds 1 --timeout-seconds 0.25" in gateway
     assert "TimeoutStartSec=75s" in gateway
 
 
@@ -440,6 +442,17 @@ def _valid_preload_fixture(
     (state / "live_analytical_orchestrator.json").write_text(json.dumps({
         "version": "R6E1R_LIVE_ANALYTICAL_STATE_V1",
         "outputs": outputs,
+        "cross_layer_contexts": {
+            session: {
+                "version": "R6E1R_CROSS_LAYER_CONTEXT_V1",
+                "inventory_source_count": 0,
+                "episode_source_count": 0,
+                "resolution_source_count": 0,
+                "inventory_previous": {},
+                "resolution_previous": {},
+            }
+            for session in EXPECTED_REPLAY_SESSIONS
+        },
         "finalized_sessions": list(EXPECTED_REPLAY_SESSIONS),
         "dirty_sessions": [],
         "sessions": {},
@@ -857,6 +870,7 @@ def test_preloaded_state_validator_refuses_state_binding_tamper(
         ("dirty", "DIRTY_SESSIONS_PRESENT"),
         ("mutable", "MUTABLE_SESSIONS_PRESENT"),
         ("output", "OUTPUT_SESSION_SET_MISMATCH"),
+        ("cross_context", "CROSS_LAYER_CONTEXT_SESSION_SET_MISMATCH"),
         ("finalized", "FINALIZED_SESSION_SET_MISMATCH"),
         ("version", "ORCHESTRATOR_STATE_VERSION_MISMATCH"),
         ("engine_ledger", "STATE_ENGINE_IDENTITY_MISMATCH"),
@@ -905,6 +919,9 @@ def test_preloaded_state_validator_refuses_unsafe_state(
         orchestrator_path.write_text(json.dumps(orchestrator))
     elif mutation == "output":
         orchestrator["outputs"].pop(EXPECTED_REPLAY_SESSIONS[0])
+        orchestrator_path.write_text(json.dumps(orchestrator))
+    elif mutation == "cross_context":
+        orchestrator["cross_layer_contexts"].pop(EXPECTED_REPLAY_SESSIONS[0])
         orchestrator_path.write_text(json.dumps(orchestrator))
     elif mutation == "finalized":
         orchestrator["finalized_sessions"].pop()

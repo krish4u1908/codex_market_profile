@@ -1,6 +1,7 @@
 {
   "timezone": "Asia/Kolkata",
   "synchronization_tolerance_ms": 2000,
+  "inventory_join_tolerance_seconds": 5,
   "index_symbol": "NSE:NIFTYBANK-INDEX",
   "futures_selection_mode": "SESSION_NEAREST_UNEXPIRED_HIGHEST_OI",
   "selected_futures_by_session": {},

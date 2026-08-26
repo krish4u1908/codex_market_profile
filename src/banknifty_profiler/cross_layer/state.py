@@ -18,6 +18,50 @@ COMPONENT_ORDER = {
     "FRESHNESS": 7,
 }
 
+MATERIAL_CONTEXT_VERSION = "R6E1R_CROSS_LAYER_CONTEXT_V1"
+
+
+def empty_material_context() -> dict[str, object]:
+    """Return the compact state needed to continue a chronological build."""
+    return {
+        "version": MATERIAL_CONTEXT_VERSION,
+        "inventory_source_count": 0,
+        "episode_source_count": 0,
+        "resolution_source_count": 0,
+        "inventory_previous": {},
+        "resolution_previous": {},
+    }
+
+
+def normalize_material_context(
+    value: Mapping[str, object] | None,
+) -> dict[str, object]:
+    """Validate persisted continuation state without accepting loose coercions."""
+    if value is None:
+        return empty_material_context()
+    if not isinstance(value, Mapping):
+        raise ValueError("cross-layer continuation context must be a mapping")
+    if value.get("version", MATERIAL_CONTEXT_VERSION) != MATERIAL_CONTEXT_VERSION:
+        raise ValueError("cross-layer continuation context version mismatch")
+    result = empty_material_context()
+    for field in (
+        "inventory_source_count",
+        "episode_source_count",
+        "resolution_source_count",
+    ):
+        item = value.get(field, 0)
+        if isinstance(item, bool) or not isinstance(item, int) or item < 0:
+            raise ValueError(f"cross-layer {field} must be a non-negative integer")
+        result[field] = item
+    for field in ("inventory_previous", "resolution_previous"):
+        item = value.get(field, {})
+        if not isinstance(item, Mapping):
+            raise ValueError(f"cross-layer {field} must be a mapping")
+        result[field] = {
+            str(key): str(state) for key, state in sorted(item.items())
+        }
+    return result
+
 
 def _time(value: str) -> datetime:
     result = datetime.fromisoformat(str(value).replace(" ", "T"))
@@ -62,16 +106,22 @@ def build_material_transitions(
     lifecycle: Iterable[Mapping[str, object]],
     resolution: Iterable[Mapping[str, object]],
     participation: Iterable[Mapping[str, object]],
-) -> list[dict[str, str]]:
+    *,
+    initial_context: Mapping[str, object] | None = None,
+    return_context: bool = False,
+) -> list[dict[str, str]] | tuple[list[dict[str, str]], dict[str, object]]:
     """Merge layer changes without turning dense observations into events."""
     output: list[dict[str, str]] = []
-    previous: dict[tuple[str, str], str] = {}
+    context = normalize_material_context(initial_context)
+    inventory_previous = dict(context["inventory_previous"])
+    resolution_previous = dict(context["resolution_previous"])
 
     inventory_rows = sorted(inventory, key=lambda r: (_time(str(r["control_effective_timestamp"])), str(r["horizon"]), str(r["family"])))
-    for ordinal, row in enumerate(inventory_rows, 1):
+    inventory_offset = int(context["inventory_source_count"])
+    for ordinal, row in enumerate(inventory_rows, inventory_offset + 1):
         key = f'{row["horizon"]}:{row["family"]}'
         current = f'AVAILABLE:{row["control_value"]}'
-        prior = previous.get(("INVENTORY", key), "NOT_YET_AVAILABLE")
+        prior = inventory_previous.get(key, "NOT_YET_AVAILABLE")
         if current == prior:
             continue
         effective = str(row["control_effective_timestamp"])
@@ -83,9 +133,11 @@ def build_material_transitions(
         output.append(_transition("INVENTORY", key, str(row["evaluation_date"]), effective,
                                   prior, current, "CONTROL_AVAILABLE_OR_WINNER_CHANGED", clocks,
                                   f"inventory:{ordinal}", horizon=str(row["horizon"]), family=str(row["family"])))
-        previous[("INVENTORY", key)] = current
+        inventory_previous[key] = current
 
-    for ordinal, row in enumerate(sorted(episodes, key=lambda r: _time(str(r["confirmation_timestamp"]))), 1):
+    episode_rows = sorted(episodes, key=lambda r: _time(str(r["confirmation_timestamp"])))
+    episode_offset = int(context["episode_source_count"])
+    for ordinal, row in enumerate(episode_rows, episode_offset + 1):
         episode = str(row["episode_id"]); effective = str(row["confirmation_timestamp"])
         output.append(_transition("DIVERGENCE", episode, str(row["evaluation_date"]), effective,
                                   "CANDIDATE", f'{row["colour"]}_CONFIRMED', "FROZEN_DIVERGENCE_CONFIRMED",
@@ -100,9 +152,9 @@ def build_material_transitions(
                                   str(row["reason_code"]), {"state_entry_timestamp": str(row["state_entry_timestamp"])},
                                   str(row["record_id"]), episode_id=str(row["episode_id"])))
 
-    resolution_previous: dict[str, str] = {}
     sorted_resolution = sorted(resolution, key=lambda r: (_time(str(r["availability_timestamp"])), str(r["episode_id"]), str(r.get("record_id", ""))))
-    for ordinal, row in enumerate(sorted_resolution, 1):
+    resolution_offset = int(context["resolution_source_count"])
+    for ordinal, row in enumerate(sorted_resolution, resolution_offset + 1):
         episode = str(row["episode_id"]); current = str(row["resolution_mechanism_native"])
         prior = resolution_previous.get(episode, "NOT_YET_AVAILABLE")
         if current == prior:
@@ -132,4 +184,14 @@ def build_material_transitions(
     identities = [(r["component"], r["state_key"], r["effective_timestamp"], r["new_state"]) for r in output]
     if len(identities) != len(set(identities)):
         raise ValueError("duplicate material cross-layer transition")
+    final_context = {
+        "version": MATERIAL_CONTEXT_VERSION,
+        "inventory_source_count": inventory_offset + len(inventory_rows),
+        "episode_source_count": episode_offset + len(episode_rows),
+        "resolution_source_count": resolution_offset + len(sorted_resolution),
+        "inventory_previous": dict(sorted(inventory_previous.items())),
+        "resolution_previous": dict(sorted(resolution_previous.items())),
+    }
+    if return_context:
+        return output, final_context
     return output

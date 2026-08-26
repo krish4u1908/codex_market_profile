@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 
 import pytest
 
@@ -73,3 +74,46 @@ def test_constituent_clock_cannot_be_backdated():
     args[4][0]["constituent_effective_timestamps"] = json.dumps({"receipt":"2026-08-20T09:46:06+05:30"})
     with pytest.raises(ValueError, match="backdating"):
         build_material_transitions(*args)
+
+
+def test_continuation_context_matches_one_global_chronological_build():
+    first = fixture_rows()
+    second = deepcopy(first)
+    for component in second:
+        for row in component:
+            for key, value in list(row.items()):
+                if isinstance(value, str):
+                    row[key] = value.replace("2026-08-20", "2026-08-21")
+            if "episode_id" in row:
+                row["episode_id"] = "E2"
+            if "record_id" in row:
+                row["record_id"] += "-2"
+            if "transition_id" in row:
+                row["transition_id"] += "-2"
+    combined = [left + right for left, right in zip(first, second)]
+    global_rows, global_context = build_material_transitions(
+        *combined, return_context=True
+    )
+    first_rows, first_context = build_material_transitions(
+        *first, return_context=True
+    )
+    second_rows, second_context = build_material_transitions(
+        *second, initial_context=first_context, return_context=True
+    )
+
+    assert first_rows + second_rows == global_rows
+    assert second_context == global_context
+    assert not any(row["component"] == "INVENTORY" for row in second_rows)
+    assert next(
+        row for row in second_rows if row["component"] == "DIVERGENCE"
+    )["source_record_id"] == "episode:2"
+    assert next(
+        row for row in second_rows if row["component"] == "RESOLUTION"
+    )["source_record_id"] == "resolution:4"
+
+
+def test_continuation_context_rejects_corrupt_counts():
+    with pytest.raises(ValueError, match="non-negative integer"):
+        build_material_transitions(
+            *fixture_rows(), initial_context={"inventory_source_count": -1}
+        )

@@ -1034,6 +1034,41 @@ def test_intraday_fallback_is_explicitly_equivalent_to_live_degradation(
     )
 
 
+def test_intraday_fallback_uses_inventory_five_second_join(tmp_path: Path) -> None:
+    physical, sessions = _physical_fixture(tmp_path / "collector")
+    session = sessions[0]
+    raw_path = physical / f"raw/{session}/events_09.jsonl"
+    rows = [json.loads(line) for line in raw_path.read_text().splitlines()]
+    rows = [rows[0], rows[1], rows[3]]
+    rows[1]["received_at"] = f"{session}T09:15:03.100000+05:30"
+    rows[1]["event_time"] = f"{session}T09:15:03.090000+05:30"
+    rows[2]["received_at"] = f"{session}T09:15:04.100000+05:30"
+    rows[2]["event_time"] = f"{session}T09:15:04.090000+05:30"
+    _write_jsonl(raw_path, rows)
+    stack_config, inventory_config = _batch_configs(tmp_path, sessions)
+
+    intraday, _, intraday_cross, _, fallback_sessions = (
+        harness.build_intraday_inventory_fallback(
+            data_root=physical,
+            stack_config_path=stack_config,
+            inventory_config_path=inventory_config,
+            sessions=sessions,
+            canonical_inventory=[],
+        )
+    )
+    volume = [
+        row for row in intraday
+        if row["family"] == "BN_REF_FUT_VOLUME_VPOC"
+    ]
+    assert fallback_sessions == sessions
+    assert len(volume) == 1
+    assert volume[0]["eligible_observation_count"] == 1
+    assert any(
+        row["family"] == "BN_REF_FUT_VOLUME_VPOC"
+        for row in intraday_cross
+    )
+
+
 def test_clean_b_terminal_null_receipt_advances_cutoff_not_valid_freshness(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

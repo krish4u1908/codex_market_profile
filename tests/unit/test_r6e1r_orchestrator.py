@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 from banknifty_profiler.participation import views as participation_views
+from banknifty_profiler.cross_layer.state import build_material_transitions
 from banknifty_profiler.shadow import orchestrator as orchestrator_module
 from banknifty_profiler.shadow.ingest import IncrementalJSONLIngestor
 from banknifty_profiler.shadow.orchestrator import LiveAnalyticalOrchestrator
@@ -186,6 +187,306 @@ def test_missing_options_preserves_market_and_intraday_partial_context(tmp_path)
     assert state["availability"]["participation_state"].startswith("SUSPENDED")
     assert state["availability"]["ce_state"] == "STALE_OR_MISSING"
     assert state["availability"]["pe_state"] == "STALE_OR_MISSING"
+
+
+def test_inventory_uses_five_second_clock_while_basis_remains_two_seconds(
+    tmp_path,
+):
+    base = datetime(2026, 8, 20, 9, 15, tzinfo=IST)
+    rows = [
+        observation("O0001", "INDEX", INDEX, base, price=57000, volume=0),
+        observation(
+            "O0002", "FUTURES", FUTURES, base + timedelta(seconds=3),
+            price=57025, volume=100,
+        ),
+        observation(
+            "O0003", "FUTURES", FUTURES, base + timedelta(seconds=4),
+            price=57026, volume=120,
+        ),
+    ]
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    orchestrator.process(rows)
+    state = orchestrator.snapshot(SESSION)
+
+    assert [row["validity_status"] for row in state["basis"]] == [
+        "UNMATCHED_TOLERANCE_EXCEEDED",
+        "UNMATCHED_TOLERANCE_EXCEEDED",
+    ]
+    assert [row["absolute_receipt_difference_ms"] for row in state["basis"]] == [
+        3000.0,
+        4000.0,
+    ]
+    intraday = [
+        row for row in state["inventory"]
+        if row["horizon"] == "ID"
+        and row["family"] == "BN_REF_FUT_VOLUME_VPOC"
+    ]
+    assert len(intraday) == 1
+    assert intraday[0]["eligible_observation_count"] == 1
+    assert orchestrator.causality_metrics()["valid_basis_pairs"] == 0
+
+
+def test_cross_layer_context_survives_restart_and_keeps_fallback_local(tmp_path):
+    first_rows = full_stack_fixture()
+    first = LiveAnalyticalOrchestrator(contract(tmp_path))
+    first.process(first_rows)
+    first_state = first.finalize_session(SESSION)
+    first_resolution_count = len(first_state["resolution"])
+    assert first._cross_layer_contexts[SESSION]["inventory_source_count"] == 0
+
+    second_session = "2026-08-21"
+    second_rows = []
+    for row in full_stack_fixture():
+        value = json.loads(json.dumps(row).replace(SESSION, second_session))
+        value["observation_id"] += "-D2"
+        value["raw_record_id"] += "-D2"
+        second_rows.append(value)
+    restarted = LiveAnalyticalOrchestrator(contract(tmp_path))
+    restarted.process(second_rows)
+    second_state = restarted.finalize_session(second_session)
+
+    divergence = next(
+        row for row in second_state["cross_layer_transitions"]
+        if row["component"] == "DIVERGENCE"
+    )
+    resolution = next(
+        row for row in second_state["cross_layer_transitions"]
+        if row["component"] == "RESOLUTION"
+    )
+    inventory = next(
+        row for row in second_state["cross_layer_transitions"]
+        if row["component"] == "INVENTORY"
+    )
+    assert divergence["source_record_id"] == "episode:2"
+    assert resolution["source_record_id"] == (
+        f"resolution:{first_resolution_count + 1}"
+    )
+    assert inventory["source_record_id"] == "inventory:1"
+    assert restarted._cross_layer_contexts[second_session][
+        "inventory_source_count"
+    ] == 0
+
+    again = LiveAnalyticalOrchestrator(contract(tmp_path))
+    assert again._cross_layer_contexts == restarted._cross_layer_contexts
+    assert ledger_counts(again) == ledger_counts(restarted)
+
+
+def test_canonical_cross_layer_sessions_equal_one_global_build_after_restart(
+    tmp_path,
+):
+    second_session = "2026-08-21"
+    runtime = contract(tmp_path)
+    runtime["config"]["fixed_inventory_rows"] = [
+        {
+            "evaluation_date": session,
+            "horizon": "3D",
+            "family": "FUT_POS_OI_VPOC",
+            "control_value": 57325,
+            "control_effective_timestamp": f"{session}T09:15:00+05:30",
+            "winner_change_timestamp": f"{session}T09:15:00+05:30",
+        }
+        for session in (SESSION, second_session)
+    ]
+    first = LiveAnalyticalOrchestrator(runtime)
+    first.process(full_stack_fixture())
+    first_state = first.finalize_session(SESSION)
+
+    second_rows = []
+    for row in full_stack_fixture():
+        value = json.loads(json.dumps(row).replace(SESSION, second_session))
+        value["observation_id"] += "-D2"
+        value["raw_record_id"] += "-D2"
+        second_rows.append(value)
+    restarted = LiveAnalyticalOrchestrator(runtime)
+    restarted.process(second_rows)
+    second_state = restarted.finalize_session(second_session)
+
+    expected = build_material_transitions(
+        first_state["inventory"] + second_state["inventory"],
+        first_state["episodes"] + second_state["episodes"],
+        first_state["lifecycle"] + second_state["lifecycle"],
+        first_state["resolution"] + second_state["resolution"],
+        first_state["participation_transitions"]
+        + second_state["participation_transitions"],
+    )
+    actual = (
+        first_state["cross_layer_transitions"]
+        + second_state["cross_layer_transitions"]
+    )
+    assert actual == expected
+    assert not any(
+        row["component"] == "INVENTORY"
+        and row["horizon"] == "3D"
+        and row["family"] == "FUT_POS_OI_VPOC"
+        for row in second_state["cross_layer_transitions"]
+    )
+    final_context = restarted._cross_layer_contexts[second_session]
+    assert final_context["inventory_source_count"] == (
+        len(first_state["inventory"]) + len(second_state["inventory"])
+    )
+
+
+def test_earlier_session_mutation_is_refused_after_successor_publication(tmp_path):
+    second_session = "2026-08-21"
+    first_row = observation(
+        "O0001", "INDEX", INDEX,
+        datetime(2026, 8, 20, 9, 15, tzinfo=IST), price=57000,
+    )
+    second_row = observation(
+        "O0002", "INDEX", INDEX,
+        datetime(2026, 8, 21, 9, 15, tzinfo=IST), price=57100,
+    )
+    second_row.update({
+        "session_date": second_session,
+        "source_file": f"raw/{second_session}/focused_fixture.jsonl",
+    })
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    orchestrator.process([first_row, second_row])
+    orchestrator.flush([SESSION, second_session])
+
+    late_prefix_mutation = observation(
+        "O0003", "INDEX", INDEX,
+        datetime(2026, 8, 20, 9, 16, tzinfo=IST), price=57001,
+    )
+    orchestrator.process([late_prefix_mutation])
+    assert "O0003" not in orchestrator._sessions[SESSION]
+    assert "OUT_OF_ORDER_SESSION_RECEIPT" in {
+        row["reason"]
+        for row in orchestrator.ledgers["refusals_data_quality"].rows()
+    }
+
+
+def test_multi_session_publication_is_strictly_chronological(tmp_path, monkeypatch):
+    second_session = "2026-08-21"
+    first_row = observation(
+        "O0001", "INDEX", INDEX,
+        datetime(2026, 8, 20, 9, 15, tzinfo=IST), price=57000,
+    )
+    second_row = observation(
+        "O0002", "INDEX", INDEX,
+        datetime(2026, 8, 21, 9, 15, tzinfo=IST), price=57100,
+    )
+    second_row.update({
+        "session_date": second_session,
+        "source_file": f"raw/{second_session}/focused_fixture.jsonl",
+    })
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    orchestrator.process([second_row, first_row])
+    original = orchestrator._publish
+    observed = []
+
+    def capture(outputs, previous):
+        observed.extend(outputs)
+        return original(outputs, previous)
+
+    monkeypatch.setattr(orchestrator, "_publish", capture)
+    orchestrator.flush([second_session, SESSION])
+    assert observed == [SESSION, second_session]
+
+
+def test_later_session_requires_finalized_or_same_flush_predecessor(tmp_path):
+    first = LiveAnalyticalOrchestrator(contract(tmp_path))
+    first.process([
+        observation(
+            "O0001", "INDEX", INDEX,
+            datetime(2026, 8, 20, 9, 15, tzinfo=IST), price=57000,
+        )
+    ])
+    first.flush([SESSION])
+    second_session = "2026-08-21"
+    row = observation(
+        "O0002", "INDEX", INDEX,
+        datetime(2026, 8, 21, 9, 15, tzinfo=IST), price=57100,
+    )
+    row.update({
+        "session_date": second_session,
+        "source_file": f"raw/{second_session}/focused_fixture.jsonl",
+    })
+    first.process([row])
+    with pytest.raises(ValueError, match="before finalizing predecessor"):
+        first.flush([second_session])
+    assert second_session in first._dirty_sessions
+
+    first.finalize_session(SESSION)
+    first.flush([second_session])
+    assert second_session not in first._dirty_sessions
+
+
+@pytest.mark.parametrize("failure_mode", ("before_replace", "after_replace"))
+def test_flush_state_persistence_failure_retains_retryable_context(
+    tmp_path, monkeypatch, failure_mode,
+):
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    orchestrator.process(full_stack_fixture())
+    original = orchestrator_module.atomic_json
+    failed = False
+
+    def fail_once(path, value):
+        nonlocal failed
+        if path == orchestrator.state_path and not failed:
+            failed = True
+            if failure_mode == "after_replace":
+                original(path, value)
+            raise OSError(f"synthetic {failure_mode} state failure")
+        return original(path, value)
+
+    monkeypatch.setattr(orchestrator_module, "atomic_json", fail_once)
+    with pytest.raises(OSError, match=failure_mode):
+        orchestrator.flush()
+    assert orchestrator._outputs == {}
+    assert orchestrator._cross_layer_contexts == {}
+    assert SESSION in orchestrator._dirty_sessions
+    durable_counts = ledger_counts(orchestrator)
+
+    orchestrator.flush()
+    assert SESSION not in orchestrator._dirty_sessions
+    assert orchestrator._cross_layer_contexts[SESSION][
+        "resolution_source_count"
+    ] > 0
+    assert ledger_counts(orchestrator) == durable_counts
+    assert_unique_stage_and_publication_ids(orchestrator)
+
+
+def test_finalize_state_failure_does_not_mutate_live_session(
+    tmp_path, monkeypatch,
+):
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    orchestrator.process(full_stack_fixture())
+    orchestrator.flush()
+    original = orchestrator_module.atomic_json
+    failed = False
+
+    def fail_once(path, value):
+        nonlocal failed
+        if path == orchestrator.state_path and not failed:
+            failed = True
+            raise OSError("synthetic finalize state failure")
+        return original(path, value)
+
+    monkeypatch.setattr(orchestrator_module, "atomic_json", fail_once)
+    with pytest.raises(OSError, match="finalize state failure"):
+        orchestrator.finalize_session(SESSION)
+    assert SESSION not in orchestrator._finalized_sessions
+    assert SESSION in orchestrator._sessions
+
+    orchestrator.finalize_session(SESSION)
+    assert SESSION in orchestrator._finalized_sessions
+    assert SESSION not in orchestrator._sessions
+
+
+def test_legacy_context_migration_refuses_evicted_finalized_prefix(tmp_path):
+    state_root = tmp_path / "state"
+    state_root.mkdir(parents=True)
+    later = "2026-08-21"
+    (state_root / "live_analytical_orchestrator.json").write_text(json.dumps({
+        "version": "R6E1R_LIVE_ANALYTICAL_STATE_V1",
+        "sessions": {},
+        "outputs": {later: LiveAnalyticalOrchestrator._empty_snapshot(later)},
+        "dirty_sessions": [],
+        "finalized_sessions": [SESSION, later],
+    }))
+    with pytest.raises(ValueError, match="clean rebuild required"):
+        LiveAnalyticalOrchestrator(contract(tmp_path))
 
 
 def test_poll_callback_routes_committed_typed_observations(tmp_path):
@@ -847,6 +1148,9 @@ def test_verified_replay_outputs_survive_more_than_rolling_live_window(tmp_path)
             "date": session, "projection_hash": f"projection-{session}",
         }
         orchestrator._outputs[session] = output
+        orchestrator._cross_layer_contexts[session] = (
+            orchestrator_module.cross_layer_state.empty_material_context()
+        )
         orchestrator._finalized_sessions.add(session)
     orchestrator._evict_sessions()
     orchestrator._persist()

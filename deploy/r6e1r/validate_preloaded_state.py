@@ -24,6 +24,7 @@ from typing import Any, NoReturn, Sequence
 SCHEMA = "R6E1R_PRELOADED_STATE_VALIDATION_V1"
 CLASSIFICATION = "LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL"
 ORCHESTRATOR_STATE_VERSION = "R6E1R_LIVE_ANALYTICAL_STATE_V1"
+CROSS_LAYER_CONTEXT_VERSION = "R6E1R_CROSS_LAYER_CONTEXT_V1"
 STATE_TREE_MANIFEST_SCHEMA = "R6E1R_INCREMENTAL_A_STATE_TREE_MANIFEST_V1"
 EXPECTED_SESSION_COUNT = 6
 HASH_PATTERN = re.compile(r"[0-9a-f]{64}\Z")
@@ -288,6 +289,7 @@ def validate_sessions(
 
     outputs = orchestrator.get("outputs")
     finalized = orchestrator.get("finalized_sessions")
+    contexts = orchestrator.get("cross_layer_contexts")
     if not isinstance(outputs, dict) or set(outputs) != expected:
         refuse("OUTPUT_SESSION_SET_MISMATCH")
     if (
@@ -300,10 +302,43 @@ def validate_sessions(
         refuse("DIRTY_SESSIONS_PRESENT")
     if orchestrator.get("sessions") != {}:
         refuse("MUTABLE_SESSIONS_PRESENT")
+    if not isinstance(contexts, dict) or set(contexts) != expected:
+        refuse("CROSS_LAYER_CONTEXT_SESSION_SET_MISMATCH")
 
+    prior_counts = {
+        "inventory_source_count": 0,
+        "episode_source_count": 0,
+        "resolution_source_count": 0,
+    }
     for session_date, output in outputs.items():
         if not isinstance(output, dict) or output.get("session_date") != session_date:
             refuse("OUTPUT_SESSION_IDENTITY_MISMATCH")
+    for session_date in sorted(expected_sessions):
+        context = contexts.get(session_date)
+        if (
+            not isinstance(context, dict)
+            or context.get("version") != CROSS_LAYER_CONTEXT_VERSION
+        ):
+            refuse("CROSS_LAYER_CONTEXT_SHAPE_INVALID")
+        for field, prior in prior_counts.items():
+            value = context.get(field)
+            if (
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or value < prior
+            ):
+                refuse("CROSS_LAYER_CONTEXT_COUNT_INVALID")
+            prior_counts[field] = value
+        for field in ("inventory_previous", "resolution_previous"):
+            states = context.get(field)
+            if (
+                not isinstance(states, dict)
+                or any(
+                    not isinstance(key, str) or not isinstance(value, str)
+                    for key, value in states.items()
+                )
+            ):
+                refuse("CROSS_LAYER_CONTEXT_SHAPE_INVALID")
 
 
 def _is_number(value: Any) -> bool:

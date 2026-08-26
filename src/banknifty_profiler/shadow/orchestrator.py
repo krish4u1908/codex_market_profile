@@ -179,6 +179,8 @@ class LiveAnalyticalOrchestrator:
         # callback-before-ACK durability boundary.
         self._stage_seen: dict[str, set[str]] = {}
         self._outputs: dict[str, dict] = {}
+        self._cross_layer_contexts: dict[str, dict[str, object]] = {}
+        self._pending_cross_layer_contexts: dict[str, dict[str, object]] = {}
         self._last_order_key: dict[str, tuple] = {}
         self._dirty_sessions: set[str] = set()
         self._finalized_sessions: set[str] = set()
@@ -265,6 +267,14 @@ class LiveAnalyticalOrchestrator:
                 continue
             if session in self._finalized_sessions:
                 self._quality(row, "FINALIZED_SESSION_RECEIPT", session)
+                continue
+            later_outputs = [date_key for date_key in self._outputs if date_key > session]
+            if later_outputs:
+                self._quality(
+                    row,
+                    "OUT_OF_ORDER_SESSION_RECEIPT",
+                    f"published_successor={min(later_outputs)}",
+                )
                 continue
             key = self._order_key(row)
             prior = provisional_order.get(session)
@@ -360,12 +370,36 @@ class LiveAnalyticalOrchestrator:
         targets = requested & set(self._dirty_sessions)
         if not targets:
             return {}
+        earliest_target = min(targets)
+        unresolved_predecessors = {
+            session
+            for session in self._sessions
+            if session < earliest_target
+            and session not in self._finalized_sessions
+            and session not in targets
+        }
+        if unresolved_predecessors:
+            raise ValueError(
+                "cannot publish a later analytical session before finalizing "
+                f"predecessor(s): {sorted(unresolved_predecessors)!r}"
+            )
         previous = self._outputs
         computed = self._compute_sessions(targets)
-        self._publish({session: computed[session] for session in targets}, previous)
+        computed_contexts = self._pending_cross_layer_contexts
+        self._publish(
+            {session: computed[session] for session in sorted(targets)}, previous
+        )
+        remaining_dirty = set(self._dirty_sessions) - targets
+        self._persist_values(
+            sessions=self._sessions,
+            outputs=computed,
+            contexts=computed_contexts,
+            dirty_sessions=remaining_dirty,
+            finalized_sessions=self._finalized_sessions,
+        )
         self._outputs = computed
-        self._dirty_sessions.difference_update(targets)
-        self._persist()
+        self._cross_layer_contexts = computed_contexts
+        self._dirty_sessions = remaining_dirty
         return {session: self.snapshot(session) for session in sorted(targets)}
 
     def pending_session_dates(self) -> tuple[str, ...]:
@@ -379,17 +413,30 @@ class LiveAnalyticalOrchestrator:
     def finalize_session(self, session_date: str) -> dict:
         """Flush and close one session against subsequent late callbacks."""
         self.flush([session_date])
-        self._finalized_sessions.add(session_date)
+        finalized = set(self._finalized_sessions)
+        finalized.add(session_date)
+        sessions = dict(self._sessions)
+        sessions.pop(session_date, None)
+        dirty = set(self._dirty_sessions)
+        dirty.discard(session_date)
+        outputs = self._retained_outputs(self._outputs, sessions, dirty)
         # The sealed output and append-only stage are the durable authorities
         # after finalization.  Raw normalized observations no longer need to
         # remain in the JSON state blob or process memory, and finalized-stage
         # recovery explicitly refuses to reload them on restart.
-        self._sessions.pop(session_date, None)
+        self._persist_values(
+            sessions=sessions,
+            outputs=outputs,
+            contexts=self._cross_layer_contexts,
+            dirty_sessions=dirty,
+            finalized_sessions=finalized,
+        )
+        self._sessions = sessions
+        self._outputs = outputs
+        self._finalized_sessions = finalized
+        self._dirty_sessions = dirty
         self._last_order_key.pop(session_date, None)
-        self._dirty_sessions.discard(session_date)
         self._stage_seen.pop(session_date, None)
-        self._evict_sessions()
-        self._persist()
         return self.snapshot(session_date)
 
     def snapshot(
@@ -504,8 +551,16 @@ class LiveAnalyticalOrchestrator:
         self._publish_availability(
             session, availability, old_result.get("availability", {})
         )
-        self._outputs[session] = _jsonable(result)
-        self._persist()
+        outputs = dict(self._outputs)
+        outputs[session] = _jsonable(result)
+        self._persist_values(
+            sessions=self._sessions,
+            outputs=outputs,
+            contexts=self._cross_layer_contexts,
+            dirty_sessions=self._dirty_sessions,
+            finalized_sessions=self._finalized_sessions,
+        )
+        self._outputs = outputs
         return True
 
     def causality_metrics(self) -> dict[str, int]:
@@ -594,6 +649,10 @@ class LiveAnalyticalOrchestrator:
         """Recompute only dirty sessions, retaining finalized prior outputs."""
         self.callback_invocations = Counter()
         results: dict[str, dict] = dict(self._outputs)
+        contexts = {
+            session: cross_layer_state.normalize_material_context(value)
+            for session, value in self._cross_layer_contexts.items()
+        }
         for session in sorted(targets):
             rows = sorted(self._sessions[session].values(), key=self._order_key)
             market = self._market_frame(rows)
@@ -640,7 +699,37 @@ class LiveAnalyticalOrchestrator:
             response_rows = responses
             participation = self._participation(session, rows, episodes, deps, life)
             self.callback_invocations["cross_layer"] += 1
-            cross = cross_layer_state.build_material_transitions(inventory, episodes, life, dense_resolution, participation["transitions"])
+            prior_context = self._cross_layer_context_before(session, contexts)
+            canonical_inventory = self._uses_canonical_inventory_context(
+                session, inventory
+            )
+            builder_context = dict(prior_context)
+            if not canonical_inventory:
+                # Clean batch publishes incomplete fixed-chain inventory as an
+                # explicit per-session degradation fallback.  Its ordinal and
+                # prior-state contract is intentionally session-local, while
+                # every non-inventory component remains globally chronological.
+                builder_context["inventory_source_count"] = 0
+                builder_context["inventory_previous"] = {}
+            cross, advanced_context = cross_layer_state.build_material_transitions(
+                inventory,
+                episodes,
+                life,
+                dense_resolution,
+                participation["transitions"],
+                initial_context=builder_context,
+                return_context=True,
+            )
+            if not canonical_inventory:
+                advanced_context["inventory_source_count"] = prior_context[
+                    "inventory_source_count"
+                ]
+                advanced_context["inventory_previous"] = prior_context[
+                    "inventory_previous"
+                ]
+            contexts[session] = cross_layer_state.normalize_material_context(
+                advanced_context
+            )
             availability = self._availability(session, rows, inventory)
             result = {
                 "session_date": session,
@@ -673,7 +762,27 @@ class LiveAnalyticalOrchestrator:
                 "cross_layer_transitions": len(cross),
             }
             results[session] = _jsonable(result)
+        self._pending_cross_layer_contexts = contexts
         return results
+
+    @staticmethod
+    def _cross_layer_context_before(
+        session: str, contexts: Mapping[str, Mapping[str, object]]
+    ) -> dict[str, object]:
+        preceding_dates = [date_key for date_key in contexts if date_key < session]
+        if not preceding_dates:
+            return cross_layer_state.empty_material_context()
+        latest = max(preceding_dates)
+        return cross_layer_state.normalize_material_context(contexts[latest])
+
+    def _uses_canonical_inventory_context(
+        self, session: str, inventory: Iterable[Mapping[str, object]]
+    ) -> bool:
+        cache = self._fixed_cache_info.get(session, {})
+        chain = cache.get("source_chain", [])
+        if isinstance(chain, list) and len(chain) >= 3:
+            return True
+        return any(str(row.get("horizon")) == "3D" for row in inventory)
 
     def _market_frame(self, rows: list[dict]) -> pd.DataFrame:
         values = []
@@ -751,7 +860,10 @@ class LiveAnalyticalOrchestrator:
         option_expiries = sorted(value for value in oi.loc[oi.instrument_class.isin(["call", "put"]) & oi.expiry_date.notna(), "expiry_date"].unique()) if not oi.empty else []
         if not rows:
             rows.extend(self._fixed_inventory_rows(session, futures, future_expiries[0] if future_expiries else None, option_expiries[0] if option_expiries else None))
-        tolerance = float(self.config.get("synchronization_tolerance_ms", 2000)) / 1000
+        # Inventory's frozen causal as-of join is independently configured at
+        # five seconds.  The exact 2,000-ms clock remains exclusive to the
+        # synchronized basis/divergence path below.
+        tolerance = float(self.config.get("inventory_join_tolerance_seconds", 5))
         bin_points = float(self.config.get("inventory_bin_points", 25))
         frames: dict[str, pd.DataFrame] = {}
         if futures and not market.empty and {INDEX_SYMBOL, futures}.issubset(set(market.symbol)):
@@ -1307,19 +1419,55 @@ class LiveAnalyticalOrchestrator:
             self._last_order_key.pop(session, None)
         # Verified replay outputs are independently protected from rolling live
         # retention.  Other sealed outputs retain only the newest live window.
+        self._outputs = self._retained_outputs(
+            self._outputs, self._sessions, self._dirty_sessions
+        )
+
+    def _retained_outputs(
+        self,
+        outputs: Mapping[str, dict],
+        sessions: Mapping[str, object],
+        dirty_sessions: Iterable[str],
+    ) -> dict[str, dict]:
         verified_replays = set(gui_adapter.SESSIONS)
-        newest_outputs = set(sorted(self._outputs)[-self.max_sessions:])
-        keep_outputs = verified_replays | newest_outputs | set(self._sessions)
-        for session in sorted(set(self._outputs) - keep_outputs):
-            self._outputs.pop(session, None)
+        newest_outputs = set(sorted(outputs)[-self.max_sessions:])
+        keep = (
+            verified_replays
+            | newest_outputs
+            | set(sessions)
+            | set(dirty_sessions)
+        )
+        return {
+            session: value for session, value in outputs.items() if session in keep
+        }
 
     def _persist(self) -> None:
+        self._persist_values(
+            sessions=self._sessions,
+            outputs=self._outputs,
+            contexts=self._cross_layer_contexts,
+            dirty_sessions=self._dirty_sessions,
+            finalized_sessions=self._finalized_sessions,
+        )
+
+    def _persist_values(
+        self,
+        *,
+        sessions: Mapping[str, Mapping[str, Mapping[str, object]]],
+        outputs: Mapping[str, dict],
+        contexts: Mapping[str, Mapping[str, object]],
+        dirty_sessions: Iterable[str],
+        finalized_sessions: Iterable[str],
+    ) -> None:
         atomic_json(self.state_path, {
             "version": "R6E1R_LIVE_ANALYTICAL_STATE_V1",
-            "sessions": {session: list(bucket.values()) for session, bucket in self._sessions.items()},
-            "outputs": self._outputs,
-            "dirty_sessions": sorted(self._dirty_sessions),
-            "finalized_sessions": sorted(self._finalized_sessions),
+            "sessions": {
+                session: list(bucket.values()) for session, bucket in sessions.items()
+            },
+            "outputs": outputs,
+            "cross_layer_contexts": contexts,
+            "dirty_sessions": sorted(dirty_sessions),
+            "finalized_sessions": sorted(finalized_sessions),
         })
 
     def _load(self) -> None:
@@ -1338,6 +1486,62 @@ class LiveAnalyticalOrchestrator:
         self._outputs = state.get("outputs", {})
         self._dirty_sessions = set(state.get("dirty_sessions", []))
         self._finalized_sessions = set(state.get("finalized_sessions", []))
+        raw_contexts = state.get("cross_layer_contexts", {})
+        if raw_contexts and not isinstance(raw_contexts, Mapping):
+            raise ValueError("analytical cross-layer contexts must be a mapping")
+        self._cross_layer_contexts = {
+            str(session): cross_layer_state.normalize_material_context(value)
+            for session, value in raw_contexts.items()
+        }
+        if self._outputs and not self._cross_layer_contexts:
+            missing_prefix = self._finalized_sessions - set(self._outputs)
+            if missing_prefix:
+                raise ValueError(
+                    "legacy analytical state lacks cross-layer context and "
+                    "has evicted finalized prefix output; clean rebuild required: "
+                    f"{sorted(missing_prefix)!r}"
+                )
+            self._cross_layer_contexts = self._rebuild_cross_layer_contexts()
+
+    def _rebuild_cross_layer_contexts(self) -> dict[str, dict[str, object]]:
+        """Migrate an older state once without reopening raw source history."""
+        context = cross_layer_state.empty_material_context()
+        rebuilt: dict[str, dict[str, object]] = {}
+        for session in sorted(self._outputs):
+            output = self._outputs[session]
+            context["episode_source_count"] = int(
+                context["episode_source_count"]
+            ) + len(output.get("episodes", []))
+            resolution = list(output.get("resolution", []))
+            context["resolution_source_count"] = int(
+                context["resolution_source_count"]
+            ) + len(resolution)
+            resolution_previous = dict(context["resolution_previous"])
+            for row in resolution:
+                resolution_previous[str(row["episode_id"])] = str(
+                    row["resolution_mechanism_native"]
+                )
+            context["resolution_previous"] = resolution_previous
+            inventory = list(output.get("inventory", []))
+            if self._uses_canonical_inventory_context(session, inventory):
+                context["inventory_source_count"] = int(
+                    context["inventory_source_count"]
+                ) + len(inventory)
+                inventory_previous = dict(context["inventory_previous"])
+                for row in sorted(
+                    inventory,
+                    key=lambda item: (
+                        parse_timestamp(item["control_effective_timestamp"]).value,
+                        str(item["horizon"]),
+                        str(item["family"]),
+                    ),
+                ):
+                    key = f'{row["horizon"]}:{row["family"]}'
+                    inventory_previous[key] = f'AVAILABLE:{row["control_value"]}'
+                context["inventory_previous"] = inventory_previous
+            context = cross_layer_state.normalize_material_context(context)
+            rebuilt[session] = context
+        return rebuilt
 
     def _load_staged_observations(self) -> None:
         """Recover callback rows durably appended after the last state seal."""

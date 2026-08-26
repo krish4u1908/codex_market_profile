@@ -12,6 +12,7 @@ from collections.abc import Mapping
 
 CANONICAL_TIMEZONE = "Asia/Kolkata"
 CANONICAL_SYNCHRONIZATION_TOLERANCE_MS = 2000
+CANONICAL_INVENTORY_JOIN_TOLERANCE_SECONDS = 5
 
 
 def validate_canonical_runtime_config(config: Mapping) -> dict:
@@ -27,6 +28,21 @@ def validate_canonical_runtime_config(config: Mapping) -> dict:
         raise ValueError(
             "frozen canonical synchronization requirement: "
             "synchronization_tolerance_ms must be the integer 2000"
+        )
+
+    inventory_tolerance = config.get(
+        "inventory_join_tolerance_seconds",
+        CANONICAL_INVENTORY_JOIN_TOLERANCE_SECONDS,
+    )
+    if (
+        isinstance(inventory_tolerance, bool)
+        or not isinstance(inventory_tolerance, (int, float))
+        or float(inventory_tolerance)
+        != float(CANONICAL_INVENTORY_JOIN_TOLERANCE_SECONDS)
+    ):
+        raise ValueError(
+            "frozen canonical inventory requirement: "
+            "inventory_join_tolerance_seconds must equal 5"
         )
 
     return dict(config)

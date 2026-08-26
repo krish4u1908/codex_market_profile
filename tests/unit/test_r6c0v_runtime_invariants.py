@@ -44,6 +44,14 @@ def test_invalid_tolerance_is_rejected(value):
         validate_canonical_runtime_config(config)
 
 
+@pytest.mark.parametrize("value", [0, 2, 4.999, 5.001, "5", True, None])
+def test_invalid_inventory_tolerance_is_rejected(value):
+    config = canonical()
+    config["inventory_join_tolerance_seconds"] = value
+    with pytest.raises(ValueError, match="inventory_join_tolerance_seconds"):
+        validate_canonical_runtime_config(config)
+
+
 def test_configuration_hash_changes_when_timezone_changes(tmp_path):
     valid = canonical()
     altered = copy.deepcopy(valid)

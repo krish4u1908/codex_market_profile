@@ -3359,7 +3359,7 @@ def build_intraday_inventory_fallback(
     intraday_cross: list[dict[str, Any]] = []
     partial_fixed_cross: list[dict[str, Any]] = []
     index_symbol = str(stack_config["index_symbol"])
-    tolerance = float(stack_config["synchronization_tolerance_ms"]) / 1000.0
+    tolerance = float(inventory_config.get("join_tolerance_seconds", 5))
     bin_points = float(inventory_config["bin_points"])
     for session in fallback_sessions:
         oi = raw_reader.load_oi(data_root / "oi", session)
