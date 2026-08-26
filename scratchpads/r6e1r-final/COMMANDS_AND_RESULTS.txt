@@ -150,3 +150,9 @@ RESULT: PASS; exit 0; 9/9 schedules; 21/21 components; 8/8 analytical ledgers; 9
 
 2026-08-27 full six-session pre-parity run
 RESULT: INTERRUPTED AND REJECTED before schedules; fresh 746,890-record/139-file lossless projection completed; incremental A processed and sealed six sessions; clean B inventory completed and stack generation was active; independent R6D comparison found missing live dependency/delta/transition projection. Partial evidence preserved under /tmp/r6e1r_rejected_and_partial_diagnostics_20260826/six_final_v1_pre_gui_parity_*; projection retained at /tmp/r6e1r_six_final_v1_projection; no result promoted.
+
+2026-08-27 R6D live parity and engine reseal
+RESULT: PASS; 135/135 targeted engine/GUI/API/browser tests; 3 fixture screenshots visually inspected; 26/26 runtime files exact; engine manifest ed6abec222efd129638c5d7850722be6c638bee85c7702f8ac995ba3b8208064; engine hash 8a80b51cc15eaa8e4cde7f03d655d780e013790a516f3b036f0b2776afe0b0b0; prohibited opens 0; remote branch 5efe70e9685b98556ae1ad9a860912c7bb1513fc.
+
+2026-08-27 first post-parity focused v9 attempt
+RESULT: INTERRUPTED AND REJECTED before schedules; adversarial mapping found single-ledger-only end-to-end boundary restart coverage. Partial roots preserved under /tmp/r6e1r_rejected_and_partial_diagnostics_20260826/focused_nine_v9_pre_all_ledger_boundary*; harness now injects and verifies one durable post-append crash/restart for every nonempty material ledger type; asymmetric Index-stale/Futures-fresh test added; targeted 2/2 PASS.

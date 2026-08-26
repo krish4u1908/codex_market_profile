@@ -2385,12 +2385,14 @@ class _AnalyticalBoundaryCrash(RuntimeError):
 def analytical_transition_boundary_probe(
     context: _RunContext, sessions: Iterable[str]
 ) -> dict[str, Any]:
-    """Crash once immediately after a fsynced material transition append.
+    """Restart after the first fsynced append in every material ledger type.
 
-    The wrapper raises *after* the repository ledger append returns.  The
-    orchestrator reconciles the deterministic identity, then this harness
-    recreates the complete ingestor/orchestrator process state before retrying
-    the seal.  A later count check proves exactly-once publication.
+    Each retry removes the already measured ledger from the failure-injection
+    set.  The repository therefore progresses in its real publication order,
+    crashes after one durable append for every ledger that receives material
+    output, recreates the complete ingestor/orchestrator process state, and
+    reconciles every deterministic identity before continuing.  Empty ledger
+    types are reported but cannot manufacture a transition boundary.
     """
     assert context.orchestrator is not None and context.ingestor is not None
     excluded = {
@@ -2399,69 +2401,120 @@ def analytical_transition_boundary_probe(
         "refusals_data_quality",
         "analytical_observation_stage",
     }
-    ledgers = {
-        name: ledger
-        for name, ledger in context.orchestrator.ledgers.items()
-        if name not in excluded
-    }
-    if not ledgers:
+    material_names = [
+        name for name in context.orchestrator.ledgers if name not in excluded
+    ]
+    if not material_names:
         raise RuntimeError("analytical transition-boundary probe has no ledgers")
-    originals = {name: ledger.append for name, ledger in ledgers.items()}
-    observed: dict[str, Any] = {}
 
-    def wrapper(name: str):
-        original = originals[name]
+    events: list[dict[str, Any]] = []
+    measured_ledgers: set[str] = set()
+    while True:
+        assert context.orchestrator is not None
+        ledgers = {
+            name: context.orchestrator.ledgers[name]
+            for name in material_names
+        }
+        pending = [name for name in material_names if name not in measured_ledgers]
+        originals = {name: ledgers[name].append for name in pending}
+        observed: dict[str, Any] = {}
 
-        def append_then_crash(row: dict[str, Any]) -> None:
-            original(row)
-            if not observed:
+        def wrapper(name: str):
+            original = originals[name]
+
+            def append_then_crash(row: dict[str, Any]) -> None:
+                original(row)
+                if observed:
+                    return
                 observed.update(
                     {
                         "ledger": name,
                         "event_id": str(row.get("event_id", "")),
                         "path": str(ledgers[name].path),
-                        "bytes_after_durable_append": ledgers[name].path.stat().st_size,
+                        "bytes_after_durable_append": (
+                            ledgers[name].path.stat().st_size
+                        ),
                     }
                 )
                 raise _AnalyticalBoundaryCrash(
                     f"simulated crash after durable {name} transition"
                 )
 
-        return append_then_crash
+            return append_then_crash
 
-    for name, ledger in ledgers.items():
-        ledger.append = wrapper(name)  # type: ignore[method-assign]
-    caught = False
-    try:
-        context.orchestrator.flush(sessions)
-    except _AnalyticalBoundaryCrash:
-        caught = True
-    finally:
-        for name, ledger in ledgers.items():
-            ledger.append = originals[name]  # type: ignore[method-assign]
-    if not caught or not observed.get("event_id"):
-        raise RuntimeError("analytical transition-boundary crash was not measured")
-    durable_rows = ledgers[str(observed["ledger"])].rows()
-    durable_count = sum(
-        str(row.get("event_id", "")) == observed["event_id"] for row in durable_rows
-    )
-    if durable_count != 1:
-        raise RuntimeError(
-            "analytical transition was not durable exactly once before restart"
+        for name in pending:
+            ledgers[name].append = wrapper(name)  # type: ignore[method-assign]
+        caught = False
+        try:
+            context.orchestrator.flush(sessions)
+        except _AnalyticalBoundaryCrash:
+            caught = True
+        finally:
+            for name in pending:
+                ledgers[name].append = originals[name]  # type: ignore[method-assign]
+
+        if not caught:
+            break
+        if not observed.get("event_id"):
+            raise RuntimeError("analytical transition-boundary crash lost its identity")
+        ledger_name = str(observed["ledger"])
+        durable_count = sum(
+            str(row.get("event_id", "")) == observed["event_id"]
+            for row in ledgers[ledger_name].rows()
         )
-    observed["durable_occurrences_before_restart"] = durable_count
-    context.restart()
+        if durable_count != 1:
+            raise RuntimeError(
+                "analytical transition was not durable exactly once before restart"
+            )
+        observed["durable_occurrences_before_restart"] = durable_count
+        measured_ledgers.add(ledger_name)
+        context.restart()
+        assert context.orchestrator is not None
+        restarted_ledger = context.orchestrator.ledgers[ledger_name]
+        restarted_count = sum(
+            str(row.get("event_id", "")) == observed["event_id"]
+            for row in restarted_ledger.rows()
+        )
+        if restarted_count != 1:
+            raise RuntimeError(
+                "durable analytical transition was not recovered exactly once"
+            )
+        observed["durable_occurrences_after_restart"] = restarted_count
+        events.append(observed)
+
     assert context.orchestrator is not None
-    restarted_ledger = context.orchestrator.ledgers[str(observed["ledger"])]
-    restarted_count = sum(
-        str(row.get("event_id", "")) == observed["event_id"]
-        for row in restarted_ledger.rows()
+    nonempty_ledgers = sorted(
+        name
+        for name in material_names
+        if context.orchestrator.ledgers[name].rows()
     )
-    if restarted_count != 1:
-        raise RuntimeError("durable analytical transition was not recovered exactly once")
-    observed["durable_occurrences_after_restart"] = restarted_count
-    observed["measured"] = True
-    return observed
+    missing = sorted(set(nonempty_ledgers) - measured_ledgers)
+    if missing:
+        raise RuntimeError(
+            "material analytical ledgers escaped restart injection: "
+            + ",".join(missing)
+        )
+    if not events:
+        raise RuntimeError("analytical transition-boundary crash was not measured")
+    return {
+        "measured": True,
+        "events": events,
+        "restart_count": len(events),
+        "material_ledger_types": material_names,
+        "material_ledgers_with_rows": nonempty_ledgers,
+        "crash_covered_ledgers": sorted(measured_ledgers),
+        "empty_material_ledgers": sorted(set(material_names) - set(nonempty_ledgers)),
+        "durable_occurrences_before_restart": (
+            1
+            if all(event["durable_occurrences_before_restart"] == 1 for event in events)
+            else 0
+        ),
+        "durable_occurrences_after_restart": (
+            1
+            if all(event["durable_occurrences_after_restart"] == 1 for event in events)
+            else 0
+        ),
+    }
 
 
 def run_schedule(
@@ -2736,8 +2789,9 @@ def run_schedule(
             analytical_boundary_probe = analytical_transition_boundary_probe(
                 context, sessions
             )
-            restart_count += 1
-            analytical_boundary_restart_count += 1
+            measured_restarts = int(analytical_boundary_probe["restart_count"])
+            restart_count += measured_restarts
+            analytical_boundary_restart_count += measured_restarts
         snapshot = context.snapshot(sessions)
         assert context.orchestrator is not None
         dirty_sessions = sorted(
@@ -2754,17 +2808,21 @@ def run_schedule(
             )
         if schedule.restart_on_analytical_transition:
             assert context.orchestrator is not None
-            ledger = context.orchestrator.ledgers[
-                str(analytical_boundary_probe["ledger"])
-            ]
-            occurrences = sum(
-                str(row.get("event_id", ""))
-                == analytical_boundary_probe["event_id"]
-                for row in ledger.rows()
+            exactly_once = True
+            for event in analytical_boundary_probe["events"]:
+                ledger = context.orchestrator.ledgers[str(event["ledger"])]
+                occurrences = sum(
+                    str(row.get("event_id", "")) == event["event_id"]
+                    for row in ledger.rows()
+                )
+                event["occurrences_after_retry_and_seal"] = occurrences
+                event["exactly_once_after_seal"] = occurrences == 1
+                exactly_once = exactly_once and occurrences == 1
+            analytical_boundary_probe["occurrences_after_retry_and_seal"] = (
+                1 if exactly_once else 0
             )
-            analytical_boundary_probe["occurrences_after_retry_and_seal"] = occurrences
-            analytical_boundary_probe["exactly_once_after_seal"] = occurrences == 1
-            if occurrences != 1:
+            analytical_boundary_probe["exactly_once_after_seal"] = exactly_once
+            if not exactly_once:
                 raise RuntimeError(
                     "analytical transition duplicated after restart/seal retry"
                 )
@@ -4257,10 +4315,21 @@ def schedule_exercise_failures(
         if not isinstance(probe, Mapping) or not probe.get("measured"):
             failures.append("ANALYTICAL_BOUNDARY_NOT_MEASURED")
         elif not (
-            int(probe.get("durable_occurrences_before_restart", 0) or 0) == 1
+            int(probe.get("restart_count", 0) or 0) > 0
+            and probe.get("crash_covered_ledgers")
+            == probe.get("material_ledgers_with_rows")
+            and int(probe.get("durable_occurrences_before_restart", 0) or 0) == 1
             and int(probe.get("durable_occurrences_after_restart", 0) or 0) == 1
             and int(probe.get("occurrences_after_retry_and_seal", 0) or 0) == 1
             and probe.get("exactly_once_after_seal") is True
+            and all(
+                isinstance(event, Mapping)
+                and int(event.get("durable_occurrences_before_restart", 0) or 0) == 1
+                and int(event.get("durable_occurrences_after_restart", 0) or 0) == 1
+                and int(event.get("occurrences_after_retry_and_seal", 0) or 0) == 1
+                and event.get("exactly_once_after_seal") is True
+                for event in probe.get("events", [])
+            )
         ):
             failures.append("ANALYTICAL_BOUNDARY_NOT_EXACTLY_ONCE")
     elif name == "hourly_file_rotation":

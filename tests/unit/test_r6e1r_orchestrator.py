@@ -721,6 +721,32 @@ def test_empty_poll_wall_clock_staleness_is_material_and_not_backdated(tmp_path)
     )
 
 
+def test_stale_index_suspends_divergence_while_futures_remains_fresh(tmp_path):
+    base = datetime(2026, 8, 20, 9, 15, tzinfo=IST)
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    orchestrator.process([
+        observation("O0001", "INDEX", INDEX, base, price=57_000, volume=0),
+        observation(
+            "O0002", "FUTURES", FUTURES,
+            base + timedelta(milliseconds=500), price=57_020, volume=1,
+        ),
+        observation(
+            "O0003", "FUTURES", FUTURES,
+            base + timedelta(seconds=9), price=57_021, volume=2,
+        ),
+    ])
+    orchestrator.snapshot(SESSION)
+
+    reference = base + timedelta(seconds=12)
+    availability = orchestrator.operational_availability(reference)
+    assert availability["index_state"] == "STALE_OR_MISSING"
+    assert availability["futures_state"] == "AVAILABLE"
+    assert availability["layers"]["ID"]["state"] == "STALE_DATA"
+    assert availability["divergence_state"] == "STALE_DATA"
+    assert availability["receipt_ages_seconds"]["INDEX"] == 12
+    assert availability["receipt_ages_seconds"]["FUTURES"] == 3
+
+
 def test_outputs_only_historical_preload_is_stale_for_live_latest(tmp_path):
     base = datetime(2026, 8, 20, 9, 15, tzinfo=IST)
     orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))

@@ -1299,11 +1299,21 @@ def test_real_live_path_chunk_split_and_restart_equivalence(tmp_path: Path) -> N
     assert boundary_metrics["unexpected_staged_sessions"] == []
     assert boundary_metrics["dirty_sessions_after_seal"] == []
     assert restart_metrics["restart_count"] > 0
-    assert boundary_metrics["analytical_boundary_restart_count"] == 1
-    assert boundary_metrics["analytical_boundary_probe"]["measured"] is True
-    assert boundary_metrics["analytical_boundary_probe"][
-        "exactly_once_after_seal"
-    ] is True
+    probe = boundary_metrics["analytical_boundary_probe"]
+    assert probe["measured"] is True
+    assert boundary_metrics["analytical_boundary_restart_count"] == probe[
+        "restart_count"
+    ] == len(probe["events"])
+    assert probe["restart_count"] > 1
+    assert probe["crash_covered_ledgers"] == probe["material_ledgers_with_rows"]
+    assert probe["exactly_once_after_seal"] is True
+    assert all(
+        event["durable_occurrences_before_restart"] == 1
+        and event["durable_occurrences_after_restart"] == 1
+        and event["occurrences_after_retry_and_seal"] == 1
+        and event["exactly_once_after_seal"] is True
+        for event in probe["events"]
+    )
     assert all(
         row["status"] == "PASS"
         for row in harness.compare_snapshots(chunked, split, expected=None)
