@@ -1,0 +1,26 @@
+2026-08-26 git fetch origin --tags --prune
+RESULT: PASS
+
+2026-08-26 remote checkpoint verification
+RESULT: origin/feature/r6e-live-shadow = 065982c2ed49f6e7dad82bf29ed25f62ef78b024
+
+2026-08-26 frozen tag manifest verification (git archive + sha256sum)
+RESULT: PASS; R6C2R 94/94 files; R6D 105/105 files
+
+2026-08-26 branch creation
+RESULT: fix/r6e1r-final-live-shadow created from 065982c2ed49f6e7dad82bf29ed25f62ef78b024
+
+2026-08-26 existing repair carry-forward
+RESULT: 0a35877 (cherry-pick of 3cd3cf9)
+
+2026-08-26 authoritative raw-root preflight
+RESULT: PASS; /opt/banknifty-collector/data-prod-v4 readable; 45 GiB; raw/ and oi/ present
+
+2026-08-26 ss -ltnp ports 8803-8810
+RESULT: 8803 and 8804 occupied and protected; 8805-8810 unused; no changes made
+
+2026-08-26 git push -u origin fix/r6e1r-final-live-shadow; git ls-remote
+RESULT: PASS; remote head 0a3587731f9b0b4a99543d1fb059307340b588d3
+
+2026-08-26 focused sample provenance revalidation
+RESULT: PASS; canonical contract NSE:BANKNIFTY26AUGFUT; 46,550/46,550 byte identities; raw=46,210; oi=340; 8/8 source hashes/stat unchanged
