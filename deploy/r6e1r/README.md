@@ -207,11 +207,18 @@ systemctl --user is-active r6e1r-shadow.service r6e1r-readonly-gateway.service
 
 Both units use `Restart=on-failure`, bounded restart bursts, SIGTERM shutdown,
 and systemd memory, swap, CPU, task, and file-descriptor limits. The backend's
-post-start health retry permits up to 300 seconds for a verified six-session
-cold preload and its start timeout is 360 seconds; the lightweight gateway
-retains its 30-attempt/75-second boundary. The 6 GiB backend ceiling is a
-safety boundary, not permission to truncate analytics; measured six-session
-peak RSS must remain below it before installation.
+post-start health-plus-readiness retry permits up to 600 attempts for a
+verified six-session cold preload and its start timeout is 900 seconds; the
+lightweight gateway retains its 30-attempt/75-second boundary. The backend
+begins memory reclaim above 8 GiB and has a hard 10 GiB ceiling with no swap
+allowance. These are safety boundaries, not permission to truncate analytics;
+an actual cold preload must remain below them before the deployment is
+accepted.
+Both localhost post-start probes use a 250-ms per-request timeout, so their
+complete delay-plus-request budgets remain below the corresponding systemd
+start timeout even when every request times out. They use the full readiness
+contract: an allowlisted after-hours 503 is accepted, while checkpoint,
+causality, or runtime-source identity failures prevent service activation.
 
 ## Health, readiness, replay, and external checks
 

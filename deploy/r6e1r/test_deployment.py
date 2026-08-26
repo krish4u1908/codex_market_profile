@@ -151,6 +151,11 @@ def test_user_units_are_isolated_and_resource_bounded() -> None:
     assert "MemorySwapMax=0" in backend
     assert "--attempts 30 --delay-seconds 1 --timeout-seconds 0.25" in gateway
     assert "TimeoutStartSec=75s" in gateway
+    # Startup must exercise the normal health-plus-readiness probe. It accepts
+    # the explicit after-hours 503 contract, but still refuses checkpoint,
+    # causality, and runtime-source identity failures.
+    assert "--health-only" not in backend
+    assert "--health-only" not in gateway
 
 
 def test_preload_runbook_requires_verified_atomic_same_filesystem_staging() -> None:

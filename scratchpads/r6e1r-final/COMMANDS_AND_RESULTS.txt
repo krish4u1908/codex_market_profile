@@ -186,3 +186,6 @@ RESULT: INTERRUPTED AND REJECTED before schedules; fresh A/B 21/21 components, 8
 
 2026-08-27 reference availability surface repair
 RESULT: PASS; batch-B layer_availability.csv byte-identical to R6C2 Reference C, SHA-256 ed70b601360a866a03789d1039316b8d59ace773494311603a57b94bca7fdd9a; 29/29 equivalence-harness tests; preserved real v3 A and B each 24/24 rows exact against Reference C; target/reference-only/remainder all zero; primary operational A/B comparator unchanged.
+
+2026-08-27 deployment startup-gate preflight and repair
+RESULT: PASS; removed health-only post-start probes; full health/readiness now gates checkpoint_valid, zero causal violations and manifest_verified while accepting only allowlisted after-hours 503; 14 focused deployment tests plus 1 GUI template regression passed; systemd-analyze --user verify and git diff --check passed; no service operation or install; 8805/18805 free; protected 8803 PID380743, 8804 PID465394 and collector PID667736 unchanged; package manifest intentionally stale pending final freeze.
