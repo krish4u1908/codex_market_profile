@@ -1,5 +1,5 @@
 {
-  "branch": "fix/r6c2r-mixed-timestamp-parser",
+  "branch": "feature/r6d-offline-profiler-gui",
   "excludes": [
     ".git",
     "manifests/repository_source_manifest.json",
@@ -8,7 +8,7 @@
     "*.egg-info",
     ".pytest_cache"
   ],
-  "file_count": 94,
+  "file_count": 105,
   "files": [
     {
       "path": ".gitignore",
@@ -64,6 +64,11 @@
       "path": "configs/r6c0i_inventory.json",
       "sha256": "a74d1810118e9d77719b5768bab7e0ce922d1169a3153aed799842d451b264d3",
       "size": 411
+    },
+    {
+      "path": "configs/r6d_gui.json",
+      "sha256": "bf5051d721feed6e102b34575c07fdaa64f564e61969ad717385957f564e850e",
+      "size": 721
     },
     {
       "path": "docs/R6C2_FULL_STACK_CONTRACT.md",
@@ -226,9 +231,19 @@
       "size": 4093
     },
     {
+      "path": "scripts/build_r6d_gui.py",
+      "sha256": "1d754cf94ade0169258fc3c8c51cc3dcd92e990b5e51c54422152f615e565798",
+      "size": 2806
+    },
+    {
       "path": "scripts/finalize_r6c2.py",
       "sha256": "e8c1f6752c9afd3570f3c309591e1afc704bd65b08f048a384d9ce563200ab80",
       "size": 15991
+    },
+    {
+      "path": "scripts/finalize_r6d.py",
+      "sha256": "1694068a2658cedc32a2ff91dfd6195ddc1fe9f3461d8cdcc3c8cfbf0b9ff894",
+      "size": 8263
     },
     {
       "path": "scripts/run_external_validation.py",
@@ -284,6 +299,36 @@
       "path": "src/banknifty_profiler/divergence/detector.py",
       "sha256": "9a9b333add9992dbd7421ffe23d359145d848bcd5951acee4e4672b7c4d4947a",
       "size": 7444
+    },
+    {
+      "path": "src/banknifty_profiler/gui/__init__.py",
+      "sha256": "d75de792f26f63f2e0673fa081f0c63dd712d7a7b79cead2bd35f725645607f5",
+      "size": 66
+    },
+    {
+      "path": "src/banknifty_profiler/gui/adapter.py",
+      "sha256": "efbb6a06506dc7c60e3012e04136b7ff8e5fb1fc613d4d80b8f3299bf8138b6b",
+      "size": 8626
+    },
+    {
+      "path": "src/banknifty_profiler/gui/static/app.js",
+      "sha256": "bdd82b1cd733ba8ebbb2aa33eb4fa2a6bb0908509e267359e51f0d1c4afd5839",
+      "size": 15293
+    },
+    {
+      "path": "src/banknifty_profiler/gui/static/index.html",
+      "sha256": "e75090d5167725ae0d44b4d2bbd67f6a125b38e8c11e25f346dfe608d4c8f357",
+      "size": 842
+    },
+    {
+      "path": "src/banknifty_profiler/gui/static/replay.html",
+      "sha256": "bb6c6fa48fe2359fa3a537eebb22c6d61ab1001b7fd7ea84526db1740d0ae7e5",
+      "size": 3934
+    },
+    {
+      "path": "src/banknifty_profiler/gui/static/style.css",
+      "sha256": "16c5045f95e9920ec193c46f9acd137900e265d7990e39b18535ede4ea8a7e11",
+      "size": 2044
     },
     {
       "path": "src/banknifty_profiler/inventory/__init__.py",
@@ -456,6 +501,11 @@
       "size": 3768
     },
     {
+      "path": "tests/unit/test_r6d_gui.py",
+      "sha256": "b6a48a380196ee080f3de5e05451e5dbb5f2e88035bd090ec47b7e7ebfa96876",
+      "size": 6923
+    },
+    {
       "path": "tests/unit/test_raw_participation.py",
       "sha256": "39a7c792fa9adfc4356373081adc63ac7b007ad84537299284fb4c319f9bc329",
       "size": 2741
@@ -479,6 +529,11 @@
       "path": "tools/historical_audit/finalize_r6b3r.py",
       "sha256": "acbc3c8f6cf444a55a3ae4ba7436b1639d0a8ff72a4ae1e4c44dd9bf173bd2d0",
       "size": 7954
+    },
+    {
+      "path": "tools/historical_audit/r6d_browser_acceptance.py",
+      "sha256": "466623791d158c4caff050bb5fd58bc12ac3399730dd6302fde80e8a854502c7",
+      "size": 7443
     }
   ],
   "repository": "/opt/banknifty/repositories/banknifty-market-profiler",
