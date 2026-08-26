@@ -29,6 +29,14 @@ def sign(v):
  except:return 'UNKNOWN'
  return 'UP' if x>0 else 'DOWN' if x<0 else 'UNCHANGED'
 def futures_state(row,w):return f"PRICE_{sign(row.get(f'price_change_{w}m'))}_OI_{sign(row.get(f'delta_oi_{w}m'))}"
+def breadth(options):
+ grouped=defaultdict(list)
+ for row in options:grouped[(row['episode_id'],row['observation_timestamp'])].append(row)
+ out=[]
+ for (episode,t),rows in sorted(grouped.items()):
+  counts=Counter(r['semantic_classification'] for r in rows);ce=[r for r in rows if r['option_type']=='CE'];pe=[r for r in rows if r['option_type']=='PE']
+  out.append({'episode_id':episode,'observation_timestamp':t,'selected_strike_count':len(rows),'ce_strike_count':len(ce),'pe_strike_count':len(pe),'atm_count':sum(r['moneyness']=='ATM' for r in rows),'otm_count':sum(r['moneyness']=='OTM' for r in rows),'supportive_count':counts['SUPPORTIVE'],'contradictory_count':counts['CONTRADICTORY'],'mixed':counts['SUPPORTIVE']>0 and counts['CONTRADICTORY']>0,'broad_agreement':max(counts['SUPPORTIVE'],counts['CONTRADICTORY'])>=2,'ce_pe_agreement':bool(ce and pe and len({r['semantic_classification'] for r in ce+pe})==1)})
+ return out
 def build(input_root:Path,anchors_path:Path,breadth_path:Path,output_root:Path,mode:str):
  a=SimpleNamespace(input=input_root,anchors=anchors_path,output=output_root,mode=mode);a.output.mkdir(parents=True,exist_ok=False)
  fp=a.input/'futures_participation.csv';op=a.input/'option_participation.csv';bp=breadth_path

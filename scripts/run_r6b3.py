@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse,csv,hashlib,json
-from collections import Counter,defaultdict
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
@@ -13,7 +13,7 @@ from banknifty_profiler.divergence.detector import causal_basis,derive,episodes
 from banknifty_profiler.divergence.dependency import group_episodes
 from banknifty_profiler.lifecycle.raw_engine import build_lifecycle
 from banknifty_profiler.participation.raw_engine import load_raw,participation_at,canonical_json_bytes
-from banknifty_profiler.participation.views import build as build_views
+from banknifty_profiler.participation.views import breadth,build as build_views
 from banknifty_profiler.runtime.anchors import EpisodeAnchor,contract_hash,read as read_anchors,validate,write as write_anchors
 from banknifty_profiler.runtime.configuration import validate_canonical_runtime_config
 
@@ -73,16 +73,6 @@ def native_anchors(data_root,config,configuration_path,run_root):
  validate(anchors,run_id,engine_hash)
  write_csv(run_root/'raw_divergence_episodes.csv',all_episodes);write_csv(run_root/'raw_dependency_groups.csv',groups);write_csv(run_root/'raw_lifecycle_transitions.csv',lifecycle);write_csv(run_root/'raw_resolution_observations.csv',dense);write_csv(run_root/'raw_response_observations.csv',responses)
  return anchors,opened,run_id,engine_hash
-
-
-def breadth(options):
- grouped=defaultdict(list)
- for row in options:grouped[(row['episode_id'],row['observation_timestamp'])].append(row)
- out=[]
- for (episode,t),rows in sorted(grouped.items()):
-  counts=Counter(r['semantic_classification'] for r in rows);ce=[r for r in rows if r['option_type']=='CE'];pe=[r for r in rows if r['option_type']=='PE']
-  out.append({'episode_id':episode,'observation_timestamp':t,'selected_strike_count':len(rows),'ce_strike_count':len(ce),'pe_strike_count':len(pe),'atm_count':sum(r['moneyness']=='ATM' for r in rows),'otm_count':sum(r['moneyness']=='OTM' for r in rows),'supportive_count':counts['SUPPORTIVE'],'contradictory_count':counts['CONTRADICTORY'],'mixed':counts['SUPPORTIVE']>0 and counts['CONTRADICTORY']>0,'broad_agreement':max(counts['SUPPORTIVE'],counts['CONTRADICTORY'])>=2,'ce_pe_agreement':bool(ce and pe and len({r['semantic_classification'] for r in ce+pe})==1)})
- return out
 
 
 def main():

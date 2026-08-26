@@ -1,0 +1,20 @@
+{
+  "timezone": "Asia/Kolkata",
+  "synchronization_tolerance_ms": 2000,
+  "index_symbol": "NSE:NIFTYBANK-INDEX",
+  "futures_selection_mode": "SESSION_NEAREST_UNEXPIRED_HIGHEST_OI",
+  "selected_futures_by_session": {},
+  "poll_interval_seconds": 1.0,
+  "max_read_bytes_per_file_per_poll": 4194304,
+  "max_buffer_bytes_per_file": 1048576,
+  "freshness_seconds": {
+    "index": 10,
+    "futures": 10,
+    "futures_oi": 180,
+    "ce": 180,
+    "pe": 180
+  },
+  "allowed_bind": "127.0.0.1",
+  "classification": "LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL",
+  "analytical_threshold_overrides": null
+}
