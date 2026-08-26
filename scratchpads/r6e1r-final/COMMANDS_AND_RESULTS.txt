@@ -162,3 +162,6 @@ RESULT: REJECTED BY ONE HARNESS COMPARATOR; all 9/9 schedules PASS; every semant
 
 2026-08-27 availability comparator regression
 RESULT: PASS; py_compile PASS; equivalence-harness plus orchestrator 57/57 tests in 11.34s; contradictory raw eligibility ignored only when independent post-fallback public availability is identical; a public availability mismatch remains FAIL.
+
+2026-08-27 final focused all-nine v11
+RESULT: PASS; exit 0; 21/21 components; 8/8 analytical ledgers; 9/9 schedules; 9/9 causal/GUI invariants; 72/72 checkpoint rows; 2/2 recovery probes; 8/8 source hashes; 2,331 measured runtime-open rows; all differences/refusals/future joins/backdating/duplicate IDs/prohibited or unmeasured opens/checkpoint failures/source mutations zero; 7/7 nonempty ledger crash boundaries exactly once; wall 21m46.61s; harness 1,305.894s; parent max RSS 1,584,964 KiB; child max RSS 797,432 KiB; summary a855629c0b9988e7ab289e5fef473681e6db3981fe8faabc021325eb4d3b3c4a; state manifest cfc72427a7c9fb629420b47bb0192571f2f3952ff8ebf09e9f4fd08a1db3d957; state tree 0c7f9cfcde213996da98de45b809bac234c991dd5a6ac332cd99b0514df25871; evidence /opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_evidence/focused_nine_final_v11.
