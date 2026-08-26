@@ -223,7 +223,12 @@ def canonicalize(value: Any, *, volatile_fields: frozenset[str] = RUN_VOLATILE_F
     value = _jsonable(value)
     if isinstance(value, dict):
         return {
-            key: canonicalize(item, volatile_fields=volatile_fields)
+            key: canonicalize(
+                _portable_source_identity(item)
+                if key in {"source_file", "raw_source_references"}
+                else item,
+                volatile_fields=volatile_fields,
+            )
             for key, item in sorted(value.items())
             if key not in volatile_fields
         }
@@ -250,6 +255,19 @@ def canonicalize(value: Any, *, volatile_fields: frozenset[str] = RUN_VOLATILE_F
         except (InvalidOperation, ValueError):
             pass
     return value
+
+
+def _portable_source_identity(value: Any) -> Any:
+    """Remove only run-local root prefixes from physical raw provenance."""
+    if not isinstance(value, str):
+        return value
+    normalized = value.replace("\\", "/")
+    positions = [
+        position
+        for marker in ("/raw/", "/oi/")
+        if (position := normalized.find(marker)) >= 0
+    ]
+    return normalized[min(positions) + 1:] if positions else normalized
 
 
 def semantic_hash(value: Any) -> str:

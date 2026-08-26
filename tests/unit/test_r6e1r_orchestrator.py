@@ -116,6 +116,15 @@ def test_focused_fixture_reaches_every_canonical_callback_and_gui(tmp_path):
     assert all(value == 1 for value in state["callback_invocations"].values())
     assert set(state["callback_invocations"]) == {"synchronization", "inventory", "divergence_detector", "dependency", "lifecycle", "participation", "participation_views", "cross_layer", "gui_projection"}
     assert all(not row.get("state_exit_timestamp") or row["state_exit_timestamp"] <= state["availability"]["calculation_timestamp"] for row in state["lifecycle"])
+    lifecycle_ends = {}
+    for row in state["lifecycle"]:
+        lifecycle_ends[row["episode_id"]] = max(
+            lifecycle_ends.get(row["episode_id"], ""), row["state_entry_timestamp"]
+        )
+    assert all(
+        row["observation_timestamp"] <= lifecycle_ends[row["episode_id"]]
+        for row in state["participation_dense"]
+    )
 
     counts = ledger_counts(orchestrator)
     assert counts["divergence_confirmations"] == 1
@@ -225,6 +234,8 @@ def test_physical_stream_lineage_and_same_session_oi_delta_are_canonical(tmp_pat
         observation("O0003", "CE", "NSE:BANKNIFTY26AUG57000CE", base + timedelta(milliseconds=200), price=210, oi=9999, strike=57000, expiry="2026-08-27", stream="raw"),
         observation("O0004", "CE", "NSE:BANKNIFTY26AUG57000CE", base + timedelta(milliseconds=300), price=200, oi=100, previous_oi=1, delta_oi=99, strike=57000, expiry="2026-08-27", stream="oi"),
         observation("O0005", "CE", "NSE:BANKNIFTY26AUG57000CE", base + timedelta(milliseconds=400), price=201, oi=110, previous_oi=2, delta_oi=108, strike=57000, expiry="2026-08-27", stream="oi"),
+        # Depth-only raw rows have no canonical price/volume evidence.
+        observation("O0006", "FUTURES", FUTURES, base + timedelta(milliseconds=500), stream="raw"),
     ]
     prepared = [orchestrator._prepare(row) for row in values]
     market = orchestrator._market_frame(prepared)
