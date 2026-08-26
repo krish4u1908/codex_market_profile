@@ -1,0 +1,28 @@
+[Unit]
+Description=R6E1R sanitized read-only gateway
+After=network-online.target r6e1r-shadow.service
+Wants=network-online.target r6e1r-shadow.service
+
+[Service]
+Type=simple
+User=banknifty-profiler
+Group=banknifty-profiler
+WorkingDirectory=/opt/banknifty/repositories/banknifty-market-profiler
+ExecStart=/opt/banknifty/research/.venv/bin/python -B deploy/r6e1r/read_only_gateway.py --bind 0.0.0.0 --port 8805 --backend http://127.0.0.1:18805
+Restart=on-failure
+RestartSec=3s
+MemoryMax=256M
+CPUQuota=50%
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/opt/banknifty/repositories/banknifty-market-profiler
+RestrictSUIDSGID=true
+LockPersonality=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=r6e1r-readonly-gateway
+
+[Install]
+WantedBy=multi-user.target

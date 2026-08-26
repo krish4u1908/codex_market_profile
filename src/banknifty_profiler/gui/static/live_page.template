@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>R6E live market profiler</title>
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="live-page">
+  <header>
+    <div class="classification">LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL</div>
+    <div class="live-title-row">
+      <h1>BankNifty live market profiler</h1>
+      <span id="connectionBadge" class="availability missing">CONNECTING</span>
+      <span id="overallBadge" class="availability missing">NO VALID MARKET DATA</span>
+    </div>
+    <div class="toolbar">
+      <label>View
+        <select id="sessionMode">
+          <option value="latest">Live / latest</option>
+          <option value="2026-08-11">Replay 2026-08-11</option>
+          <option value="2026-08-12">Replay 2026-08-12</option>
+          <option value="2026-08-13">Replay 2026-08-13</option>
+          <option value="2026-08-18">Replay 2026-08-18</option>
+          <option value="2026-08-19">Replay 2026-08-19</option>
+          <option value="2026-08-20">Replay 2026-08-20</option>
+        </select>
+      </label>
+      <button id="refreshNow" type="button">Refresh</button>
+      <label>Polling
+        <select id="pollRate">
+          <option value="2">2 seconds</option>
+          <option value="5" selected>5 seconds</option>
+          <option value="15">15 seconds</option>
+          <option value="0">Paused</option>
+        </select>
+      </label>
+      <span id="asOf" class="clock">Awaiting analytical projection</span>
+    </div>
+    <div id="receiptAges" class="toolbar receipt-ages"></div>
+  </header>
+
+  <main class="app">
+    <section class="card">
+      <div class="chart-head">
+        <div id="availability" class="availability-row"></div>
+        <div class="toggle-row">
+          <strong>Market:</strong>
+          <label class="toggle"><input data-market="index" type="checkbox"><span class="swatch market-index"></span>BankNifty Index</label>
+          <label class="toggle"><input data-market="futures" type="checkbox"><span class="swatch market-futures"></span>BankNifty Futures</label>
+          <label class="toggle"><input data-market="basis" type="checkbox"><span class="swatch market-basis"></span>Synchronized Basis</label>
+        </div>
+        <div id="horizonControls"></div>
+        <div class="toggle-row">
+          <strong>Events:</strong>
+          <label class="toggle"><input data-event="confirmation" type="checkbox">Confirmations</label>
+          <label class="toggle"><input data-event="lifecycle" type="checkbox">Lifecycle markers</label>
+          <button id="restoreDefaults" type="button">Restore display defaults</button>
+        </div>
+      </div>
+      <canvas id="price" aria-label="Separate BankNifty Index and Futures price paths"></canvas>
+      <div id="basisWrap" class="basis hidden">
+        <canvas id="basis" aria-label="Synchronized basis path"></canvas>
+      </div>
+      <div id="scaleInfo" class="chart-foot"></div>
+    </section>
+
+    <div class="grid2">
+      <section class="card">
+        <h2>Divergence and lifecycle</h2>
+        <div id="divergencePanel" class="panel-content">No qualifying divergence observable.</div>
+      </section>
+      <section class="card">
+        <h2>Five-minute participation context</h2>
+        <div id="participationPanel" class="participation-grid"></div>
+        <p class="warning">Option volume is cumulative traded-volume change between REST receipts, not tick-ordered intraminute volume.</p>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>Layer availability and freshness</h2>
+      <div id="layerDetails" class="layer-grid"></div>
+    </section>
+
+    <section class="card">
+      <h2>Operational projection</h2>
+      <div id="operationalPanel" class="panel-content audit"></div>
+    </section>
+  </main>
+  <script src="/assets/live.js"></script>
+</body>
+</html>

@@ -30,3 +30,9 @@ RESULT: INTERRUPTED AFTER DEFECT CONFIRMATION; elapsed 8m56.43s; max RSS 343,064
 
 2026-08-26 repaired backend focused verification
 RESULT: PASS; 74 backend/harness tests + 18 live GUI/API tests; py_compile PASS; git diff --check PASS
+
+2026-08-26 live API + shadow API + browser + preserved R6D GUI tests
+RESULT: PASS; 79 passed in 48.82s; zero browser console/page errors
+
+2026-08-26 GUI screenshot inspection
+RESULT: PASS; 3 PNG files, each 1600x1705; complete horizons, Intraday-only degradation, live/latest operational projection
