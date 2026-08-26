@@ -2,6 +2,7 @@ from __future__ import annotations
 import json,re
 from pathlib import Path
 import numpy as np,pandas as pd
+from banknifty_profiler.runtime.timestamps import parse_timestamp_series
 
 def load_market(raw_root:Path,date:str,symbols:set[str])->pd.DataFrame:
  rows=[]
@@ -15,7 +16,9 @@ def load_market(raw_root:Path,date:str,symbols:set[str])->pd.DataFrame:
     rows.append({'session_date':date,'symbol':sym,'event_timestamp':r.get('event_time'),'receipt_timestamp':r.get('received_at'),'availability_timestamp':r.get('received_at'),'last_price':m.get('ltp'),'cumulative_volume':m.get('vol_traded_today'),'last_traded_quantity':m.get('last_traded_qty'),'source_file':str(path),'source_row':offset,'source_quality':'RAW_WEBSOCKET_EVENT'})
  z=pd.DataFrame(rows)
  if len(z):
-  for field in ('event_timestamp','receipt_timestamp','availability_timestamp'):z[field]=pd.to_datetime(z[field],errors='coerce')
+  z['event_timestamp']=parse_timestamp_series(z.event_timestamp,field_name='market event timestamp',allow_missing=True)
+  z['receipt_timestamp']=parse_timestamp_series(z.receipt_timestamp,field_name='market receipt timestamp')
+  z['availability_timestamp']=z.receipt_timestamp.copy()
   z=z.sort_values(['receipt_timestamp','symbol','source_file','source_row']).reset_index(drop=True)
  return z
 
@@ -42,7 +45,9 @@ def load_oi(oi_root:Path,date:str)->pd.DataFrame:
      rows.append({'session_date':date,'symbol':sym,'instrument_class':typ,'expiry_date':expiry,'strike':strike,'oi_observation_timestamp':request,'oi_receipt_timestamp':receipt,'availability_timestamp':receipt,'oi_close':m.get('oi'),'instrument_price':m.get('ltp'),'cumulative_volume':m.get('volume',m.get('v')),'source_file':str(path),'source_row':offset,'availability_quality':'EXACT_REST_RECEIPT','source_quality':'RAW_REST_OI'})
  z=pd.DataFrame(rows)
  if z.empty:return z
- for field in ('oi_observation_timestamp','oi_receipt_timestamp','availability_timestamp'):z[field]=pd.to_datetime(z[field],errors='coerce')
+ z['oi_observation_timestamp']=parse_timestamp_series(z.oi_observation_timestamp,field_name='OI request timestamp',allow_missing=True)
+ z['oi_receipt_timestamp']=parse_timestamp_series(z.oi_receipt_timestamp,field_name='OI receipt timestamp')
+ z['availability_timestamp']=z.oi_receipt_timestamp.copy()
  z=z.sort_values(['symbol','availability_timestamp','source_file','source_row']).reset_index(drop=True);g=z.groupby('symbol',observed=True);z['previous_oi']=g.oi_close.shift();z['delta_oi_raw']=z.oi_close-z.previous_oi;z['valid_receipt']=z.oi_close.notna()&z.availability_timestamp.notna();z['oi_changed']=z.delta_oi_raw.ne(0)&z.delta_oi_raw.notna();z['duplicate_record']=z.duplicated(['symbol','availability_timestamp','oi_close','instrument_price'],keep='first');z['delta_oi']=z.delta_oi_raw.where(z.delta_oi_raw.ne(0));z.loc[g.cumcount().eq(0)|~z.valid_receipt,'delta_oi']=np.nan;z['last_valid_receipt_timestamp']=z.availability_timestamp.where(z.valid_receipt).groupby(z.symbol).ffill();z['last_change_timestamp']=z.availability_timestamp.where(z.oi_changed).groupby(z.symbol).ffill();z['freshness_age_minutes']=0.0;z['change_age_minutes']=(z.availability_timestamp-z.last_change_timestamp).dt.total_seconds()/60;return z
 
 def select_contracts(o:pd.DataFrame,date:str):

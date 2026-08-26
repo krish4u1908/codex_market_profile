@@ -8,6 +8,7 @@ from __future__ import annotations
 import math
 from bisect import bisect_right
 import numpy as np,pandas as pd
+from banknifty_profiler.runtime.timestamps import parse_timestamp_series
 MATCH_MS=2000;INDEX_MATERIAL=10.;BASIS_MATERIAL=5.;HIGH_Q=.8;LOW_Q=.2;ROBUST_Z=1.;MERGE_GAP=15.;HORIZONS=[1,3,5,10]
 PERSIST=[('P30_N3',30,3),('P60_N5',60,5),('P180',180,5)]
 def iso(x):return '' if pd.isna(x) else pd.Timestamp(x).isoformat()
@@ -24,7 +25,7 @@ def past_row(df,i,mins):
  target=df.at[i,'t']-pd.Timedelta(minutes=mins);j=df.t.searchsorted(target,side='right')-1
  return None if j<0 else j
 def derive(rows):
- df=pd.DataFrame(rows);df['t']=pd.to_datetime(df.basis_timestamp);valid=df.validity_status.eq('VALID');df['basis']=pd.to_numeric(df.basis_value,errors='coerce');df['index']=pd.to_numeric(df.index_price,errors='coerce');df['futures']=pd.to_numeric(df.futures_price,errors='coerce')
+ df=pd.DataFrame(rows);df['t']=parse_timestamp_series(df.basis_timestamp,field_name='Basis receipt timestamp');valid=df.validity_status.eq('VALID');df['basis']=pd.to_numeric(df.basis_value,errors='coerce');df['index']=pd.to_numeric(df.index_price,errors='coerce');df['futures']=pd.to_numeric(df.futures_price,errors='coerce')
  for h in HORIZONS:
   ic=[];fc=[];bc=[];elapsed=[];counts=[]
   for i in range(len(df)):

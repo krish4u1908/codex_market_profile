@@ -1,5 +1,5 @@
 {
-  "branch": "fix/r6c0v-runtime-invariants",
+  "branch": "fix/r6c2r-mixed-timestamp-parser",
   "excludes": [
     ".git",
     "manifests/repository_source_manifest.json",
@@ -8,7 +8,7 @@
     "*.egg-info",
     ".pytest_cache"
   ],
-  "file_count": 81,
+  "file_count": 94,
   "files": [
     {
       "path": ".gitignore",
@@ -66,6 +66,11 @@
       "size": 411
     },
     {
+      "path": "docs/R6C2_FULL_STACK_CONTRACT.md",
+      "sha256": "918ebbe424f8417c274b34d3cfa0888cb8d6dcde04109b559462338b37ca7c34",
+      "size": 514
+    },
+    {
       "path": "docs/causality/R6B3R_PUBLICATION_CLOCK_CONTRACT.md",
       "sha256": "afd2bd7b3249d7cacacda43b357264c651770ee675ff9bd0114311a89fcd1a75",
       "size": 453
@@ -79,6 +84,11 @@
       "path": "docs/causality/R6C0V_RUNTIME_INVARIANTS.md",
       "sha256": "bd2e7c8df0855d23108c4f45eba8e8ad4ce2712517612da5c7fc471a3cb158ee",
       "size": 579
+    },
+    {
+      "path": "docs/causality/R6C2R_TIMESTAMP_PARSER_CONTRACT.md",
+      "sha256": "868552e384fb3923503deaa6f5738965fb5ef415b655c90803ede468a937387b",
+      "size": 1039
     },
     {
       "path": "docs/causality/inventory_publication_clock.md",
@@ -196,9 +206,29 @@
       "size": 439
     },
     {
+      "path": "schemas/r6c2-cross-layer-transition.schema.json",
+      "sha256": "c7f55ba6f344e7f07dea54d2f950f5f5b14dd1facfb7face9a2f6fc2baed18e6",
+      "size": 836
+    },
+    {
+      "path": "schemas/r6c2-layer-availability.schema.json",
+      "sha256": "ea22d4d9655b1d5fd85908923d8d95523abb3efc850fd98c1ac88d1f63037e00",
+      "size": 737
+    },
+    {
       "path": "schemas/transition-ledger.schema.json",
       "sha256": "0cf5bd16a743ced6e6bd09a8ce8ad4f6238b18a7553b844f6babd94562e37c7b",
       "size": 497
+    },
+    {
+      "path": "scripts/build_r6c2_layers.py",
+      "sha256": "4317f082217cc777de746f9d870ac556d33690cf85a7bf79cc53017e0f477ca7",
+      "size": 4093
+    },
+    {
+      "path": "scripts/finalize_r6c2.py",
+      "sha256": "e8c1f6752c9afd3570f3c309591e1afc704bd65b08f048a384d9ce563200ab80",
+      "size": 15991
     },
     {
       "path": "scripts/run_external_validation.py",
@@ -221,6 +251,26 @@
       "size": 78
     },
     {
+      "path": "src/banknifty_profiler/context/__init__.py",
+      "sha256": "1f8db643a8233f71e91fee8e8c6ddb7fe8ec5c84bc72757a418dc6ac9923da46",
+      "size": 188
+    },
+    {
+      "path": "src/banknifty_profiler/context/availability.py",
+      "sha256": "31b6a4108c2059e8b04619079c458db70b30ff102303716401262b4183bf0e36",
+      "size": 2757
+    },
+    {
+      "path": "src/banknifty_profiler/cross_layer/__init__.py",
+      "sha256": "d0d9a414bdb734fa29d2e5bfe395f9d9578c0ec0cdaff0f6c07331c9843e0f88",
+      "size": 140
+    },
+    {
+      "path": "src/banknifty_profiler/cross_layer/state.py",
+      "sha256": "64c44eb783211d42185b3acf2e89e7afe151707f284ced90edc9be6edab31244",
+      "size": 7126
+    },
+    {
       "path": "src/banknifty_profiler/divergence/__init__.py",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "size": 0
@@ -232,8 +282,8 @@
     },
     {
       "path": "src/banknifty_profiler/divergence/detector.py",
-      "sha256": "918886481ede58668ba157e9d03893b72b4ff049538ba9fa0a88e2db8f20563d",
-      "size": 7326
+      "sha256": "9a9b333add9992dbd7421ffe23d359145d848bcd5951acee4e4672b7c4d4947a",
+      "size": 7444
     },
     {
       "path": "src/banknifty_profiler/inventory/__init__.py",
@@ -297,8 +347,8 @@
     },
     {
       "path": "src/banknifty_profiler/raw_io/reader.py",
-      "sha256": "490751c7764c6d4d2d9b8bf552ecd989c18b29be94fdd3cc725952f60632b8b4",
-      "size": 6248
+      "sha256": "9873d578e4238193067d4d883ae9f279d8a86afcb6d529d6eae182358e949d2e",
+      "size": 6636
     },
     {
       "path": "src/banknifty_profiler/runtime/__init__.py",
@@ -314,6 +364,11 @@
       "path": "src/banknifty_profiler/runtime/configuration.py",
       "sha256": "cc20deff032b3af6ce3b732815a6f81e3227f4fc6f47915dc085f3d147577cbe",
       "size": 1559
+    },
+    {
+      "path": "src/banknifty_profiler/runtime/timestamps.py",
+      "sha256": "794b730e0b1f3c8e6bc7714e6524d14eb049057c813f0e377e2a32f9bde352b7",
+      "size": 3256
     },
     {
       "path": "tests/__init__.py",
@@ -389,6 +444,16 @@
       "path": "tests/unit/test_r6c0v_runtime_invariants.py",
       "sha256": "ca605ab9a73109db510acfb8a6b876816f5269c3d46ac07b0da9975473800a32",
       "size": 3491
+    },
+    {
+      "path": "tests/unit/test_r6c2_full_stack.py",
+      "sha256": "8a88b15336310af903992d098bc2b3c9691efc282277ec3e758607613b98aa9d",
+      "size": 4783
+    },
+    {
+      "path": "tests/unit/test_r6c2r_timestamps.py",
+      "sha256": "d9a9c46afa22c55d016a107aed42a5ff4adfa4cf1450cd226bbc932b0df519bd",
+      "size": 3768
     },
     {
       "path": "tests/unit/test_raw_participation.py",
