@@ -174,3 +174,9 @@ RESULT: PASS FOR ROOT-CAUSE REPAIR DIAGNOSTIC ONLY; rebuilt repaired cross path 
 
 2026-08-27 repaired-engine targeted verification and reseal
 RESULT: PASS; 216/216 tests (120 core callback/runner, 28 equivalence harness, 68 engine/API/runtime/cross-layer); py_compile and git diff --check PASS; real 3-4s inventory versus exact-2s basis fixture PASS; transactional persistence failure and successor-order regressions PASS; 26-file engine manifest SHA-256 7c13b44c9ae4fbc9c3317900866ddaf68800abe7b2c4d7a9f4e1749e41abc3b3; engine hash 980b6af26e9ca5957b97bafb235474e13d268c691f2cbf3797f1d53fff011602.
+
+2026-08-27 focused v12 invocation corrections
+RESULT: TWO PRE-ACCEPTANCE INVOCATION FAILURES RETAINED; wrong authorized-root level refused before analytics, then missing explicit one-session batch configs caused clean B to refuse six-session/config mismatch after incremental A; no source mutation or analytical rule change; partials preserved under /tmp/r6e1r_rejected_and_partial_diagnostics_20260826/focused_v12_invocation_* and excluded from acceptance.
+
+2026-08-27 final focused all-nine v12
+RESULT: PASS; exit 0; 21/21 components; 8/8 analytical ledgers; 9/9 schedules; 9/9 causal/GUI invariants; 72/72 checkpoint rows; 2/2 recovery probes; 8/8 source hashes; 2,340 measured runtime-open rows; all differences/refusals/future joins/backdating/duplicate IDs/prohibited or unmeasured opens/checkpoint failures/source mutations zero; 7/7 nonempty ledger crash boundaries exactly once; wall 22m09.73s; harness 1,328.957s; parent max RSS 1,586,204 KiB; child max RSS 803,968 KiB; summary 19b6c15f426b925fa6ec018d65477f4364242d65cfaaa5425423098d3861de15; state manifest d38ca5e40e60d87d117894df84386fb19b5e1c08347392838a86eef832d92fb3; state tree ece5d41515f182761e397b2bf06e1545daab6a91b6d313af18505fd01932a37f; evidence /opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_evidence/focused_nine_final_v12.
