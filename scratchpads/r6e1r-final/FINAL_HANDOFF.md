@@ -155,3 +155,10 @@ safety counters zero, and both actual session-local periodic refresh traces
 exact. Wall time was 8m54.59s; process peak RSS was 1,568,472 KiB. The remaining
 mandatory sequence begins with focused all-nine, then full-six all-nine; the
 deployment/tag prohibition still applies.
+
+Focused all-nine v13 then passed from pushed handoff commit
+`e01b5c6f7a6458923f71828c17d23f4afdefb10d`: 21/21 components, 8/8 ledgers,
+9/9 invariants, 9/9 schedules, 72/72 checkpoints, 2/2 recovery probes, and 8/8
+source hashes, with all failure/safety counters zero. Wall time was 57m10.47s;
+parent/child peak RSS was 1,775,736/895,316 KiB. Full six-session all-nine is
+the next mandatory gate; deployment and the verified tag remain prohibited.

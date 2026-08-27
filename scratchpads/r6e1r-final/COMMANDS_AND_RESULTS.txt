@@ -368,3 +368,13 @@ PERFORMANCE: 8m54.59s wall; 1,568,472 KiB process peak RSS; 900,372 KiB clean-ch
 2026-08-27 post-large diagnostic protected-service gate
 COMMAND: inspect PIDs, proc start ticks, user-service invocation IDs, NRestarts, and listeners
 RESULT: PASS; 8803 remains 380743/46015771/d0df21acd54a440788d89f7cad5b4827/NRestarts0; 8804 remains 465394/51980337/260291b2ae4a4c70a95a0a37722af61e/NRestarts0; 8805 and 18805 free.
+
+2026-08-27 fresh focused all-nine v13
+COMMAND: pinned clean e01b5c6 checkout; persistent hardened user service with AF_UNIX only; authorized August 19 fixture; original, one-record, variable, inside-line, empty/repeated, checkpoint-restart, analytical-boundary-restart, hourly-rotation, and large-chunk schedules
+RESULT: PASS; service exit 0; 21/21 components, 8/8 ledgers, 9/9 causality invariants, 9/9 schedules, 72/72 checkpoint rows, 2/2 recovery probes, 8/8 source hashes, and 9/9 feasibility rows. All failure/difference/refusal/remainder/source-mutation counters 0. Runtime opens 2,508 measured, prohibited/unmeasured 0. Every schedule semantic/ledger SHA-256 exact at 68070652aaa24a54b3fb30649e7869731f0c37835d59cc1e315e332502d7cb69 / 27466e2caaa730b7a4999be7f6b413f418e3fcd45ff5fd3b34a214350d7613a1.
+SCHEDULE DETAILS: one-record 46,550/46,550 and three causal peer repolls with zero remainder; variable 6,312 polls and nine sizes; partial-line 17/17; empty polls 34; checkpoint restarts 7; analytical-boundary restarts 6/6 nonempty material ledgers exactly once with availability/stale ledgers empty; hourly rotations 6/6; large refreshes 2/2 with every trace assertion true and zero future joins/backdating/duplicates/tolerance violations.
+PERFORMANCE: harness 3,429.450s; wall 57m10.47s; parent peak RSS 1,775,736 KiB; child peak RSS 895,316 KiB; cgroup peak 2,408,161,280 bytes. Summary/state-manifest/state-tree/time SHA-256: 82ae10e47c06c7ed5d1a40545982ae2f43aae357654a173783d20be73f6f4576 / 6a0a9e9a4fd0acc4ad108a20051ad47f6b3101fe8cf10df267855bded14c50cc / 6c7e595ff66a9b6855329038eafaf18f5d69e282bb265f2d7766c70e11f9b452 / 9c715e3bbbce2c365c40901f76389ea45b6af558a6879448a84d761cd1e247f7.
+
+2026-08-27 post-focused integrity/interference gate
+COMMAND: verify focused fixture manifest; inspect pinned checkout cleanliness; inspect protected service PID/start/invocation/restart identities and listener set
+RESULT: PASS; fixture and checkout exact; 8803/8804 identities unchanged with NRestarts0; 8805/18805 remain free.
