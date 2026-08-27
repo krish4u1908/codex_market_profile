@@ -162,6 +162,8 @@
       for (const family of FAMILIES) {
         const label = document.createElement("label");
         label.className = "toggle";
+        label.dataset.horizonChild = horizon;
+        label.classList.toggle("hidden", !state.settings.masters[horizon]);
         const child = document.createElement("input");
         child.type = "checkbox";
         child.dataset.child = `${horizon}|${family}`;
@@ -200,6 +202,10 @@
     $$('[data-master]').forEach((input) => {
       input.onchange = () => {
         state.settings.masters[input.dataset.master] = input.checked;
+        const row = input.closest(".horizon-row");
+        row?.querySelectorAll("[data-horizon-child]").forEach((label) => {
+          label.classList.toggle("hidden", !input.checked);
+        });
         persist(); renderCharts();
       };
     });

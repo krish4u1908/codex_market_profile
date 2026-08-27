@@ -14,14 +14,22 @@ class ShadowState:
         self.ingestor = ingestor
         self.activation = activation
         self.orchestrator = orchestrator
+        bind_quality_index = getattr(
+            orchestrator, "bind_quality_identity_index", None
+        )
+        quality_index = getattr(ingestor, "_quality_seen", None)
+        if callable(bind_quality_index) and isinstance(quality_index, set):
+            bind_quality_index(quality_index)
         self.started = datetime.now(IST)
         self.last_error = ""
 
     def analytical_snapshot(self):
-        return (
-            self.orchestrator.snapshot(flush_dirty=False)
-            if self.orchestrator is not None else {}
-        )
+        if self.orchestrator is None:
+            return {}
+        sealed_view = getattr(self.orchestrator, "sealed_read_view", None)
+        if callable(sealed_view):
+            return sealed_view()
+        return self.orchestrator.snapshot(flush_dirty=False)
 
     def ages(self):
         current = pd.Timestamp(datetime.now(IST))
@@ -29,10 +37,13 @@ class ShadowState:
         # valid-evidence clock so null depth messages cannot imply readiness.
         receipts = self.ingestor.latest_valid or self.ingestor.latest
         output = {}
-        for key, value in receipts.items():
+        for key in ("INDEX", "FUTURES", "FUTURES_OI", "CE", "PE", "OPTION_OI"):
             try:
+                value = receipts.get(key)
+                if value is None:
+                    continue
                 output[key] = (current - pd.Timestamp(value)).total_seconds()
-            except (TypeError, ValueError):
+            except (RuntimeError, TypeError, ValueError):
                 output[key] = None
         return output
 
@@ -99,19 +110,21 @@ class ShadowState:
             "started_at": self.started.isoformat(),
         }
 
-    def readiness(self):
-        availability = self.availability()
+    def readiness(self, availability=None, causality=None):
+        if availability is None:
+            availability = self.availability()
         checkpoint = self.ingestor.checkpoint_health()
-        causality = (
-            self.orchestrator.causality_metrics()
-            if self.orchestrator is not None
-            and hasattr(self.orchestrator, "causality_metrics")
-            else {
-                "valid_basis_pairs": 0,
-                "future_joins": 0,
-                "synchronization_tolerance_violations": 0,
-            }
-        )
+        if causality is None:
+            causality = (
+                self.orchestrator.causality_metrics()
+                if self.orchestrator is not None
+                and hasattr(self.orchestrator, "causality_metrics")
+                else {
+                    "valid_basis_pairs": 0,
+                    "future_joins": 0,
+                    "synchronization_tolerance_violations": 0,
+                }
+            )
         reasons = []
         if self.last_error:
             reasons.append(self.last_error)

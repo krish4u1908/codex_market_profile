@@ -7,12 +7,16 @@ an analytical snapshot, ledger row, exception, or configuration wholesale.
 """
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import hashlib
 import json
 import math
 from pathlib import Path
 from inspect import signature
+from threading import Lock
 from urllib.parse import parse_qs, urlparse
 
 from banknifty_profiler.gui.adapter import PRODUCT_CLASSIFICATION, SESSIONS
@@ -158,14 +162,98 @@ def _read_snapshot(callable_: object, session_date: str | None = None) -> object
 
 def _snapshot(state: object, session_date: str | None = None) -> Mapping[str, object]:
     orchestrator = getattr(state, "orchestrator", None)
+    sealed_view = getattr(orchestrator, "sealed_read_view", None)
     snapshot = getattr(orchestrator, "snapshot", None)
-    if callable(snapshot):
+    if callable(sealed_view):
+        value = _read_snapshot(sealed_view, session_date)
+    elif callable(snapshot):
         value = _read_snapshot(snapshot, session_date)
     elif session_date:
         value = {}
     else:
         value = state.analytical_snapshot()
     return value if isinstance(value, Mapping) else {}
+
+
+def _snapshot_and_availability(
+    state: object,
+    session_date: str | None = None,
+    *,
+    operational: bool,
+) -> tuple[
+    Mapping[str, object], dict[str, object], dict[str, int] | None
+]:
+    """Capture one analytical generation and its matching availability view."""
+    orchestrator = getattr(state, "orchestrator", None)
+    generation = getattr(orchestrator, "sealed_operational_generation", None)
+    if operational and callable(generation):
+        value = generation()
+        if not isinstance(value, tuple) or len(value) != 3:
+            raise ValueError("invalid sealed operational generation")
+        snapshot, availability, causality = value
+        if not all(
+            isinstance(item, Mapping)
+            for item in (snapshot, availability, causality)
+        ):
+            raise ValueError("invalid sealed operational generation")
+        return (
+            snapshot,
+            _safe_availability(availability),
+            _validated_causality(causality),
+        )
+    composite = getattr(orchestrator, "sealed_operational_read_view", None)
+    if operational and callable(composite):
+        value = composite()
+        if not isinstance(value, tuple) or len(value) != 2:
+            raise ValueError("invalid sealed operational read view")
+        snapshot, availability = value
+        if not isinstance(snapshot, Mapping) or not isinstance(
+            availability, Mapping
+        ):
+            raise ValueError("invalid sealed operational read view")
+        return snapshot, _safe_availability(availability), None
+    snapshot = _snapshot(state, session_date)
+    availability = _availability_for(
+        state, snapshot, _gui(snapshot), operational=operational,
+    )
+    return snapshot, availability, None
+
+
+def _validated_causality(values: Mapping[str, object]) -> dict[str, int]:
+    """Validate one constant-size sealed causality mapping."""
+    result: dict[str, int] = {}
+    for field_name in (
+        "valid_basis_pairs", "future_joins",
+        "synchronization_tolerance_violations",
+    ):
+        value = values.get(field_name, 0)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(
+                f"invalid sealed public causality counter: {field_name}"
+            )
+        result[field_name] = value
+    return result
+
+
+def _causality_for(
+    state: object, snapshot: Mapping[str, object],
+) -> dict[str, int]:
+    """Read runtime-wide sealed causality with a per-snapshot fallback.
+
+    Readiness and audit are process gates, so they must not hide a violation in
+    an older retained session merely because the latest session is clean.  The
+    production orchestrator publishes a constant-size aggregate; legacy state
+    objects without that method fall back to their selected sealed snapshot.
+    """
+    orchestrator = getattr(state, "orchestrator", None)
+    method = getattr(orchestrator, "causality_metrics", None)
+    if callable(method):
+        values = method()
+    else:
+        direct = snapshot.get("public_causality_counters")
+        values = direct if isinstance(direct, Mapping) else {}
+    values = values if isinstance(values, Mapping) else {}
+    return _validated_causality(values)
 
 
 def _gui(snapshot: Mapping[str, object]) -> Mapping[str, object]:
@@ -175,11 +263,14 @@ def _gui(snapshot: Mapping[str, object]) -> Mapping[str, object]:
 
 def _artifact_rows(
     snapshot: Mapping[str, object], gui: Mapping[str, object], name: str,
-) -> list[dict[str, object]]:
+) -> Sequence[Mapping[str, object]]:
     snapshot_name, _ = ARTIFACT_SPECS[name]
     direct = snapshot.get(snapshot_name)
     if isinstance(direct, list):
-        return [dict(row) for row in direct if isinstance(row, Mapping)]
+        # Canonical sealed outputs contain mapping rows.  Return the published
+        # sequence by reference so bounded endpoints project only their tail,
+        # instead of first copying every dense row in the session.
+        return direct
     return _unpack(gui.get(name, {}))
 
 
@@ -309,95 +400,437 @@ def _counts(value: object) -> dict[str, int | float]:
 
 
 def _timestamp(value: object):
+    if value is None:
+        return None
+    return parse_timestamp(value, field_name="public audit clock")
+
+
+def _audit_timestamp(value: object, field_name: str):
+    """Parse an optional audit clock, refusing malformed/naive evidence."""
     if value in (None, ""):
         return None
-    try:
-        return parse_timestamp(value, field_name="public audit clock")
-    except (TypeError, ValueError):
-        return None
+    parsed = _timestamp(value)
+    if parsed is None:
+        raise ValueError(f"invalid public audit clock: {field_name}")
+    return parsed
 
 
-def _audit_measurements(
-    state: object, snapshot: Mapping[str, object],
-) -> dict[str, object]:
-    """Measure public audit counters from current/persisted runtime artifacts."""
-    orchestrator = getattr(state, "orchestrator", None)
-    causality_method = getattr(orchestrator, "causality_metrics", None)
-    try:
-        causality = causality_method() if callable(causality_method) else {}
-    except (TypeError, ValueError, OSError):
-        causality = {}
-    causality = causality if isinstance(causality, Mapping) else {}
+_AUDIT_IDENTITY_FIELDS = (
+    "event_id", "transition_id", "record_id", "episode_id",
+)
+_AUDIT_EVIDENCE_FIELDS = (
+    "effective_timestamp", "confirmation_timestamp",
+    "state_entry_timestamp", "observation_timestamp",
+    "receipt_timestamp", "evidence_receipt_timestamp",
+    "availability_timestamp", "control_effective_timestamp",
+    "index_receipt_timestamp", "futures_receipt_timestamp",
+)
+_AUDIT_SNAPSHOT_IDENTITIES = {
+    "episodes": "episode_id", "dependencies": "episode_id",
+    "lifecycle": "record_id", "participation_dense": "record_id",
+    "participation_transitions": "transition_id",
+    "participation_summaries": "episode_id",
+    "compatibility_snapshots": "episode_id",
+    "cross_layer_transitions": "transition_id",
+}
+_LEGACY_AUDIT_IDENTITY_LIMIT = 5_000
 
+
+@dataclass
+class _LedgerAuditState:
+    ledger: object
+    boundary: object | None = None
+    row_count: int = 0
+    timestamp_backdating: int = 0
+    duplicate_ids: int = 0
+    seen_ids: set[str] = field(default_factory=set)
+    refusal_tail: deque[dict[str, object]] = field(
+        default_factory=lambda: deque(maxlen=500)
+    )
+    legacy_complete: bool = False
+
+
+def _audit_snapshot_generation(
+    snapshot: object, ledger_name: str,
+) -> tuple[object, ...]:
+    """Validate the monotonic token used for a stable ledger double-collect."""
+    if not isinstance(snapshot, Mapping):
+        raise ValueError(f"public audit snapshot is not an object: {ledger_name}")
+    value = snapshot.get("generation")
+    if not isinstance(value, (tuple, list)) or len(value) != 7:
+        raise ValueError(f"public audit snapshot has no generation: {ledger_name}")
+    existed, device, inode, size, mtime_ns, ctime_ns, digest = value
+    if not isinstance(existed, bool):
+        raise ValueError(f"invalid public audit generation: {ledger_name}")
+    for item in (device, inode, mtime_ns, ctime_ns):
+        if item is not None and (isinstance(item, bool) or not isinstance(item, int)):
+            raise ValueError(f"invalid public audit generation: {ledger_name}")
+    if isinstance(size, bool) or not isinstance(size, int) or size < 0:
+        raise ValueError(f"invalid public audit generation: {ledger_name}")
+    if (
+        not isinstance(digest, str)
+        or len(digest) != 64
+        or any(character not in "0123456789abcdef" for character in digest)
+    ):
+        raise ValueError(f"invalid public audit generation: {ledger_name}")
+    return tuple(value)
+
+
+def _trusted_ledger_identity_count(
+    state: object, ledger_name: str,
+) -> int | None:
+    """Return a runtime-validated unique-ID count without allocating a set."""
     ingestor = getattr(state, "ingestor", None)
-    ledgers = getattr(ingestor, "ledgers", {})
-    ledgers = ledgers if isinstance(ledgers, Mapping) else {}
+    if ledger_name == "normalized_raw_events":
+        identities = getattr(ingestor, "_normalized_seen", None)
+        return len(identities) if isinstance(identities, set) else None
+    if ledger_name == "raw_file_checkpoints":
+        identities = getattr(ingestor, "_checkpoint_seen", None)
+        return len(identities) if isinstance(identities, set) else None
+    if ledger_name == "refusals_data_quality":
+        orchestrator = getattr(state, "orchestrator", None)
+        shared_count = getattr(
+            orchestrator, "trusted_quality_identity_count", None
+        )
+        if callable(shared_count):
+            value = shared_count()
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError("invalid shared refusal identity count")
+            return value
+        identities = getattr(ingestor, "_quality_seen", None)
+        return len(identities) if isinstance(identities, set) else None
+    orchestrator = getattr(state, "orchestrator", None)
+    indexes = getattr(orchestrator, "_ledger_content", None)
+    if isinstance(indexes, Mapping):
+        identities = indexes.get(ledger_name)
+        if isinstance(identities, Mapping):
+            return len(identities)
+    return None
+
+
+def _fallback_snapshot_audit(
+    snapshot: Mapping[str, object],
+) -> dict[str, int]:
+    """One-generation fallback for legacy orchestrators without sealed counts."""
+    availability = snapshot.get("availability", {})
+    calculation = _audit_timestamp(
+        availability.get("calculation_timestamp")
+        if isinstance(availability, Mapping) else None,
+        "calculation_timestamp",
+    )
     duplicate_ids = 0
     timestamp_backdating = 0
-    measured_ledger_rows = 0
-    identity_fields = ("event_id", "transition_id", "record_id", "episode_id")
-    evidence_fields = (
-        "effective_timestamp", "confirmation_timestamp",
-        "state_entry_timestamp", "observation_timestamp",
-        "receipt_timestamp", "evidence_receipt_timestamp",
-        "availability_timestamp", "control_effective_timestamp",
-        "index_receipt_timestamp", "futures_receipt_timestamp",
-    )
-    for ledger in ledgers.values():
-        try:
-            rows = ledger.rows() if hasattr(ledger, "rows") else []
-        except (OSError, ValueError, json.JSONDecodeError):
-            rows = []
-        identities = []
-        for row in rows:
-            if not isinstance(row, Mapping):
-                continue
-            measured_ledger_rows += 1
-            identity = next(
-                (str(row[field]) for field in identity_fields if row.get(field)),
-                "",
-            )
-            if identity:
-                identities.append(identity)
-            publication = _timestamp(row.get("publication_timestamp"))
-            if publication is not None and any(
-                evidence is not None and evidence > publication
-                for evidence in (_timestamp(row.get(field)) for field in evidence_fields)
-            ):
-                timestamp_backdating += 1
-        duplicate_ids += len(identities) - len(set(identities))
-
-    calculation = _timestamp(
-        (snapshot.get("availability") or {}).get("calculation_timestamp")
-        if isinstance(snapshot.get("availability"), Mapping) else None
-    )
-    snapshot_identities = {
-        "episodes": "episode_id", "dependencies": "episode_id",
-        "lifecycle": "record_id", "participation_dense": "record_id",
-        "participation_transitions": "transition_id",
-        "participation_summaries": "episode_id",
-        "compatibility_snapshots": "episode_id",
-        "cross_layer_transitions": "transition_id",
-    }
-    measured_snapshot_rows = 0
-    for artifact, identity_field in snapshot_identities.items():
+    measured_rows = 0
+    for artifact, identity_field in _AUDIT_SNAPSHOT_IDENTITIES.items():
         rows = snapshot.get(artifact, [])
         if not isinstance(rows, list):
-            continue
-        identities = []
+            raise ValueError(f"public audit artifact is not a list: {artifact}")
+        identities: list[str] = []
         for row in rows:
             if not isinstance(row, Mapping):
-                continue
-            measured_snapshot_rows += 1
+                raise ValueError(f"public audit row is not an object: {artifact}")
+            measured_rows += 1
             if row.get(identity_field):
                 identities.append(str(row[identity_field]))
             if calculation is not None and any(
                 evidence is not None and evidence > calculation
-                for evidence in (_timestamp(row.get(field)) for field in evidence_fields)
+                for evidence in (
+                    _audit_timestamp(row.get(field), field)
+                    for field in _AUDIT_EVIDENCE_FIELDS
+                )
             ):
                 timestamp_backdating += 1
         duplicate_ids += len(identities) - len(set(identities))
+    return {
+        "timestamp_backdating": timestamp_backdating,
+        "duplicate_analytical_ids": duplicate_ids,
+        "measured_snapshot_rows": measured_rows,
+    }
 
+
+class _AuditReadCache:
+    """Bounded, thread-safe incremental view of append-only audit evidence."""
+
+    def __init__(self):
+        self._lock = Lock()
+        self._ledgers: dict[str, _LedgerAuditState] = {}
+        self._snapshot_token: tuple[object, ...] | None = None
+        self._snapshot_counters: dict[str, int] = {}
+
+    @staticmethod
+    def _sealed_snapshot_counters(
+        state: object, snapshot: Mapping[str, object],
+    ) -> dict[str, int]:
+        direct = snapshot.get("public_audit_counters")
+        if isinstance(direct, Mapping):
+            values = direct
+        else:
+            orchestrator = getattr(state, "orchestrator", None)
+            method = getattr(orchestrator, "sealed_audit_measurements", None)
+            if not callable(method):
+                return {}
+            session = str(snapshot.get("session_date", "")) or None
+            values = method(session)
+        result: dict[str, int] = {}
+        for name in (
+            "timestamp_backdating", "duplicate_analytical_ids",
+            "measured_snapshot_rows",
+        ):
+            value = values.get(name) if isinstance(values, Mapping) else None
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"invalid sealed public audit counter: {name}")
+            result[name] = value
+        return result
+
+    def _advance_ledger(
+        self,
+        state: object,
+        name: str,
+        ledger: object,
+        preloaded_audit: Mapping[str, object] | None = None,
+    ) -> _LedgerAuditState:
+        audit_snapshot = getattr(ledger, "audit_snapshot", None)
+        if callable(audit_snapshot):
+            snapshot = (
+                preloaded_audit
+                if preloaded_audit is not None
+                else audit_snapshot()
+            )
+            if not isinstance(snapshot, Mapping):
+                raise ValueError(f"public audit snapshot is not an object: {name}")
+            counters: dict[str, int] = {}
+            for field_name in (
+                "row_count", "timestamp_backdating", "duplicate_ids",
+            ):
+                value = snapshot.get(field_name)
+                if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                    raise ValueError(
+                        f"invalid public ledger audit counter {field_name}: {name}"
+                    )
+                counters[field_name] = value
+            raw_tail = snapshot.get("tail")
+            if not isinstance(raw_tail, list) or len(raw_tail) > 500:
+                raise ValueError(f"invalid public ledger audit tail: {name}")
+            tail: deque[dict[str, object]] = deque(maxlen=500)
+            for row in raw_tail:
+                if not isinstance(row, Mapping):
+                    raise ValueError(f"public audit tail row is not an object: {name}")
+                # Revalidate optional clocks at the API trust boundary. The
+                # production ledger has already accounted for backdating.
+                _timestamp(row.get("publication_timestamp"))
+                for field_name in _AUDIT_EVIDENCE_FIELDS:
+                    _timestamp(row.get(field_name))
+                if name == "refusals_data_quality":
+                    tail.append(dict(row))
+            trusted_count = _trusted_ledger_identity_count(state, name)
+            if trusted_count is not None:
+                if trusted_count != counters["row_count"]:
+                    raise ValueError(
+                        f"public audit ledger identity count mismatch: {name}"
+                    )
+                # Production producers admit a row only after consulting their
+                # all-history uniqueness index. A disagreement (including the
+                # narrow append-before-index-update window) fails closed instead
+                # of inventing a duplicate total from two generations.
+                counters["duplicate_ids"] = 0
+            updated = _LedgerAuditState(
+                ledger=ledger,
+                row_count=counters["row_count"],
+                timestamp_backdating=counters["timestamp_backdating"],
+                duplicate_ids=counters["duplicate_ids"],
+                refusal_tail=tail,
+                legacy_complete=True,
+            )
+            self._ledgers[name] = updated
+            return updated
+
+        prior = self._ledgers.get(name)
+        if prior is None or prior.ledger is not ledger:
+            prior = _LedgerAuditState(ledger=ledger)
+        if prior.legacy_complete:
+            return prior
+
+        row_count = prior.row_count
+        backdating = prior.timestamp_backdating
+        duplicates = prior.duplicate_ids
+        pending_ids: set[str] = set()
+        refusal_tail = deque(prior.refusal_tail, maxlen=500)
+        trusted_count = _trusted_ledger_identity_count(state, name)
+
+        def consume(row: object) -> None:
+            nonlocal row_count, backdating, duplicates
+            if not isinstance(row, Mapping):
+                raise ValueError(f"public audit ledger row is not an object: {name}")
+            identity = next(
+                (
+                    str(row[field]) for field in _AUDIT_IDENTITY_FIELDS
+                    if row.get(field)
+                ),
+                "",
+            )
+            if not identity:
+                raise ValueError(f"public audit ledger row has no identity: {name}")
+            if trusted_count is None:
+                if identity in prior.seen_ids or identity in pending_ids:
+                    duplicates += 1
+                elif (
+                    len(prior.seen_ids) + len(pending_ids)
+                    >= _LEGACY_AUDIT_IDENTITY_LIMIT
+                ):
+                    raise ValueError(
+                        f"legacy public audit identity bound exceeded: {name}"
+                    )
+                pending_ids.add(identity)
+            publication = _audit_timestamp(
+                row.get("publication_timestamp"), "publication_timestamp"
+            )
+            if publication is not None and any(
+                evidence is not None and evidence > publication
+                for evidence in (
+                    _audit_timestamp(row.get(field), field)
+                    for field in _AUDIT_EVIDENCE_FIELDS
+                )
+            ):
+                backdating += 1
+            row_count += 1
+            if name == "refusals_data_quality":
+                refusal_tail.append(dict(row))
+
+        scanner = getattr(ledger, "scan_from", None)
+        if callable(scanner):
+            boundary = scanner(prior.boundary, consume)
+            legacy_complete = False
+        else:
+            rows_method = getattr(ledger, "rows", None)
+            rows = rows_method() if callable(rows_method) else []
+            if not isinstance(rows, list):
+                raise ValueError(f"public audit ledger rows are not a list: {name}")
+            for row in rows:
+                consume(row)
+            boundary = prior.boundary
+            legacy_complete = True
+
+        # Production ledgers are identity-validated during runtime startup and
+        # on every append.  A count disagreement indicates an external append,
+        # an incomplete producer update, or corruption, so the request fails
+        # without committing this scan and can be retried safely.
+        trusted_after = _trusted_ledger_identity_count(state, name)
+        if trusted_after is not None and row_count != trusted_after:
+            raise ValueError(f"public audit ledger identity count mismatch: {name}")
+
+        updated = _LedgerAuditState(
+            ledger=ledger,
+            boundary=boundary,
+            row_count=row_count,
+            timestamp_backdating=backdating,
+            duplicate_ids=duplicates,
+            seen_ids=prior.seen_ids,
+            refusal_tail=refusal_tail,
+            legacy_complete=legacy_complete,
+        )
+        updated.seen_ids.update(pending_ids)
+        self._ledgers[name] = updated
+        return updated
+
+    def read(
+        self, state: object, snapshot: Mapping[str, object], limit: int,
+    ) -> dict[str, object]:
+        with self._lock:
+            ingestor = getattr(state, "ingestor", None)
+            ledgers = getattr(ingestor, "ledgers", {})
+            ledgers = ledgers if isinstance(ledgers, Mapping) else {}
+            active = set(map(str, ledgers))
+            for stale in set(self._ledgers) - active:
+                self._ledgers.pop(stale, None)
+            items = sorted(ledgers.items(), key=lambda item: str(item[0]))
+            production = bool(items) and all(
+                callable(getattr(ledger, "audit_snapshot", None))
+                for _name, ledger in items
+            )
+            stable: dict[str, Mapping[str, object]] | None = None
+            if production:
+                # Two identical ordered collects provide one real overlap point
+                # for independently locked monotonic ledger generations. Retry
+                # boundedly rather than reporting a vector that never existed.
+                for _attempt in range(4):
+                    first = {
+                        str(name): ledger.audit_snapshot()
+                        for name, ledger in items
+                    }
+                    second = {
+                        str(name): ledger.audit_snapshot()
+                        for name, ledger in items
+                    }
+                    if all(
+                        _audit_snapshot_generation(first[name], name)
+                        == _audit_snapshot_generation(second[name], name)
+                        for name in first
+                    ):
+                        stable = second
+                        break
+                if stable is None:
+                    raise ValueError(
+                        "public audit ledgers changed during stable collection"
+                    )
+            states = [
+                self._advance_ledger(
+                    state,
+                    str(name),
+                    ledger,
+                    stable.get(str(name)) if stable is not None else None,
+                )
+                for name, ledger in items
+            ]
+
+            sealed = self._sealed_snapshot_counters(state, snapshot)
+            if sealed:
+                snapshot_counters = sealed
+            else:
+                gui = snapshot.get("gui_payload", {})
+                projection = (
+                    gui.get("projection_hash") if isinstance(gui, Mapping) else ""
+                )
+                token = (
+                    str(snapshot.get("session_date", "")), projection,
+                    id(snapshot.get("participation_dense")),
+                )
+                if token != self._snapshot_token:
+                    self._snapshot_counters = _fallback_snapshot_audit(snapshot)
+                    self._snapshot_token = token
+                snapshot_counters = self._snapshot_counters
+
+            refusal = self._ledgers.get("refusals_data_quality")
+            refusal_rows = list(refusal.refusal_tail)[-limit:] if refusal else []
+            return {
+                "refusals": refusal_rows,
+                "refusal_count": refusal.row_count if refusal else 0,
+                "timestamp_backdating": sum(
+                    item.timestamp_backdating for item in states
+                ) + snapshot_counters["timestamp_backdating"],
+                "duplicate_analytical_ids": sum(
+                    item.duplicate_ids for item in states
+                ) + snapshot_counters["duplicate_analytical_ids"],
+                "measured_ledger_rows": sum(item.row_count for item in states),
+                "measured_snapshot_rows": snapshot_counters[
+                    "measured_snapshot_rows"
+                ],
+            }
+
+
+def _audit_measurements(
+    state: object,
+    snapshot: Mapping[str, object],
+    cached: Mapping[str, object],
+    causality: Mapping[str, int] | None = None,
+) -> dict[str, object]:
+    """Combine sealed/incremental counters with current constant-size gates."""
+    causality = (
+        _validated_causality(causality)
+        if causality is not None
+        else _causality_for(state, snapshot)
+    )
+
+    ingestor = getattr(state, "ingestor", None)
     contract = getattr(ingestor, "c", {})
     contract = contract if isinstance(contract, Mapping) else {}
     open_audit = contract.get("runtime_source_open_audit", {})
@@ -410,31 +843,40 @@ def _audit_measurements(
         "synchronization_tolerance_violations": _primitive(
             causality.get("synchronization_tolerance_violations")
         ),
-        "timestamp_backdating": timestamp_backdating,
-        "duplicate_analytical_ids": duplicate_ids,
+        "timestamp_backdating": cached["timestamp_backdating"],
+        "duplicate_analytical_ids": cached["duplicate_analytical_ids"],
         "prohibited_runtime_opens": prohibited_opens,
         "manifest_verified": bool(contract.get("engine_source_verified", False)),
-        "measured_ledger_rows": measured_ledger_rows,
-        "measured_snapshot_rows": measured_snapshot_rows,
+        "measured_ledger_rows": cached["measured_ledger_rows"],
+        "measured_snapshot_rows": cached["measured_snapshot_rows"],
     }
 
 
 def _readiness(state: object) -> dict[str, object]:
     orchestrator = getattr(state, "orchestrator", None)
-    snapshot = _snapshot(state)
-    availability = _availability_for(
-        state, snapshot, _gui(snapshot), operational=True,
+    snapshot, availability, generation_causality = _snapshot_and_availability(
+        state, operational=True,
+    )
+    causality = (
+        generation_causality
+        if generation_causality is not None
+        else _causality_for(state, snapshot)
     )
     try:
-        source = state.readiness()
+        readiness = state.readiness
+        parameters = signature(readiness).parameters
+        kwargs = {}
+        if "availability" in parameters:
+            kwargs["availability"] = availability
+        if "causality" in parameters:
+            kwargs["causality"] = causality
+        source = readiness(**kwargs)
     except (AttributeError, TypeError, ValueError):
         source = {}
     if (not isinstance(source, Mapping) or not source) and orchestrator is not None:
         ingestor = getattr(state, "ingestor", None)
         checkpoint_health = getattr(ingestor, "checkpoint_health", None)
         checkpoint = checkpoint_health() if callable(checkpoint_health) else {"valid": True}
-        causality_metrics = getattr(orchestrator, "causality_metrics", None)
-        causality = causality_metrics() if callable(causality_metrics) else {}
         config = getattr(ingestor, "c", {}) if ingestor is not None else {}
         reasons = []
         if getattr(state, "last_error", ""):
@@ -480,6 +922,10 @@ def _readiness(state: object) -> dict[str, object]:
         reasons.append("STALE_DATA" if market_seen else "REQUIRED_MARKET_INPUTS_UNAVAILABLE")
     if availability.get("overall_state") == "NO_VALID_MARKET_DATA":
         reasons.append("REQUIRED_MARKET_INPUTS_UNAVAILABLE")
+    if causality.get("future_joins"):
+        reasons.append("FUTURE_JOIN_DETECTED")
+    if causality.get("synchronization_tolerance_violations"):
+        reasons.append("SYNCHRONIZATION_TOLERANCE_VIOLATION")
     reasons = list(dict.fromkeys(reasons))
     ready = bool(source.get("ready", not reasons)) and not reasons
     result = {
@@ -510,7 +956,8 @@ def _limit(query: Mapping[str, list[str]], default: int, maximum: int) -> int:
 
 
 def _tail_response(
-    rows: list[dict[str, object]], fields: Sequence[str], limit: int, session: str,
+    rows: Sequence[Mapping[str, object]], fields: Sequence[str], limit: int,
+    session: str,
 ) -> dict[str, object]:
     selected = rows[-limit:]
     return {
@@ -526,24 +973,11 @@ def _session(snapshot: Mapping[str, object], gui: Mapping[str, object]) -> str:
     return str(snapshot.get("session_date") or gui.get("date") or "")
 
 
-def _material_resolution(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
-    """Retain canonical mechanism changes, never dense repeated display rows."""
-    result = []
-    previous: dict[str, object] = {}
-    for row in rows:
-        episode = str(row.get("episode_id", ""))
-        mechanism = row.get("resolution_mechanism_native")
-        if previous.get(episode) == mechanism:
-            continue
-        previous[episode] = mechanism
-        result.append(dict(row))
-    return result
-
-
 def _chart(
     state: object,
     snapshot: Mapping[str, object],
     gui: Mapping[str, object],
+    availability: Mapping[str, object],
     *,
     operational: bool,
 ) -> dict[str, object]:
@@ -552,10 +986,10 @@ def _chart(
     episodes = _artifact_rows(snapshot, gui, "episodes")
     dependencies = _artifact_rows(snapshot, gui, "dependencies")
     lifecycle = _artifact_rows(snapshot, gui, "lifecycle")
-    resolution = _material_resolution(_artifact_rows(snapshot, gui, "resolution_mechanisms"))
-    availability = _availability_for(
-        state, snapshot, gui, operational=operational,
-    )
+    # Production GUI projection seals only material mechanism changes. Reading
+    # that packed surface avoids rescanning/copying the dense resolution ledger
+    # (164k+ rows in the canonical six-session reference) on every refresh.
+    resolution = _unpack(gui.get("resolution_mechanisms", {}))
     date = _session(snapshot, gui)
     stale_warning = operational and (
         availability.get("divergence_state") == "STALE_DATA"
@@ -609,6 +1043,13 @@ def _selected_session(query: Mapping[str, list[str]]) -> tuple[str | None, bool]
 
 def _available_replays(state: object) -> list[str]:
     orchestrator = getattr(state, "orchestrator", None)
+    session_dates = getattr(orchestrator, "sealed_session_dates", None)
+    if callable(session_dates):
+        try:
+            available = set(session_dates())
+        except (TypeError, ValueError, OSError):
+            return []
+        return [date for date in SESSIONS if date in available]
     outputs = getattr(orchestrator, "_outputs", None)
     if not isinstance(outputs, Mapping):
         outputs = getattr(orchestrator, "outputs", None)
@@ -635,7 +1076,12 @@ def _available_replays(state: object) -> list[str]:
     ]
 
 
-def _response_for(state: object, path: str, query: Mapping[str, list[str]]) -> tuple[dict[str, object], int]:
+def _response_for(
+    state: object,
+    path: str,
+    query: Mapping[str, list[str]],
+    audit_cache: _AuditReadCache | None = None,
+) -> tuple[dict[str, object], int]:
     if path == "/api/health":
         started = getattr(state, "started", None)
         return {
@@ -655,13 +1101,12 @@ def _response_for(state: object, path: str, query: Mapping[str, list[str]]) -> t
             "error": "REPLAY_SESSION_UNAVAILABLE",
             "session_date": selected,
         }, 404
-    snapshot = _snapshot(state, selected)
+    operational = selected is None
+    snapshot, availability, generation_causality = _snapshot_and_availability(
+        state, selected, operational=operational,
+    )
     gui = _gui(snapshot)
     session = _session(snapshot, gui)
-    operational = selected is None
-    availability = _availability_for(
-        state, snapshot, gui, operational=operational,
-    )
 
     if path == "/api/status":
         analytical_counts = _counts(snapshot.get("counts", {}))
@@ -698,7 +1143,7 @@ def _response_for(state: object, path: str, query: Mapping[str, list[str]]) -> t
         }, 200
     if path == "/api/chart":
         return _chart(
-            state, snapshot, gui, operational=operational,
+            state, snapshot, gui, availability, operational=operational,
         ), 200
     if path == "/api/availability":
         return {
@@ -754,20 +1199,24 @@ def _response_for(state: object, path: str, query: Mapping[str, list[str]]) -> t
             "participation_count": len(participation),
         }, 200
     if path == "/api/audit":
-        ledgers = getattr(state.ingestor, "ledgers", {})
-        refusal_ledger = ledgers.get("refusals_data_quality") if isinstance(ledgers, Mapping) else None
-        rows = refusal_ledger.rows() if hasattr(refusal_ledger, "rows") else []
         limit = _limit(query, 100, 500)
+        cache = audit_cache if audit_cache is not None else _AuditReadCache()
+        audit = cache.read(state, snapshot, limit)
         allowed = (
             "event_id", "session_date", "effective_timestamp",
             "publication_timestamp", "status", "reason",
         )
-        measurements = _audit_measurements(state, snapshot)
+        measurements = _audit_measurements(
+            state, snapshot, audit, generation_causality,
+        )
         return {
             "session_date": session,
             "classification": _classification(state),
-            "refusals": [_project(row, allowed) for row in rows[-limit:]],
-            "refusal_count": len(rows),
+            "refusals": [
+                _project(row, allowed) for row in audit["refusals"]
+                if isinstance(row, Mapping)
+            ],
+            "refusal_count": audit["refusal_count"],
             **measurements,
             "measurement_source": "PERSISTED_AND_CURRENT_RUNTIME_ARTIFACTS",
             "lineage_redacted": True,
@@ -777,6 +1226,40 @@ def _response_for(state: object, path: str, query: Mapping[str, list[str]]) -> t
 
 
 def handler_for(state: object) -> type[BaseHTTPRequestHandler]:
+    audit_cache = _AuditReadCache()
+    contract = getattr(getattr(state, "ingestor", None), "c", None)
+    inventory = (
+        contract.get("engine_source_inventory")
+        if isinstance(contract, Mapping)
+        else None
+    )
+    if not isinstance(inventory, list):
+        raise ValueError("verified engine source inventory is unavailable")
+    inventory_by_path: dict[str, Mapping[str, object]] = {}
+    for row in inventory:
+        if not isinstance(row, Mapping):
+            raise ValueError("verified engine source inventory is invalid")
+        relative = row.get("path")
+        if not isinstance(relative, str) or relative in inventory_by_path:
+            raise ValueError("verified engine source inventory is invalid")
+        inventory_by_path[relative] = row
+    static_assets: dict[str, tuple[bytes, str]] = {}
+    for route, (name, content_type) in STATIC_ROUTES.items():
+        try:
+            data = (STATIC_ROOT / name).read_bytes()
+        except OSError as error:
+            raise ValueError("verified static asset is unavailable") from error
+        relative = f"src/banknifty_profiler/gui/static/{name}"
+        expected = inventory_by_path.get(relative)
+        actual = {
+            "path": relative,
+            "size": len(data),
+            "sha256": hashlib.sha256(data).hexdigest(),
+        }
+        if expected != actual:
+            raise ValueError("verified static asset identity mismatch")
+        static_assets[route] = (data, content_type)
+
     class Handler(BaseHTTPRequestHandler):
         server_version = "R6EReadOnly"
         sys_version = ""
@@ -811,18 +1294,17 @@ def handler_for(state: object) -> type[BaseHTTPRequestHandler]:
 
         def do_GET(self) -> None:  # noqa: N802 - stdlib handler contract
             parsed = urlparse(self.path)
-            if parsed.path in STATIC_ROUTES:
-                name, content_type = STATIC_ROUTES[parsed.path]
-                try:
-                    data = (STATIC_ROOT / name).read_bytes()
-                except OSError:
-                    return self._send_json({"error": "STATIC_ASSET_UNAVAILABLE"}, 503)
+            if parsed.path in static_assets:
+                data, content_type = static_assets[parsed.path]
                 return self._send_bytes(data, 200, content_type)
             if not parsed.path.startswith("/api/"):
                 return self._send_json({"error": "NOT_FOUND"}, 404)
             try:
                 value, status = _response_for(
-                    state, parsed.path, parse_qs(parsed.query, keep_blank_values=False),
+                    state,
+                    parsed.path,
+                    parse_qs(parsed.query, keep_blank_values=False),
+                    audit_cache,
                 )
             except Exception:  # public responses must never contain exception detail
                 return self._send_json({"error": "INTERNAL_STATE_UNAVAILABLE"}, 500)

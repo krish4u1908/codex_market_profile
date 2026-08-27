@@ -43,8 +43,11 @@ def test_live_gui_browser_acceptance_and_screenshots():
         with sync_playwright() as playwright:
             environment = dict(os.environ)
             local_libraries = [
-                "/tmp/r6e1r-browser-deps/root/usr/lib/x86_64-linux-gnu",
-                "/opt/banknifty/research/.browser_libs/root/usr/lib/x86_64-linux-gnu",
+                value
+                for value in os.environ.get(
+                    "R6E1R_BROWSER_LIBRARY_PATH", ""
+                ).split(":")
+                if value
             ]
             available = [path for path in local_libraries if Path(path).is_dir()]
             if available:
@@ -87,6 +90,41 @@ def test_live_gui_browser_acceptance_and_screenshots():
                 "basisAligned": True,
                 "backwardAgesValid": True,
             }
+            basis_toggle = page.locator('[data-market="basis"]')
+            assert not basis_toggle.is_checked()
+            assert page.locator("#basisWrap").is_hidden()
+            basis_toggle.check()
+            assert page.locator("#basisWrap").is_visible()
+            basis_canvas = page.evaluate("""() => {
+                const canvas=document.querySelector('#basis');
+                const pixels=canvas.getContext('2d').getImageData(
+                    0, 0, canvas.width, canvas.height
+                ).data;
+                let basisColour=false;
+                for(let index=0; index<pixels.length; index+=4){
+                    if(pixels[index]>160 && pixels[index+1]>130 &&
+                       pixels[index+2]>225 && pixels[index+3]>0){
+                        basisColour=true;
+                        break;
+                    }
+                }
+                return {width:canvas.width,height:canvas.height,basisColour};
+            }""")
+            assert basis_canvas["width"] > 0 and basis_canvas["height"] > 0
+            assert basis_canvas["basisColour"] is True
+            page.evaluate("window.R6E.refresh()")
+            page.wait_for_function("!window.R6E.state.busy")
+            assert basis_toggle.is_checked()
+            assert page.locator("#basisWrap").is_visible()
+            page.reload(wait_until="networkidle")
+            page.wait_for_function(
+                "window.R6E && window.R6E.state.chart && !window.R6E.state.busy"
+            )
+            basis_toggle = page.locator('[data-market="basis"]')
+            assert basis_toggle.is_checked()
+            assert page.locator("#basisWrap").is_visible()
+            basis_toggle.uncheck()
+            assert page.locator("#basisWrap").is_hidden()
             assert page.locator("#overallBadge").inner_text() == "LIVE FULL CONTEXT"
             inventory_families = page.evaluate("""() => {
                 const rows=window.R6E.unpack(window.R6E.state.chart.inventory);
@@ -204,6 +242,37 @@ def test_live_gui_browser_acceptance_and_screenshots():
                 return [...r.inventoryGroups(r.unpack(c.inventory),bounds).keys()];
             }""")
             assert keys and all(key.startswith("ID|") for key in keys)
+            for horizon in ("3D", "2D", "1D"):
+                assert page.locator(
+                    f'[data-master="{horizon}"]'
+                ).is_visible()
+                assert page.locator(
+                    f'[data-horizon-child="{horizon}"]'
+                ).count() == 7
+                assert page.locator(
+                    f'[data-horizon-child="{horizon}"]:visible'
+                ).count() == 0
+            assert page.locator('[data-horizon-child="ID"]:visible').count() == 7
+
+            # Hidden fixed-horizon children retain their independent choices.
+            page.check('[data-master="1D"]')
+            assert page.locator('[data-horizon-child="1D"]:visible').count() == 7
+            assert page.is_checked('[data-child="1D|FUT_POS_OI_VPOC"]')
+            assert not page.is_checked('[data-child="1D|CE_POS_OI_VPOC"]')
+            page.uncheck('[data-master="1D"]')
+            assert page.locator('[data-horizon-child="1D"]:visible').count() == 0
+            page.evaluate("window.R6E.refresh()")
+            page.wait_for_function("!window.R6E.state.busy")
+            assert page.locator('[data-horizon-child="1D"]:visible').count() == 0
+            assert page.is_checked('[data-child="1D|FUT_POS_OI_VPOC"]')
+            assert not page.is_checked('[data-child="1D|CE_POS_OI_VPOC"]')
+            page.reload(wait_until="networkidle")
+            page.wait_for_function(
+                "window.R6E && window.R6E.state.chart && !window.R6E.state.busy"
+            )
+            assert page.locator('[data-horizon-child="1D"]:visible').count() == 0
+            assert page.is_checked('[data-child="1D|FUT_POS_OI_VPOC"]')
+            assert not page.is_checked('[data-child="1D|CE_POS_OI_VPOC"]')
 
             # Fixed horizons disappear independently; Intraday and both market
             # paths remain visible with explicit reason badges.
@@ -221,6 +290,11 @@ def test_live_gui_browser_acceptance_and_screenshots():
             assert page.locator("#overallBadge").inner_text() == "LIVE INTRADAY ONLY"
             assert page.locator('[data-master="ID"]').is_checked()
             assert "MISSING_PRIOR_SESSION" in page.locator("#availability").inner_text()
+            for horizon in ("3D", "2D", "1D"):
+                assert page.locator(
+                    f'[data-horizon-child="{horizon}"]:visible'
+                ).count() == 0
+            assert page.locator('[data-horizon-child="ID"]:visible').count() == 7
             page.screenshot(path=str(EVIDENCE / "intraday_only_degradation.png"), full_page=True)
 
             runtime.value = snapshot(state=complete_availability())

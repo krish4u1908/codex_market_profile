@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
@@ -11,6 +12,7 @@ import pytest
 
 from banknifty_profiler.participation import views as participation_views
 from banknifty_profiler.cross_layer.state import build_material_transitions
+from banknifty_profiler.shadow import ledger as ledger_module
 from banknifty_profiler.shadow import orchestrator as orchestrator_module
 from banknifty_profiler.shadow.ingest import IncrementalJSONLIngestor
 from banknifty_profiler.shadow.orchestrator import LiveAnalyticalOrchestrator
@@ -89,8 +91,126 @@ def full_stack_fixture() -> list[dict]:
     return rows
 
 
+def independent_confirmation_fixture() -> list[dict]:
+    """Extend the GREEN fixture through an unresolved then confirmed RED run."""
+    rows = full_stack_fixture()
+    base = datetime(2026, 8, 20, 9, 23, 10, tzinfo=IST)
+    ordinal = len(rows)
+    for step in range(16):
+        instant = base + timedelta(seconds=10 * step)
+        ordinal += 1
+        rows.append(observation(
+            f"O{ordinal:04d}", "INDEX", INDEX, instant,
+            price=56_952 + 2 * (step + 1), volume=0,
+        ))
+        ordinal += 1
+        rows.append(observation(
+            f"O{ordinal:04d}", "FUTURES", FUTURES,
+            instant + timedelta(milliseconds=500),
+            price=57_024.8 - .2 * (step + 1),
+            volume=345 + 5 * (step + 1),
+        ))
+    return rows
+
+
 def ledger_counts(orchestrator: LiveAnalyticalOrchestrator) -> dict[str, int]:
     return {name: len(ledger.rows()) for name, ledger in orchestrator.ledgers.items()}
+
+
+def material_ledger_fixture(ledger_name: str) -> dict:
+    instant = "2026-08-20T10:00:00+05:30"
+    return {
+        "divergence_confirmations": {
+            "episode_id": "BDR1-FIXTURE", "evaluation_date": SESSION,
+            "candidate_start_timestamp": instant,
+            "confirmation_timestamp": instant,
+            "index_receipt_timestamp": instant,
+            "futures_receipt_timestamp": instant, "colour": "GREEN",
+            "index_at_confirmation": 57_000,
+            "futures_at_confirmation": 57_020,
+            "basis_at_confirmation": 20,
+        },
+        "dependency_retriggers": {
+            "episode_id": "BDR1-FIXTURE",
+            "dependency_group_id": "HYP-FIXTURE",
+            "root_episode_id": "BDR1-FIXTURE",
+            "classification": "NEW_INDEPENDENT_HYPOTHESIS",
+            "reason_code": "FIRST_SESSION_EPISODE", "member_number": 1,
+            "previous_episode_id": "", "gap_seconds": None,
+            "favourable_response_before_retrigger": False,
+            "adverse_response_before_retrigger": False,
+            "opposite_episode_before_retrigger": False,
+            "previous_hypothesis_resolved": True,
+            "retrigger_flag": False,
+        },
+        "lifecycle_transitions": {
+            "record_id": "R6B2R-FIXTURE", "episode_id": "BDR1-FIXTURE",
+            "dependency_group_id": "HYP-FIXTURE",
+            "evaluation_date": SESSION, "state": "DIVERGENCE_DETECTED",
+            "colour": "GREEN",
+            "previous_state": "NOT_YET_DETECTED",
+            "reason_code": "RAW_LOCKED_CONFIRMATION",
+            "state_entry_timestamp": instant, "causal_input_cutoff": instant,
+        },
+        "inventory_winner_transitions": {
+            "evaluation_date": SESSION, "horizon": "ID",
+            "family": "BN_REF_FUT_VOLUME_VPOC", "control_value": 57_000,
+            "sign": "VOLUME", "source_sessions": SESSION,
+            "control_effective_timestamp": instant,
+            "winner_change_timestamp": instant, "snapshot_timestamp": "",
+            "freshness_receipt_timestamp": instant,
+            "last_contributing_change_timestamp": instant,
+            "contract": FUTURES, "expiry": "2026-08-27",
+            "eligible_observation_count": 1, "excluded_observation_count": 0,
+            "winning_bin_weight": 1.0, "runner_up_bin": "",
+            "runner_up_weight": "", "tie_break_reason": "NO_TIE",
+            "methodology_version": "INVENTORY_V2_BN_REF_RAW_CAUSAL",
+            "raw_input_hashes": "RECORDED_IN_FILE_OPEN_AUDIT",
+            "authority_basis": "RAW_CAUSAL_BANKNIFTY_REFERENCE",
+            "canonical_control_name": "BN_REF_FUT_VOLUME_VPOC",
+            "user_facing_label": "BN-REF FUT VOL-VPOC",
+            "canonical_revision": (
+                "INVENTORY_CANONICAL_REVISION_2_BN_REFERENCE_RAW_CAUSAL"
+            ),
+        },
+        "participation_transitions": {
+            "transition_id": "R6B3R-FIXTURE", "episode_id": "BDR1-FIXTURE",
+            "component": "FUTURES", "previous_state": "UNOBSERVED",
+            "new_state": "AVAILABLE", "reason_code": "MATERIAL_CHANGE",
+            "dependency_group_id": "HYP-FIXTURE",
+            "constituent_effective_timestamps": json.dumps({
+                "futures": instant
+            }),
+            "raw_source_references": "raw/fixture.jsonl:1",
+            "effective_timestamp": instant,
+            "evidence_receipt_timestamp": instant,
+        },
+        "cross_layer_transitions": {
+            "transition_id": "XL-FIXTURE", "source_record_id": "SOURCE-1",
+            "evaluation_date": SESSION, "component": "INVENTORY",
+            "state_key": "ID:BN_REF_FUT_VOLUME_VPOC",
+            "previous_state": "NOT_YET_AVAILABLE", "new_state": "AVAILABLE",
+            "reason_code": "CONTROL_AVAILABLE_OR_WINNER_CHANGED",
+            "constituent_effective_timestamps": json.dumps({
+                "control_effective_timestamp": instant
+            }),
+            "episode_id": "", "horizon": "ID",
+            "family": "BN_REF_FUT_VOLUME_VPOC",
+            "effective_timestamp": instant,
+        },
+        "availability_transitions": {
+            "session_date": SESSION, "component": "INDEX_STATE",
+            "previous_state": "NOT_YET_AVAILABLE", "new_state": "AVAILABLE",
+            "reason": "MATERIAL_AVAILABILITY_CHANGE",
+            "effective_timestamp": instant,
+        },
+        "stale_recovery_transitions": {
+            "session_date": SESSION, "component": "INDEX_STATE",
+            "previous_state": "STALE", "new_state": "AVAILABLE",
+            "reason": "MATERIAL_AVAILABILITY_CHANGE",
+            "effective_timestamp": instant,
+        },
+    }[ledger_name]
 
 
 def assert_unique_stage_and_publication_ids(
@@ -105,6 +225,87 @@ def assert_unique_stage_and_publication_ids(
     for name, ledger in orchestrator.ledgers.items():
         identities = [row["event_id"] for row in ledger.rows()]
         assert len(identities) == len(set(identities)), name
+
+
+def persist_one_mutable_session(
+    tmp_path: Path,
+) -> tuple[LiveAnalyticalOrchestrator, dict]:
+    instant = datetime(2026, 8, 20, 9, 15, tzinfo=IST)
+    row = observation(
+        "O0001", "INDEX", INDEX, instant, price=57_000, volume=0,
+    )
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    orchestrator.process([row])
+    orchestrator.flush()
+    assert orchestrator.state_path.is_file()
+    assert (orchestrator.stage_root / f"{SESSION}.jsonl").is_file()
+    return orchestrator, row
+
+
+def test_sealed_read_view_is_stable_across_copy_on_write_publication(
+    tmp_path, monkeypatch,
+):
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    first = orchestrator._empty_snapshot(SESSION)
+    first["generation"] = "first"
+    orchestrator._outputs = {SESSION: first}
+    orchestrator._dirty_sessions.add(SESSION)
+    monkeypatch.setattr(
+        orchestrator,
+        "flush",
+        lambda *_args, **_kwargs: pytest.fail(
+            "sealed read view attempted analytical work"
+        ),
+    )
+
+    view = orchestrator.sealed_read_view(SESSION)
+    assert view["generation"] == "first"
+    assert view["inventory"] is first["inventory"]
+    with pytest.raises(TypeError):
+        view["generation"] = "mutated"
+
+    second = orchestrator._empty_snapshot(SESSION)
+    second["generation"] = "second"
+    orchestrator._outputs = {SESSION: second}
+
+    assert view["generation"] == "first"
+    assert orchestrator.sealed_read_view(SESSION)["generation"] == "second"
+    assert orchestrator.sealed_session_dates() == (SESSION,)
+
+
+def test_restart_compacts_legacy_dense_gui_resolution_projection(tmp_path):
+    runtime = contract(tmp_path)
+    first = LiveAnalyticalOrchestrator(runtime)
+    output = first._empty_snapshot(SESSION)
+    fields = [
+        "episode_id", "timestamp", "resolution_mechanism_native",
+    ]
+    output["gui_payload"] = {
+        "schema": "R6E_LIVE_SESSION_PAYLOAD_V1",
+        "date": SESSION,
+        "resolution_mechanisms": {
+            "fields": fields,
+            "rows": [
+                ["E1", f"{SESSION}T09:15:00+05:30", "PENDING"],
+                ["E1", f"{SESSION}T09:15:01+05:30", "PENDING"],
+                ["E1", f"{SESSION}T09:15:02+05:30", "BASIS_CONVERGENCE"],
+            ],
+        },
+        "counts": {"resolution_mechanisms": 3},
+        "projection_hash": "legacy-dense-projection",
+    }
+    first._outputs = {SESSION: output}
+    first._sessions = {SESSION: {}}
+    first._persist()
+
+    restarted = LiveAnalyticalOrchestrator(runtime)
+    gui = restarted.sealed_read_view(SESSION)["gui_payload"]
+    assert gui["resolution_mechanisms"]["rows"] == [
+        ["E1", f"{SESSION}T09:15:00+05:30", "PENDING"],
+        ["E1", f"{SESSION}T09:15:02+05:30", "BASIS_CONVERGENCE"],
+    ]
+    assert gui["counts"]["resolution_mechanisms"] == 2
+    assert gui["projection_hash"] != "legacy-dense-projection"
 
 
 def test_focused_fixture_reaches_every_canonical_callback_and_gui(tmp_path):
@@ -152,6 +353,504 @@ def test_focused_fixture_reaches_every_canonical_callback_and_gui(tmp_path):
     assert counts["inventory_winner_transitions"] == state["counts"]["inventory"]
     assert counts["participation_transitions"] == state["counts"]["participation_transitions"]
     assert counts["cross_layer_transitions"] == state["counts"]["cross_layer_transitions"]
+
+
+def test_periodic_flush_keeps_mutable_closure_fields_out_of_event_ledgers(
+    tmp_path,
+):
+    rows = full_stack_fixture()
+    incremental = LiveAnalyticalOrchestrator(contract(tmp_path / "incremental"))
+    incremental.process(rows[:95])
+    early = incremental.snapshot(SESSION)
+    assert early["counts"]["episodes"] == 1
+    assert early["counts"]["lifecycle"] == 1
+    assert early["lifecycle"][0]["state_exit_timestamp"] == ""
+
+    first_end = early["episodes"][0]["episode_end_timestamp"]
+    incremental.process(rows[95:])
+    final = incremental.snapshot(SESSION)
+    assert final["episodes"][0]["episode_end_timestamp"] > first_end
+    assert final["lifecycle"][0]["state_exit_timestamp"]
+    assert all(
+        "episode_end_timestamp" not in row
+        for row in incremental.ledgers["divergence_confirmations"].rows()
+    )
+    assert all(
+        "state_exit_timestamp" not in row
+        for row in incremental.ledgers["lifecycle_transitions"].rows()
+    )
+
+    one_shot = LiveAnalyticalOrchestrator(contract(tmp_path / "one-shot"))
+    one_shot.process(rows)
+    expected = one_shot.snapshot(SESSION)
+    assert final["episodes"] == expected["episodes"]
+    assert final["lifecycle"] == expected["lifecycle"]
+    for name in ("divergence_confirmations", "lifecycle_transitions"):
+        actual_rows = sorted(
+            orchestrator_module._material_ledger_content(name, row)
+            for row in incremental.ledgers[name].rows()
+        )
+        expected_rows = sorted(
+            orchestrator_module._material_ledger_content(name, row)
+            for row in one_shot.ledgers[name].rows()
+        )
+        assert actual_rows == expected_rows
+    assert_unique_stage_and_publication_ids(incremental)
+
+
+def test_unconfirmed_candidate_defers_terminal_group_publication(
+    tmp_path,
+):
+    rows = independent_confirmation_fixture()
+    periodic = LiveAnalyticalOrchestrator(contract(tmp_path / "periodic"))
+    periodic.process(rows[:155])
+    provisional = periodic.snapshot(SESSION)
+
+    assert len(provisional["episodes"]) == 1
+    terminal_group = provisional["dependencies"][-1]["dependency_group_id"]
+    candidate_start = "2026-08-20T09:24:40.500000+05:30"
+    unstable_lifecycle_ids = {
+        row["record_id"] for row in provisional["lifecycle"]
+        if row["dependency_group_id"] == terminal_group
+        and row["state_entry_timestamp"] > candidate_start
+    }
+    assert unstable_lifecycle_ids
+    assert provisional["gui_payload"]["lifecycle"]["rows"]
+    assert periodic._pending_unstable_dependency_groups == {
+        SESSION: terminal_group
+    }
+    assert len(periodic.ledgers["divergence_confirmations"].rows()) == 1
+    assert len(periodic.ledgers["dependency_retriggers"].rows()) == 1
+    assert not periodic.ledgers["lifecycle_transitions"].rows()
+    assert not periodic.ledgers["participation_transitions"].rows()
+    assert not [
+        row for row in periodic.ledgers["cross_layer_transitions"].rows()
+        if row.get("episode_id")
+    ]
+
+    periodic.process(rows[155:])
+    final = periodic.snapshot(SESSION)
+    assert len(final["episodes"]) == 2
+    assert len({
+        row["dependency_group_id"] for row in final["dependencies"]
+    }) == 2
+    assert not unstable_lifecycle_ids & {
+        row["record_id"] for row in final["lifecycle"]
+    }
+
+    one_shot = LiveAnalyticalOrchestrator(contract(tmp_path / "one-shot"))
+    one_shot.process(rows)
+    expected = one_shot.snapshot(SESSION)
+    assert final["lifecycle"] == expected["lifecycle"]
+    assert final["participation_transitions"] == expected[
+        "participation_transitions"
+    ]
+    assert final["cross_layer_transitions"] == expected[
+        "cross_layer_transitions"
+    ]
+    for name in (
+        "divergence_confirmations", "dependency_retriggers",
+        "lifecycle_transitions", "participation_transitions",
+        "cross_layer_transitions",
+    ):
+        actual_rows = sorted(
+            orchestrator_module._material_ledger_content(name, row)
+            for row in periodic.ledgers[name].rows()
+        )
+        expected_rows = sorted(
+            orchestrator_module._material_ledger_content(name, row)
+            for row in one_shot.ledgers[name].rows()
+        )
+        assert actual_rows == expected_rows
+    assert_unique_stage_and_publication_ids(periodic)
+
+
+def test_finalize_releases_deferred_group_after_restart_failure_exactly_once(
+    tmp_path, monkeypatch,
+):
+    rows = independent_confirmation_fixture()[:155]
+    root = tmp_path / "deferred-restart"
+    orchestrator = LiveAnalyticalOrchestrator(contract(root))
+    orchestrator.process(rows)
+    provisional = orchestrator.snapshot(SESSION)
+    assert provisional["lifecycle"]
+    assert not orchestrator.ledgers["lifecycle_transitions"].rows()
+
+    restarted = LiveAnalyticalOrchestrator(contract(root))
+    original_append = orchestrator_module.AppendOnlyLedger.append_many
+    failed = False
+
+    def fail_after_deferred_write(ledger, values):
+        nonlocal failed
+        if (
+            ledger.path.name == "lifecycle_transitions.jsonl"
+            and not failed
+        ):
+            failed = True
+            original_append(ledger, values)
+            raise RuntimeError("synthetic deferred publication failure")
+        return original_append(ledger, values)
+
+    monkeypatch.setattr(
+        orchestrator_module.AppendOnlyLedger,
+        "append_many",
+        fail_after_deferred_write,
+    )
+    with pytest.raises(
+        RuntimeError, match="synthetic deferred publication failure"
+    ):
+        restarted.finalize_session(SESSION)
+    assert SESSION not in restarted._finalized_sessions
+
+    recovered = LiveAnalyticalOrchestrator(contract(root))
+    recovered.finalize_session(SESSION)
+    before = ledger_counts(recovered)
+    recovered.finalize_session(SESSION)
+    assert ledger_counts(recovered) == before
+    assert len(recovered.ledgers["lifecycle_transitions"].rows()) == len(
+        provisional["lifecycle"]
+    )
+    assert len(recovered.ledgers["participation_transitions"].rows()) == len(
+        provisional["participation_transitions"]
+    )
+    assert len([
+        row for row in recovered.ledgers["cross_layer_transitions"].rows()
+        if row.get("episode_id")
+    ]) == len([
+        row for row in provisional["cross_layer_transitions"]
+        if row.get("episode_id")
+    ])
+    assert_unique_stage_and_publication_ids(recovered)
+
+
+def test_periodic_and_one_shot_publish_same_sealed_availability_events(
+    tmp_path,
+):
+    rows = full_stack_fixture()
+    periodic = LiveAnalyticalOrchestrator(contract(tmp_path / "periodic"))
+    periodic.process(rows[:95])
+    periodic.snapshot(SESSION)
+    periodic.process(rows[95:])
+    periodic.snapshot(SESSION)
+    assert periodic.ledgers["availability_transitions"].rows() == []
+    periodic_final = periodic.finalize_session(SESSION)
+
+    one_shot = LiveAnalyticalOrchestrator(contract(tmp_path / "one-shot"))
+    one_shot.process(rows)
+    one_shot_final = one_shot.finalize_session(SESSION)
+    assert {
+        key: value for key, value in periodic_final["availability"].items()
+        if key != "calculation_timestamp"
+    } == {
+        key: value for key, value in one_shot_final["availability"].items()
+        if key != "calculation_timestamp"
+    }
+
+    runtime_fields = {
+        "publication_timestamp", "calculation_timestamp", "raw_run_id",
+    }
+    for ledger_name in (
+        "availability_transitions", "stale_recovery_transitions",
+    ):
+        periodic_rows = [
+            {key: value for key, value in row.items() if key not in runtime_fields}
+            for row in periodic.ledgers[ledger_name].rows()
+        ]
+        one_shot_rows = [
+            {key: value for key, value in row.items() if key not in runtime_fields}
+            for row in one_shot.ledgers[ledger_name].rows()
+        ]
+        assert periodic_rows == one_shot_rows
+    availability_rows = periodic.ledgers["availability_transitions"].rows()
+    assert len(availability_rows) == 12
+    assert all(
+        row["reason"] == "SESSION_AVAILABILITY_SEAL"
+        and row["effective_timestamp"]
+        == periodic_final["availability"]["evidence_cutoff_timestamp"]
+        for row in availability_rows
+    )
+
+
+@pytest.mark.parametrize(
+    ("ledger_name", "identity", "row", "mutable_field", "stable_field"),
+    (
+        (
+            "divergence_confirmations",
+            "BDR1-2026-08-20-GREEN-001",
+            {
+                **material_ledger_fixture("divergence_confirmations"),
+                "episode_id": "BDR1-2026-08-20-GREEN-001",
+                "episode_end_timestamp": "2026-08-20T10:01:00+05:30",
+            },
+            "episode_end_timestamp",
+            "colour",
+        ),
+        (
+            "lifecycle_transitions",
+            "R6B2R-IMMUTABLE-ONE",
+            {
+                **material_ledger_fixture("lifecycle_transitions"),
+                "record_id": "R6B2R-IMMUTABLE-ONE",
+                "state_exit_timestamp": "",
+            },
+            "state_exit_timestamp",
+            "reason_code",
+        ),
+    ),
+)
+def test_same_material_identity_requires_same_immutable_content(
+    tmp_path, ledger_name, identity, row, mutable_field, stable_field,
+):
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    calculation = "2026-08-20T10:02:00+05:30"
+    orchestrator._append_once(ledger_name, row, identity, calculation)
+
+    closure_update = dict(row)
+    closure_update[mutable_field] = "2026-08-20T10:03:00+05:30"
+    orchestrator._append_once(
+        ledger_name, closure_update, identity, calculation
+    )
+    physical = orchestrator.ledgers[ledger_name].rows()
+    assert len(physical) == 1
+    assert mutable_field not in physical[0]
+
+    conflict = dict(closure_update)
+    conflict[stable_field] = "DIFFERENT_STABLE_CONTENT"
+    with pytest.raises(ValueError, match="different immutable content"):
+        orchestrator._append_once(
+            ledger_name, conflict, identity, calculation
+        )
+    assert orchestrator.ledgers[ledger_name].rows() == physical
+
+
+def test_duplicate_physical_material_identity_is_refused_at_startup(tmp_path):
+    runtime = contract(tmp_path)
+    orchestrator = LiveAnalyticalOrchestrator(runtime)
+    row = material_ledger_fixture("divergence_confirmations")
+    row["episode_id"] = "BDR1-2026-08-20-GREEN-001"
+    identity = "BDR1-2026-08-20-GREEN-001"
+    orchestrator._append_once(
+        "divergence_confirmations", row, identity,
+        "2026-08-20T10:00:00+05:30",
+    )
+    ledger = orchestrator.ledgers["divergence_confirmations"]
+    ledger.append(ledger.rows()[0])
+
+    with pytest.raises(ValueError, match="duplicate physical event identity"):
+        LiveAnalyticalOrchestrator(runtime)
+
+
+@pytest.mark.parametrize("ledger_name", orchestrator_module.LEDGER_NAMES)
+def test_material_startup_refuses_schema_empty_unique_event(
+    tmp_path, ledger_name,
+):
+    runtime = contract(tmp_path)
+    ledger = orchestrator_module.AppendOnlyLedger(
+        runtime["state_root"] / "ledgers" / f"{ledger_name}.jsonl"
+    )
+    ledger.append({"event_id": "MALFORMED-BUT-UNIQUE"})
+
+    with pytest.raises(ValueError, match=f"append-only {ledger_name} row 1"):
+        LiveAnalyticalOrchestrator(runtime)
+
+
+def test_divergence_startup_refuses_naive_candidate_timestamp(tmp_path):
+    builder = LiveAnalyticalOrchestrator(contract(tmp_path / "builder"))
+    builder._append_once(
+        "divergence_confirmations",
+        material_ledger_fixture("divergence_confirmations"),
+        "BDR1-CANDIDATE-CLOCK",
+        "2026-08-20T10:00:00+05:30",
+    )
+    row = dict(builder.ledgers["divergence_confirmations"].rows()[0])
+    row["candidate_start_timestamp"] = "2026-08-20T09:55:00"
+
+    runtime = contract(tmp_path / "target")
+    ledger = orchestrator_module.AppendOnlyLedger(
+        runtime["state_root"]
+        / "ledgers"
+        / "divergence_confirmations.jsonl"
+    )
+    ledger.append(row)
+    with pytest.raises(
+        ValueError, match="timezone-aware candidate_start_timestamp"
+    ):
+        LiveAnalyticalOrchestrator(runtime)
+
+
+@pytest.mark.parametrize("provenance", ("missing", "UNKNOWN"))
+def test_orchestrator_refusal_startup_requires_timestamp_provenance(
+    tmp_path, provenance,
+):
+    builder = LiveAnalyticalOrchestrator(contract(tmp_path / "builder"))
+    builder._quality(
+        {
+            "observation_id": "O-BUILD-REFUSAL",
+            "session_date": SESSION,
+            "receipt_timestamp": "2026-08-20T10:00:00+05:30",
+            "source_file": f"raw/{SESSION}/events_10.jsonl",
+            "source_byte_offset": 0,
+            "source_row_number": 1,
+        },
+        "SYNTHETIC_REFUSAL",
+        "fixture",
+    )
+    row = dict(builder.ledgers["refusals_data_quality"].rows()[0])
+    if provenance == "missing":
+        row.pop("effective_timestamp_provenance")
+    else:
+        row["effective_timestamp_provenance"] = provenance
+
+    runtime = contract(tmp_path / "target")
+    ledger = orchestrator_module.AppendOnlyLedger(
+        runtime["state_root"]
+        / "ledgers"
+        / "refusals_data_quality.jsonl"
+    )
+    ledger.append(row)
+    with pytest.raises(
+        ValueError, match="invalid effective_timestamp_provenance"
+    ):
+        LiveAnalyticalOrchestrator(runtime)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (("file", None), ("byte_offset", True), ("source_row", -1)),
+)
+def test_orchestrator_refusal_startup_requires_source_coordinates(
+    tmp_path, field, value,
+):
+    builder = LiveAnalyticalOrchestrator(contract(tmp_path / "builder"))
+    builder._quality(
+        {
+            "observation_id": "O-BUILD-COORDINATES",
+            "session_date": SESSION,
+            "receipt_timestamp": "2026-08-20T10:00:00+05:30",
+            "source_file": f"raw/{SESSION}/events_10.jsonl",
+            "source_byte_offset": 0,
+            "source_row_number": 1,
+        },
+        "SYNTHETIC_REFUSAL",
+        "fixture",
+    )
+    row = dict(builder.ledgers["refusals_data_quality"].rows()[0])
+    if value is None:
+        row["source_receipt_identifiers"].pop(field)
+    else:
+        row["source_receipt_identifiers"][field] = value
+
+    runtime = contract(tmp_path / "target")
+    ledger = orchestrator_module.AppendOnlyLedger(
+        runtime["state_root"]
+        / "ledgers"
+        / "refusals_data_quality.jsonl"
+    )
+    ledger.append(row)
+    with pytest.raises(ValueError, match=f"identifiers.{field}"):
+        LiveAnalyticalOrchestrator(runtime)
+
+
+def test_stage_startup_refuses_partial_row_that_has_identity_and_order_fields(
+    tmp_path,
+):
+    runtime = contract(tmp_path)
+    stage = orchestrator_module.AppendOnlyLedger(
+        runtime["state_root"]
+        / "analytical_observation_stage"
+        / f"{SESSION}.jsonl"
+    )
+    stage.append({
+        "observation_id": "O0001",
+        "session_date": SESSION,
+        "instrument_class": "INDEX",
+        "canonical_symbol": INDEX,
+        "source_symbol": INDEX,
+        "receipt_timestamp": "2026-08-20T10:00:00+05:30",
+        "source_file": f"raw/{SESSION}/events_10.jsonl",
+        "source_stream": "raw",
+        "source_byte_offset": 0,
+        "source_row_number": 1,
+        "raw_record_id": "RAW-O0001",
+        "availability_status": "AVAILABLE",
+        "freshness_status": "FRESH",
+        "out_of_order": False,
+    })
+
+    with pytest.raises(ValueError, match="missing required fields"):
+        LiveAnalyticalOrchestrator(runtime)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    (
+        ("source_symbol", "mismatched canonical/source symbol"),
+        ("source_path", "invalid source file identity"),
+        ("option_symbol", "invalid option identity"),
+        ("option_strike", "invalid option identity"),
+        ("option_expiry", "invalid option identity"),
+        ("futures_symbol", "invalid Futures identity"),
+    ),
+)
+def test_stage_startup_refuses_class_identity_tampering(
+    tmp_path, mutation, message,
+):
+    instant = datetime(2026, 8, 20, 10, 0, tzinfo=IST)
+    builder = LiveAnalyticalOrchestrator(contract(tmp_path / "builder"))
+    row = builder._prepare(observation(
+        "O0001",
+        "CE",
+        "NSE:BANKNIFTY26AUG57000CE",
+        instant,
+        price=200,
+        volume=10,
+        oi=500,
+        strike=57_000,
+        expiry="2026-08-27",
+    ))
+    if mutation == "source_symbol":
+        row["source_symbol"] = "NSE:BANKNIFTY26AUG57100CE"
+    elif mutation == "source_path":
+        row["source_file"] = f"raw/{SESSION}/focused_fixture.jsonl"
+        row["source_receipt_identifiers"]["file"] = row["source_file"]
+    elif mutation == "option_symbol":
+        row["canonical_symbol"] = "NSE:BANKNIFTY-INVALID-CE"
+        row["source_symbol"] = row["canonical_symbol"]
+    elif mutation == "option_strike":
+        row["strike"] = 57_100
+    elif mutation == "option_expiry":
+        row["expiry"] = "2026-09-24"
+        row["expiry_date"] = row["expiry"]
+    else:
+        row["instrument_class"] = "FUTURES"
+        row["canonical_symbol"] = "NSE:BANKNIFTY-FUT"
+        row["source_symbol"] = row["canonical_symbol"]
+        row["source_stream"] = "raw"
+        row["source_file"] = f"raw/{SESSION}/focused_fixture.jsonl"
+        row["source_receipt_identifiers"]["source_stream"] = "raw"
+        row["source_receipt_identifiers"]["file"] = row["source_file"]
+
+    runtime = contract(tmp_path / "target")
+    stage = orchestrator_module.AppendOnlyLedger(
+        runtime["state_root"]
+        / "analytical_observation_stage"
+        / f"{SESSION}.jsonl"
+    )
+    stage.append(row)
+    with pytest.raises(ValueError, match=message):
+        LiveAnalyticalOrchestrator(runtime)
+
+
+def test_material_append_refuses_schema_empty_row_before_persistence(tmp_path):
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    with pytest.raises(ValueError, match="invalid episode_id"):
+        orchestrator._append_once(
+            "divergence_confirmations",
+            {"event_id": "BDR1-MALFORMED-BUT-UNIQUE"},
+            "BDR1-MALFORMED-BUT-UNIQUE",
+            "2026-08-20T10:00:00+05:30",
+        )
+    assert orchestrator.ledgers["divergence_confirmations"].rows() == []
 
 
 def test_restart_and_callback_retry_are_exactly_once(tmp_path):
@@ -277,14 +976,12 @@ def test_canonical_cross_layer_sessions_equal_one_global_build_after_restart(
     second_session = "2026-08-21"
     runtime = contract(tmp_path)
     runtime["config"]["fixed_inventory_rows"] = [
-        {
-            "evaluation_date": session,
-            "horizon": "3D",
-            "family": "FUT_POS_OI_VPOC",
-            "control_value": 57325,
-            "control_effective_timestamp": f"{session}T09:15:00+05:30",
-            "winner_change_timestamp": f"{session}T09:15:00+05:30",
-        }
+        orchestrator_module.inventory_engine.record(
+            session, "3D", "FUT_POS_OI_VPOC", 57325, session,
+            f"{session}T09:15:00+05:30",
+            f"{session}T09:15:00+05:30", FUTURES, "2026-08-27",
+            1, 1.0, "", "", "NO_TIE",
+        )
         for session in (SESSION, second_session)
     ]
     first = LiveAnalyticalOrchestrator(runtime)
@@ -542,6 +1239,23 @@ def test_unknown_and_late_observations_are_audited_not_backdated(tmp_path):
     assert reasons == ["OUT_OF_ORDER_ANALYTICAL_RECEIPT", "UNKNOWN_SYMBOL"] or reasons == ["UNKNOWN_SYMBOL", "OUT_OF_ORDER_ANALYTICAL_RECEIPT"]
 
 
+def test_noncanonical_session_date_is_refused_before_stage_path_use(tmp_path):
+    base = datetime(2026, 8, 20, 9, 15, tzinfo=IST)
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    escaped = tmp_path / "escaped.jsonl"
+    unsafe = observation("O0001", "INDEX", INDEX, base, price=57000)
+    unsafe["session_date"] = str(escaped.with_suffix(""))
+
+    orchestrator.process([unsafe])
+
+    assert not escaped.exists()
+    assert not list(orchestrator.stage_root.glob("*.jsonl"))
+    refusals = orchestrator.ledgers["refusals_data_quality"].rows()
+    assert len(refusals) == 1
+    assert refusals[0]["reason"] == "ORCHESTRATOR_OBSERVATION_REFUSED"
+    assert "unsafe analytical session date" in refusals[0]["detail"]
+
+
 def test_physical_stream_lineage_and_same_session_oi_delta_are_canonical(tmp_path):
     base = datetime(2026, 8, 20, 9, 15, tzinfo=IST)
     orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
@@ -638,13 +1352,172 @@ def test_callback_staging_is_durable_and_flushes_once(tmp_path, monkeypatch):
     assert restarted.snapshot(SESSION)["counts"]["observations"] == len(rows)
 
 
+def test_restart_refuses_tampered_mutable_session_content(tmp_path):
+    orchestrator, _row = persist_one_mutable_session(tmp_path)
+    state = json.loads(orchestrator.state_path.read_text())
+    state["sessions"][SESSION][0]["price"] = 99_999
+    orchestrator.state_path.write_text(json.dumps(state))
+
+    with pytest.raises(
+        ValueError,
+        match="content mismatch with durable stage.*O0001",
+    ):
+        LiveAnalyticalOrchestrator(contract(tmp_path))
+
+
+def test_restart_refuses_duplicate_mutable_session_identity(tmp_path):
+    orchestrator, _row = persist_one_mutable_session(tmp_path)
+    state = json.loads(orchestrator.state_path.read_text())
+    state["sessions"][SESSION].append(dict(state["sessions"][SESSION][0]))
+    orchestrator.state_path.write_text(json.dumps(state))
+
+    with pytest.raises(
+        ValueError,
+        match="duplicate persisted analytical observation identity.*O0001",
+    ):
+        LiveAnalyticalOrchestrator(contract(tmp_path))
+
+
+@pytest.mark.parametrize(
+    "unsafe_session",
+    ("../ledgers/refusals_data_quality", "20260820"),
+)
+def test_restart_refuses_unsafe_or_noncanonical_persisted_session_key(
+    tmp_path, unsafe_session,
+):
+    orchestrator, _row = persist_one_mutable_session(tmp_path)
+    state = json.loads(orchestrator.state_path.read_text())
+    state["sessions"] = {
+        unsafe_session: state["sessions"].pop(SESSION),
+    }
+    orchestrator.state_path.write_text(json.dumps(state))
+
+    with pytest.raises(ValueError, match="persisted analytical session key"):
+        LiveAnalyticalOrchestrator(contract(tmp_path))
+
+
+@pytest.mark.parametrize(
+    ("corruption", "message"),
+    (
+        ("output_key", "analytical output key"),
+        ("output_session", "output has mismatched session_date"),
+        ("output_missing_session", "output has mismatched session_date"),
+        ("output_orphan", "outputs lack mutable or finalized"),
+        ("context_key", "cross-layer context key"),
+        ("context_value", "cross-layer context is not an object"),
+        ("context_orphan", "context authority mismatch"),
+        ("context_missing", "context authority mismatch"),
+        ("dirty_container", "dirty_sessions must be a list"),
+        ("dirty_item", "dirty_sessions item 1"),
+        ("dirty_duplicate", "dirty_sessions contains duplicate"),
+        ("dirty_without_session", "dirty_sessions are missing mutable"),
+        ("finalized_container", "finalized_sessions must be a list"),
+        ("finalized_item", "finalized_sessions item 1"),
+        ("finalized_mutable", "finalized_sessions retain mutable"),
+        ("dirty_finalized_overlap", "overlap finalized_sessions"),
+    ),
+)
+def test_restart_refuses_malformed_persisted_session_containers(
+    tmp_path, corruption, message,
+):
+    runtime = contract(tmp_path)
+    runtime["state_root"].mkdir(parents=True, exist_ok=True)
+    state = {
+        "version": "R6E1R_LIVE_ANALYTICAL_STATE_V1",
+        "sessions": {SESSION: []},
+        "outputs": {
+            SESSION: LiveAnalyticalOrchestrator._empty_snapshot(SESSION),
+        },
+        "cross_layer_contexts": {
+            SESSION: orchestrator_module.cross_layer_state.empty_material_context(),
+        },
+        "dirty_sessions": [],
+        "finalized_sessions": [],
+    }
+    if corruption == "output_key":
+        state["outputs"] = {"20260820": state["outputs"].pop(SESSION)}
+    elif corruption == "output_session":
+        state["outputs"][SESSION]["session_date"] = "2026-08-21"
+    elif corruption == "output_missing_session":
+        state["outputs"][SESSION].pop("session_date")
+    elif corruption == "output_orphan":
+        state["sessions"] = {}
+    elif corruption == "context_key":
+        state["cross_layer_contexts"] = {
+            "20260820": state["cross_layer_contexts"].pop(SESSION),
+        }
+    elif corruption == "context_value":
+        state["cross_layer_contexts"][SESSION] = []
+    elif corruption == "context_orphan":
+        state["cross_layer_contexts"]["2026-08-21"] = (
+            orchestrator_module.cross_layer_state.empty_material_context()
+        )
+    elif corruption == "context_missing":
+        state["sessions"]["2026-08-21"] = []
+        state["outputs"]["2026-08-21"] = (
+            LiveAnalyticalOrchestrator._empty_snapshot("2026-08-21")
+        )
+    elif corruption == "dirty_container":
+        state["dirty_sessions"] = SESSION
+    elif corruption == "dirty_item":
+        state["dirty_sessions"] = ["20260820"]
+    elif corruption == "dirty_duplicate":
+        state["sessions"][SESSION] = []
+        state["dirty_sessions"] = [SESSION, SESSION]
+    elif corruption == "dirty_without_session":
+        state["sessions"] = {}
+        state["dirty_sessions"] = [SESSION]
+    elif corruption == "finalized_container":
+        state["finalized_sessions"] = SESSION
+    elif corruption == "finalized_item":
+        state["finalized_sessions"] = ["20260820"]
+    elif corruption == "finalized_mutable":
+        state["sessions"][SESSION] = []
+        state["finalized_sessions"] = [SESSION]
+    else:
+        state["sessions"][SESSION] = []
+        state["dirty_sessions"] = [SESSION]
+        state["finalized_sessions"] = [SESSION]
+    (runtime["state_root"] / "live_analytical_orchestrator.json").write_text(
+        json.dumps(state)
+    )
+
+    with pytest.raises(ValueError, match=message):
+        LiveAnalyticalOrchestrator(runtime)
+
+
+def test_restart_refuses_mutable_session_without_durable_stage(tmp_path):
+    orchestrator, _row = persist_one_mutable_session(tmp_path)
+    (orchestrator.stage_root / f"{SESSION}.jsonl").unlink()
+
+    with pytest.raises(
+        ValueError,
+        match="missing from durable stage.*O0001",
+    ):
+        LiveAnalyticalOrchestrator(contract(tmp_path))
+
+
+def test_restart_refuses_noncanonical_state_session_before_stage_path(tmp_path):
+    orchestrator, _row = persist_one_mutable_session(tmp_path)
+    state = json.loads(orchestrator.state_path.read_text())
+    state["sessions"]["../../outside"] = state["sessions"].pop(SESSION)
+    orchestrator.state_path.write_text(json.dumps(state))
+
+    with pytest.raises(
+        ValueError,
+        match="persisted analytical session key is invalid",
+    ):
+        LiveAnalyticalOrchestrator(contract(tmp_path))
+    assert not (tmp_path / "outside.jsonl").exists()
+
+
 def test_stage_failure_before_write_remains_replayable_and_unaccepted(
     tmp_path, monkeypatch,
 ):
     base = datetime(2026, 8, 20, 9, 15, tzinfo=IST)
     row = observation("O0001", "INDEX", INDEX, base, price=57_000, volume=0)
     orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
-    original = orchestrator_module.AppendOnlyLedger.append_many
+    original = orchestrator_module.AppendOnlyLedger.append_many_retained
     failed = False
 
     def fail_before_write(ledger, values):
@@ -659,7 +1532,8 @@ def test_stage_failure_before_write_remains_replayable_and_unaccepted(
         return original(ledger, values)
 
     monkeypatch.setattr(
-        orchestrator_module.AppendOnlyLedger, "append_many", fail_before_write
+        orchestrator_module.AppendOnlyLedger,
+        "append_many_retained", fail_before_write,
     )
     with pytest.raises(RuntimeError, match="synthetic pre-write stage failure"):
         orchestrator.process_observations([row])
@@ -689,7 +1563,10 @@ def test_stage_and_publication_failure_after_write_reconcile_exactly_once(
     base = datetime(2026, 8, 20, 9, 15, tzinfo=IST)
     row = observation("O0001", "INDEX", INDEX, base, price=57_000, volume=0)
     orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
-    original = orchestrator_module.AppendOnlyLedger.append_many
+    original_retained = (
+        orchestrator_module.AppendOnlyLedger.append_many_retained
+    )
+    original_standard = orchestrator_module.AppendOnlyLedger.append_many
     stage_failed = False
 
     def fail_after_stage_write(ledger, values):
@@ -700,17 +1577,17 @@ def test_stage_and_publication_failure_after_write_reconcile_exactly_once(
                 SESSION, {}
             )
             assert SESSION not in orchestrator._dirty_sessions
-            original(ledger, values)
+            original_retained(ledger, values)
             assert row["observation_id"] not in orchestrator._sessions.get(
                 SESSION, {}
             )
             assert SESSION not in orchestrator._dirty_sessions
             raise RuntimeError("synthetic post-write stage failure")
-        return original(ledger, values)
+        return original_retained(ledger, values)
 
     monkeypatch.setattr(
         orchestrator_module.AppendOnlyLedger,
-        "append_many",
+        "append_many_retained",
         fail_after_stage_write,
     )
     with pytest.raises(RuntimeError, match="synthetic post-write stage failure"):
@@ -731,9 +1608,9 @@ def test_stage_and_publication_failure_after_write_reconcile_exactly_once(
             and not publication_failed
         ):
             publication_failed = True
-            original(ledger, values)
+            original_standard(ledger, values)
             raise RuntimeError("synthetic post-write publication failure")
-        return original(ledger, values)
+        return original_standard(ledger, values)
 
     monkeypatch.setattr(
         orchestrator_module.AppendOnlyLedger,
@@ -743,14 +1620,17 @@ def test_stage_and_publication_failure_after_write_reconcile_exactly_once(
     with pytest.raises(
         RuntimeError, match="synthetic post-write publication failure"
     ):
-        orchestrator.flush()
+        orchestrator.finalize_session(SESSION)
     assert orchestrator._ledger_seen["availability_transitions"]
-    orchestrator.flush()
-    before = ledger_counts(orchestrator)
-    orchestrator.process_observations([row])
-    orchestrator.flush()
-    assert ledger_counts(orchestrator) == before
-    assert_unique_stage_and_publication_ids(orchestrator)
+    assert SESSION not in orchestrator._finalized_sessions
+
+    restarted = LiveAnalyticalOrchestrator(contract(tmp_path))
+    restarted.finalize_session(SESSION)
+    before = ledger_counts(restarted)
+    restarted.finalize_session(SESSION)
+    assert ledger_counts(restarted) == before
+    assert len(restarted.ledgers["availability_transitions"].rows()) == 12
+    assert_unique_stage_and_publication_ids(restarted)
 
 
 @pytest.mark.parametrize(
@@ -785,14 +1665,11 @@ def test_every_material_ledger_reconciles_post_append_restart_exactly_once(
     monkeypatch.setattr(
         orchestrator_module.AppendOnlyLedger, "append_many", fail_after_write
     )
-    row = {
-        "session_date": SESSION,
-        "effective_timestamp": "2026-08-20T10:00:00+05:30",
-        "status": "MATERIAL",
-    }
+    row = material_ledger_fixture(ledger_name)
+    calculation = "2026-08-20T10:00:00+05:30"
     with pytest.raises(RuntimeError, match=ledger_name):
         orchestrator._append_once(
-            ledger_name, row, f"{ledger_name}:fixture", row["effective_timestamp"],
+            ledger_name, row, f"{ledger_name}:fixture", calculation,
         )
     physical = orchestrator.ledgers[ledger_name].rows()
     assert len(physical) == 1
@@ -801,10 +1678,106 @@ def test_every_material_ledger_reconciles_post_append_restart_exactly_once(
 
     restarted = LiveAnalyticalOrchestrator(contract(tmp_path))
     restarted._append_once(
-        ledger_name, row, f"{ledger_name}:fixture", row["effective_timestamp"],
+        ledger_name, row, f"{ledger_name}:fixture", calculation,
     )
     replayed = restarted.ledgers[ledger_name].rows()
     assert [value["event_id"] for value in replayed] == [event_id]
+
+
+def test_quality_ledger_reconciles_post_append_exception_exactly_once(
+    tmp_path, monkeypatch,
+):
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    ledger = orchestrator.ledgers["refusals_data_quality"]
+    original = ledger.append_many
+    failed = False
+
+    def fail_after_write(values):
+        nonlocal failed
+        if not failed:
+            failed = True
+            original(values)
+            raise RuntimeError("synthetic quality post-write failure")
+        return original(values)
+
+    monkeypatch.setattr(ledger, "append_many", fail_after_write)
+    row = {
+        "observation_id": "O-REFUSED-ONE",
+        "session_date": SESSION,
+        # Invalid evidence clocks use a wall-clock effective timestamp.  The
+        # retry must still identify the same durable refusal event.
+        "receipt_timestamp": "invalid-receipt-clock",
+        "source_file": f"raw/{SESSION}/events.jsonl",
+        "source_byte_offset": 100,
+        "source_row_number": 1,
+    }
+    with pytest.raises(RuntimeError, match="quality post-write failure"):
+        orchestrator._quality(row, "SYNTHETIC_REFUSAL", "stable detail")
+    physical = ledger.rows()
+    assert len(physical) == 1
+    assert parse_timestamp(physical[0]["effective_timestamp"]).tzinfo is not None
+    assert (
+        physical[0]["effective_timestamp_provenance"]
+        == "WALL_CLOCK_FALLBACK"
+    )
+    assert physical[0]["event_id"] in orchestrator._ledger_seen[
+        "refusals_data_quality"
+    ]
+
+    orchestrator._quality(row, "SYNTHETIC_REFUSAL", "stable detail")
+    assert ledger.rows() == physical
+    restarted = LiveAnalyticalOrchestrator(contract(tmp_path))
+    restarted._quality(row, "SYNTHETIC_REFUSAL", "stable detail")
+    assert restarted.ledgers["refusals_data_quality"].rows() == physical
+    with pytest.raises(ValueError, match="different immutable content"):
+        restarted._quality(row, "SYNTHETIC_REFUSAL", "changed detail")
+    assert restarted.ledgers["refusals_data_quality"].rows() == physical
+
+
+def test_quality_valid_evidence_clock_is_immutable_after_ambiguous_append(
+    tmp_path, monkeypatch,
+):
+    runtime = contract(tmp_path)
+    orchestrator = LiveAnalyticalOrchestrator(runtime)
+    ledger = orchestrator.ledgers["refusals_data_quality"]
+    original = ledger.append_many
+    failed = False
+
+    def fail_after_write(values):
+        nonlocal failed
+        if not failed:
+            failed = True
+            original(values)
+            raise RuntimeError("synthetic valid-clock post-write failure")
+        return original(values)
+
+    monkeypatch.setattr(ledger, "append_many", fail_after_write)
+    row = {
+        "observation_id": "O-REFUSED-VALID-CLOCK",
+        "session_date": SESSION,
+        "receipt_timestamp": "2026-08-20T10:00:00.123456+05:30",
+        "source_file": f"raw/{SESSION}/events.jsonl",
+        "source_byte_offset": 200,
+        "source_row_number": 2,
+    }
+    with pytest.raises(RuntimeError, match="valid-clock post-write failure"):
+        orchestrator._quality(row, "SYNTHETIC_REFUSAL", "stable detail")
+    physical = ledger.rows()
+    assert len(physical) == 1
+    assert physical[0]["effective_timestamp"] == row["receipt_timestamp"]
+    assert physical[0]["effective_timestamp_provenance"] == "EVIDENCE"
+
+    restarted = LiveAnalyticalOrchestrator(runtime)
+    restarted._quality(row, "SYNTHETIC_REFUSAL", "stable detail")
+    assert restarted.ledgers["refusals_data_quality"].rows() == physical
+
+    changed_clock = dict(row)
+    changed_clock["receipt_timestamp"] = "2026-08-20T10:00:00.123457+05:30"
+    with pytest.raises(ValueError, match="different immutable content"):
+        restarted._quality(
+            changed_clock, "SYNTHETIC_REFUSAL", "stable detail"
+        )
+    assert restarted.ledgers["refusals_data_quality"].rows() == physical
 
 
 def test_partial_multi_session_stage_retry_never_duplicates(tmp_path, monkeypatch):
@@ -823,7 +1796,7 @@ def test_partial_multi_session_stage_retry_never_duplicates(tmp_path, monkeypatc
         "source_file": f"raw/{second_session}/focused_fixture.jsonl",
     })
     orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
-    original = orchestrator_module.AppendOnlyLedger.append_many
+    original = orchestrator_module.AppendOnlyLedger.append_many_retained
     failed = False
 
     def fail_after_second_session(ledger, values):
@@ -843,7 +1816,7 @@ def test_partial_multi_session_stage_retry_never_duplicates(tmp_path, monkeypatc
 
     monkeypatch.setattr(
         orchestrator_module.AppendOnlyLedger,
-        "append_many",
+        "append_many_retained",
         fail_after_second_session,
     )
     with pytest.raises(RuntimeError, match="partial multi-session failure"):
@@ -869,18 +1842,393 @@ def test_partial_multi_session_stage_retry_never_duplicates(tmp_path, monkeypatc
     assert_unique_stage_and_publication_ids(orchestrator)
 
 
+def test_stage_ambiguity_with_unrelated_tail_is_durably_quarantined(
+    tmp_path, monkeypatch,
+):
+    runtime = contract(tmp_path)
+    orchestrator = LiveAnalyticalOrchestrator(runtime)
+    attempted = observation(
+        "O9101", "INDEX", INDEX,
+        datetime(2026, 8, 20, 9, 15, tzinfo=IST), price=57_000, volume=0,
+    )
+    unrelated = orchestrator._prepare(observation(
+        "O9102", "INDEX", INDEX,
+        datetime(2026, 8, 20, 9, 15, 1, tzinfo=IST),
+        price=57_001, volume=0,
+    ))
+    original = orchestrator_module.AppendOnlyLedger.append_many_retained
+    injected = False
+
+    def append_attempt_and_unrelated_tail(ledger, values):
+        nonlocal injected
+        if ledger.path.parent == orchestrator.stage_root and not injected:
+            injected = True
+            original(ledger, values)
+            with ledger.path.open("ab") as handle:
+                handle.write((
+                    json.dumps(unrelated, sort_keys=True, separators=(",", ":"))
+                    + "\n"
+                ).encode())
+                handle.flush()
+                os.fsync(handle.fileno())
+            raise RuntimeError("synthetic unrelated durable tail")
+        return original(ledger, values)
+
+    monkeypatch.setattr(
+        orchestrator_module.AppendOnlyLedger,
+        "append_many_retained",
+        append_attempt_and_unrelated_tail,
+    )
+    with pytest.raises(ValueError, match="ambiguity quarantined"):
+        orchestrator.process_observations([attempted])
+    assert orchestrator._sessions.get(SESSION, {}) == {}
+    assert orchestrator._stage_recovery_failure_path(SESSION).is_file()
+
+    monkeypatch.setattr(
+        orchestrator_module.AppendOnlyLedger, "append_many_retained", original,
+    )
+    with pytest.raises(ValueError, match="stage is quarantined"):
+        orchestrator.process_observations([attempted])
+    assert orchestrator._sessions.get(SESSION, {}) == {}
+    with pytest.raises(ValueError, match="stage is quarantined"):
+        LiveAnalyticalOrchestrator(runtime)
+
+
+def test_stage_quarantine_poison_survives_marker_write_failure(
+    tmp_path, monkeypatch,
+):
+    runtime = contract(tmp_path)
+    orchestrator = LiveAnalyticalOrchestrator(runtime)
+    attempted = observation(
+        "O9201", "INDEX", INDEX,
+        datetime(2026, 8, 20, 9, 15, tzinfo=IST), price=57_000, volume=0,
+    )
+    unrelated = orchestrator._prepare(observation(
+        "O9202", "INDEX", INDEX,
+        datetime(2026, 8, 20, 9, 15, 1, tzinfo=IST),
+        price=57_001, volume=0,
+    ))
+    original_append = orchestrator_module.AppendOnlyLedger.append_many_retained
+    original_atomic = orchestrator_module.atomic_json
+    injected = False
+
+    def append_unrelated_tail(ledger, values):
+        nonlocal injected
+        if ledger.path.parent == orchestrator.stage_root and not injected:
+            injected = True
+            original_append(ledger, values)
+            with ledger.path.open("ab") as handle:
+                handle.write((
+                    json.dumps(unrelated, sort_keys=True, separators=(",", ":"))
+                    + "\n"
+                ).encode())
+                handle.flush()
+                os.fsync(handle.fileno())
+            raise RuntimeError("synthetic unrelated durable tail")
+        return original_append(ledger, values)
+
+    def fail_recovery_marker(path, value):
+        if path.name.endswith(".recovery_failed.json"):
+            raise OSError("synthetic recovery marker failure")
+        return original_atomic(path, value)
+
+    monkeypatch.setattr(
+        orchestrator_module.AppendOnlyLedger,
+        "append_many_retained", append_unrelated_tail,
+    )
+    monkeypatch.setattr(orchestrator_module, "atomic_json", fail_recovery_marker)
+    with pytest.raises(OSError, match="recovery marker failure"):
+        orchestrator.process_observations([attempted])
+
+    monkeypatch.setattr(
+        orchestrator_module.AppendOnlyLedger,
+        "append_many_retained", original_append,
+    )
+    monkeypatch.setattr(orchestrator_module, "atomic_json", original_atomic)
+    with pytest.raises(ValueError, match="stage is quarantined"):
+        orchestrator.process_observations([attempted])
+    assert orchestrator._sessions.get(SESSION, {}) == {}
+    assert SESSION in orchestrator._poisoned_stage_sessions
+    stage_path = orchestrator.stage_root / f"{SESSION}.jsonl"
+    assert [
+        json.loads(line)["observation_id"]
+        for line in stage_path.read_text().splitlines()
+    ] == ["O9201", "O9202"]
+    # The pre-append intent remains durable even though the later quarantine
+    # marker write failed. Trusted ledger startup rediscovers the unrelated
+    # tail, persists the generic quarantine, and the session cannot restart.
+    generic = orchestrator_module.AppendOnlyLedger(stage_path)
+    with pytest.raises(ValueError, match="quarantined"):
+        generic.rows()
+    assert generic._append_quarantine_path.is_file()
+    with pytest.raises(ValueError, match="quarantined"):
+        LiveAnalyticalOrchestrator(runtime)
+    assert not orchestrator._stage_recovery_failure_path(SESSION).exists()
+
+
+def test_retained_stage_append_recovers_exact_full_tail_after_ack_failure(
+    tmp_path, monkeypatch,
+):
+    runtime = contract(tmp_path)
+    orchestrator = LiveAnalyticalOrchestrator(runtime)
+    attempted = observation(
+        "O9251", "INDEX", INDEX,
+        datetime(2026, 8, 20, 9, 15, tzinfo=IST), price=57_000, volume=0,
+    )
+
+    original_ack = orchestrator_module.AppendOnlyLedger.acknowledge_retained_append
+
+    def fail_before_intent_clear(ledger, receipt, *, accepted_identities):
+        if ledger.path.parent == orchestrator.stage_root:
+            raise OSError("synthetic crash before retained-intent ACK")
+        return original_ack(
+            ledger, receipt, accepted_identities=accepted_identities,
+        )
+
+    monkeypatch.setattr(
+        orchestrator_module.AppendOnlyLedger,
+        "acknowledge_retained_append", fail_before_intent_clear,
+    )
+    with pytest.raises(OSError, match="retained-intent ACK"):
+        orchestrator.process_observations([attempted])
+    intent = (
+        orchestrator.stage_root
+        / f"{SESSION}.jsonl.append_intent.json"
+    )
+    assert intent.is_file()
+
+    monkeypatch.setattr(
+        orchestrator_module.AppendOnlyLedger,
+        "acknowledge_retained_append", original_ack,
+    )
+    restarted = LiveAnalyticalOrchestrator(runtime)
+    assert not intent.exists()
+    assert list(restarted._sessions[SESSION]) == ["O9251"]
+    restarted.process_observations([attempted])
+    assert [
+        row["observation_id"]
+        for row in restarted._stage_ledger(SESSION).rows()
+    ] == ["O9251"]
+
+
+def test_retained_stage_append_survives_crash_before_caller_accept(
+    tmp_path, monkeypatch,
+):
+    runtime = contract(tmp_path)
+    orchestrator = LiveAnalyticalOrchestrator(runtime)
+    attempted = observation(
+        "O9255", "INDEX", INDEX,
+        datetime(2026, 8, 20, 9, 15, tzinfo=IST),
+        price=57_000, volume=0,
+    )
+
+    def crash_before_accept(_session, _rows):
+        raise RuntimeError("synthetic crash before caller accept")
+
+    monkeypatch.setattr(
+        orchestrator, "_accept_durable_stage_rows", crash_before_accept,
+    )
+    with pytest.raises(RuntimeError, match="before caller accept"):
+        orchestrator.process_observations([attempted])
+    intent = (
+        orchestrator.stage_root / f"{SESSION}.jsonl.append_intent.json"
+    )
+    assert intent.is_file()
+    assert orchestrator._sessions.get(SESSION, {}) == {}
+
+    restarted = LiveAnalyticalOrchestrator(runtime)
+    assert not intent.exists()
+    assert list(restarted._sessions[SESSION]) == ["O9255"]
+    restarted.process_observations([attempted])
+    assert [
+        row["observation_id"]
+        for row in restarted._stage_ledger(SESSION).rows()
+    ] == ["O9255"]
+
+
+def test_same_process_retry_resolves_ack_failure_before_dedup_and_next_row(
+    tmp_path, monkeypatch,
+):
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    first = observation(
+        "O9256", "INDEX", INDEX,
+        datetime(2026, 8, 20, 9, 15, tzinfo=IST),
+        price=57_000, volume=0,
+    )
+    second = observation(
+        "O9257", "INDEX", INDEX,
+        datetime(2026, 8, 20, 9, 15, 1, tzinfo=IST),
+        price=57_001, volume=0,
+    )
+    original_ack = orchestrator_module.AppendOnlyLedger.acknowledge_retained_append
+    failed = False
+
+    def fail_first_ack(ledger, receipt, *, accepted_identities):
+        nonlocal failed
+        if ledger.path.parent == orchestrator.stage_root and not failed:
+            failed = True
+            raise OSError("synthetic one-time retained ACK failure")
+        return original_ack(
+            ledger, receipt, accepted_identities=accepted_identities,
+        )
+
+    monkeypatch.setattr(
+        orchestrator_module.AppendOnlyLedger,
+        "acknowledge_retained_append", fail_first_ack,
+    )
+    with pytest.raises(OSError, match="one-time retained ACK failure"):
+        orchestrator.process_observations([first])
+    intent = (
+        orchestrator.stage_root / f"{SESSION}.jsonl.append_intent.json"
+    )
+    assert intent.is_file()
+    assert list(orchestrator._sessions[SESSION]) == ["O9256"]
+
+    # The exact replay must resolve the retained generic receipt before the
+    # `_stage_seen` identity shortcut. A later row must then append normally.
+    orchestrator.process_observations([first])
+    assert not intent.exists()
+    orchestrator.process_observations([second])
+    assert not intent.exists()
+    assert [
+        row["observation_id"]
+        for row in orchestrator._stage_ledger(SESSION).rows()
+    ] == ["O9256", "O9257"]
+
+
+def test_normal_stage_uses_one_retained_intent_and_four_steady_state_fsyncs(
+    tmp_path, monkeypatch,
+):
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    original_fsync = ledger_module.os.fsync
+    fsync_count = 0
+
+    def counted_fsync(descriptor):
+        nonlocal fsync_count
+        fsync_count += 1
+        return original_fsync(descriptor)
+
+    monkeypatch.setattr(ledger_module.os, "fsync", counted_fsync)
+    orchestrator.process_observations([observation(
+        "O9253", "INDEX", INDEX,
+        datetime(2026, 8, 20, 9, 15, tzinfo=IST),
+        price=57_000, volume=0,
+    )])
+    first_append_fsyncs = fsync_count
+    orchestrator.process_observations([observation(
+        "O9254", "INDEX", INDEX,
+        datetime(2026, 8, 20, 9, 15, 1, tzinfo=IST),
+        price=57_001, volume=0,
+    )])
+
+    # First creation adds one directory-entry fsync; a normal later append is
+    # intent-file fsync + intent-directory fsync + data fsync + ACK-directory
+    # fsync. The superseded two-intent path required seven steady-state fsyncs.
+    assert first_append_fsyncs == 5
+    assert fsync_count - first_append_fsyncs == 4
+    assert not orchestrator._stage_append_intent_path(SESSION).exists()
+    assert not (
+        orchestrator.stage_root / f"{SESSION}.jsonl.append_intent.json"
+    ).exists()
+
+
+def test_legacy_stage_append_intent_still_recovers_exact_tail(tmp_path):
+    runtime = contract(tmp_path)
+    orchestrator = LiveAnalyticalOrchestrator(runtime)
+    expected = orchestrator._prepare(observation(
+        "O9252", "INDEX", INDEX,
+        datetime(2026, 8, 20, 9, 15, tzinfo=IST),
+        price=57_000, volume=0,
+    ))
+    ledger = orchestrator._raw_stage_ledger(SESSION)
+    boundary = ledger.append_boundary()
+    orchestrator._write_stage_append_intent(SESSION, boundary, [expected])
+    ledger.append_many([expected])
+
+    restarted = LiveAnalyticalOrchestrator(runtime)
+    assert not restarted._stage_append_intent_path(SESSION).exists()
+    assert list(restarted._sessions[SESSION]) == ["O9252"]
+
+
+def test_stage_append_intent_rejects_oversize_tail_before_decoding(
+    tmp_path, monkeypatch,
+):
+    runtime = contract(tmp_path)
+    orchestrator = LiveAnalyticalOrchestrator(runtime)
+    expected = orchestrator._prepare(observation(
+        "O9261", "INDEX", INDEX,
+        datetime(2026, 8, 20, 9, 15, tzinfo=IST), price=57_000, volume=0,
+    ))
+    unrelated = orchestrator._prepare(observation(
+        "O9262", "INDEX", INDEX,
+        datetime(2026, 8, 20, 9, 15, 1, tzinfo=IST),
+        price=57_001, volume=0,
+    ))
+    ledger = orchestrator._raw_stage_ledger(SESSION)
+    boundary = ledger.append_boundary()
+    orchestrator._write_stage_append_intent(SESSION, boundary, [expected])
+    ledger.append_many([expected, unrelated])
+
+    monkeypatch.setattr(
+        ledger,
+        "scan_from",
+        lambda *_args, **_kwargs: pytest.fail(
+            "oversize intent recovery decoded the unexpected tail"
+        ),
+    )
+    with pytest.raises(ValueError, match="stage is quarantined"):
+        orchestrator._recover_stage_append_intent(SESSION)
+    assert orchestrator._stage_recovery_failure_path(SESSION).is_file()
+
+
+def test_stage_identity_requires_identical_normalized_content(tmp_path):
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    original = observation(
+        "O9103", "INDEX", INDEX,
+        datetime(2026, 8, 20, 9, 15, tzinfo=IST), price=57_000, volume=0,
+    )
+    orchestrator.process_observations([original])
+    changed = dict(original)
+    changed["price"] = 57_001
+    with pytest.raises(ValueError, match="identity reused with different content"):
+        orchestrator.process_observations([changed])
+    assert len(orchestrator._stage_ledger(SESSION).rows()) == 1
+
+
+def test_material_identity_index_uses_one_fixed_digest_mapping(tmp_path):
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    row = material_ledger_fixture("inventory_winner_transitions")
+    orchestrator._append_once(
+        "inventory_winner_transitions", row, "fixed-digest",
+        row["control_effective_timestamp"],
+    )
+    assert orchestrator._ledger_seen is orchestrator._ledger_content
+    digests = list(orchestrator._ledger_content["inventory_winner_transitions"].values())
+    assert len(digests) == 1
+    assert len(digests[0]) == 64
+    int(digests[0], 16)
+
+
 def test_registered_callback_stages_linearly_until_explicit_snapshot(tmp_path, monkeypatch):
     rows = full_stack_fixture()[:24]
     orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
     calls = []
     order_key_calls = 0
+    stage_prime_calls = 0
     original = orchestrator._compute_sessions
     original_order_key = orchestrator._order_key
+    stage_ledger = orchestrator._stage_ledger(SESSION)
+    original_stage_prime = stage_ledger._read_and_prime_locked
 
     def counted_order_key(row):
         nonlocal order_key_calls
         order_key_calls += 1
         return original_order_key(row)
+
+    def counted_stage_prime():
+        nonlocal stage_prime_calls
+        stage_prime_calls += 1
+        return original_stage_prime()
 
     monkeypatch.setattr(
         orchestrator,
@@ -888,12 +2236,15 @@ def test_registered_callback_stages_linearly_until_explicit_snapshot(tmp_path, m
         lambda targets: (calls.append(set(targets)), original(targets))[1],
     )
     monkeypatch.setattr(orchestrator, "_order_key", counted_order_key)
+    monkeypatch.setattr(stage_ledger, "_read_and_prime_locked", counted_stage_prime)
     for row in rows:
         orchestrator.process_observations([row])
     assert calls == []
     # A one-record increment may inspect that record while validating, sorting,
     # and accepting it, but must never rescan all prior session observations.
     assert order_key_calls <= 3 * len(rows)
+    assert stage_prime_calls == 1
+    assert orchestrator._stage_ledger(SESSION) is stage_ledger
     assert orchestrator._last_order_key[SESSION] == original_order_key(rows[-1])
     assert orchestrator.snapshot(SESSION, flush_dirty=False)["counts"]["observations"] == 0
     assert orchestrator.snapshot(SESSION)["counts"]["observations"] == len(rows)
@@ -1022,6 +2373,88 @@ def test_empty_poll_wall_clock_staleness_is_material_and_not_backdated(tmp_path)
     )
 
 
+def test_staleness_refresh_retry_after_persist_crash_is_exactly_once(
+    tmp_path, monkeypatch,
+):
+    base = datetime(2026, 8, 20, 9, 15, tzinfo=IST)
+    runtime = contract(tmp_path)
+    orchestrator = LiveAnalyticalOrchestrator(runtime)
+    orchestrator.process([
+        observation("O0001", "INDEX", INDEX, base, price=57_000, volume=0),
+        observation(
+            "O0002", "FUTURES", FUTURES,
+            base + timedelta(milliseconds=500), price=57_020, volume=1,
+        ),
+    ])
+    orchestrator.snapshot(SESSION)
+
+    stale_at = base + timedelta(seconds=20)
+    monkeypatch.setattr(
+        orchestrator,
+        "_persist_values",
+        lambda **_values: (_ for _ in ()).throw(
+            RuntimeError("synthetic availability state persist crash")
+        ),
+    )
+    with pytest.raises(
+        RuntimeError, match="synthetic availability state persist crash"
+    ):
+        orchestrator.refresh_staleness(stale_at)
+
+    availability_before = (
+        orchestrator.ledgers["availability_transitions"].rows()
+    )
+    stale_before = orchestrator.ledgers["stale_recovery_transitions"].rows()
+    availability_ids = {row["event_id"] for row in availability_before}
+    stale_ids = {row["event_id"] for row in stale_before}
+    assert len(availability_before) == len(availability_ids) == 5
+    assert len(stale_before) == len(stale_ids) == 4
+    assert all(row.get("evidence_identity") for row in availability_before)
+    effective = {
+        row["component"]: row["effective_timestamp"]
+        for row in availability_before
+    }
+    assert effective["INDEX_STATE"] == (
+        base + timedelta(seconds=10)
+    ).isoformat()
+    assert effective["FUTURES_STATE"] == (
+        base + timedelta(milliseconds=500, seconds=10)
+    ).isoformat()
+    assert effective["HORIZON_ID"] == (
+        base + timedelta(seconds=10)
+    ).isoformat()
+    assert all(
+        row["effective_timestamp"] != stale_at.isoformat()
+        for row in availability_before
+    )
+
+    # The state file still contains the pre-stale generation.  A new process
+    # must recognize the durable transition rows and persist the later wall
+    # clock without appending a second semantic freshness transition.
+    restarted = LiveAnalyticalOrchestrator(runtime)
+    assert restarted.refresh_staleness(stale_at + timedelta(seconds=30))
+    assert restarted.ledgers["availability_transitions"].rows() == (
+        availability_before
+    )
+    assert restarted.ledgers["stale_recovery_transitions"].rows() == stale_before
+    assert {
+        row["event_id"]
+        for row in restarted.ledgers["availability_transitions"].rows()
+    } == availability_ids
+    assert {
+        row["event_id"]
+        for row in restarted.ledgers["stale_recovery_transitions"].rows()
+    } == stale_ids
+
+    persisted = LiveAnalyticalOrchestrator(runtime)
+    availability = persisted.snapshot(SESSION, flush_dirty=False)["availability"]
+    assert availability["layers"]["ID"]["state"] == "STALE_DATA"
+    assert availability["divergence_state"] == "STALE_DATA"
+    assert availability["reference_timestamp"] == (
+        stale_at + timedelta(seconds=30)
+    ).isoformat()
+
+
 def test_stale_index_suspends_divergence_while_futures_remains_fresh(tmp_path):
     base = datetime(2026, 8, 20, 9, 15, tzinfo=IST)
     orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
@@ -1065,8 +2498,7 @@ def test_outputs_only_historical_preload_is_stale_for_live_latest(tmp_path):
     current = orchestrator.operational_availability(explicit_reference)
     assert current["reference_timestamp"] == explicit_reference.isoformat()
     assert current["calculation_timestamp"] == explicit_reference.isoformat()
-    orchestrator._sessions.clear()
-    orchestrator._last_order_key.clear()
+    orchestrator.finalize_session(SESSION)
 
     operational = orchestrator.operational_availability(
         datetime(2026, 8, 26, 18, 0, tzinfo=IST)
@@ -1083,6 +2515,88 @@ def test_outputs_only_historical_preload_is_stale_for_live_latest(tmp_path):
     assert orchestrator.snapshot(SESSION, flush_dirty=False)["gui_payload"] == (
         sealed["gui_payload"]
     )
+
+
+def test_operational_availability_reads_only_immutable_published_view(tmp_path):
+    base = datetime(2026, 8, 20, 9, 15, tzinfo=IST)
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    orchestrator.process([
+        observation("O0001", "INDEX", INDEX, base, price=57_000, volume=0),
+        observation(
+            "O0002", "FUTURES", FUTURES,
+            base + timedelta(milliseconds=500), price=57_020, volume=1,
+        ),
+    ])
+    orchestrator.snapshot(SESSION)
+
+    class WriterOwnedSessions(dict):
+        def __contains__(self, _key):
+            raise AssertionError("API traversed writer-owned sessions")
+
+        def __getitem__(self, _key):
+            raise AssertionError("API traversed writer-owned sessions")
+
+        def __iter__(self):
+            raise AssertionError("API traversed writer-owned sessions")
+
+    orchestrator._sessions = WriterOwnedSessions()
+    current = orchestrator.operational_availability(
+        base + timedelta(seconds=5)
+    )
+    assert current["index_state"] == "AVAILABLE"
+    assert current["futures_state"] == "AVAILABLE"
+    assert current["receipt_ages_seconds"]["INDEX"] == 5
+    assert current["receipt_ages_seconds"]["FUTURES"] == 4.5
+
+
+def test_sealed_operational_view_keeps_snapshot_and_overlay_on_one_generation(
+    tmp_path,
+):
+    base = datetime(2026, 8, 20, 9, 15, tzinfo=IST)
+    orchestrator = LiveAnalyticalOrchestrator(contract(tmp_path))
+    orchestrator.process([
+        observation("O0001", "INDEX", INDEX, base, price=57_000, volume=0),
+        observation(
+            "O0002", "FUTURES", FUTURES,
+            base + timedelta(milliseconds=500), price=57_020, volume=1,
+        ),
+    ])
+    published = orchestrator.snapshot(SESSION)
+
+    # Model the writer having built/swapped the next analytical output before
+    # it publishes the corresponding composite operational generation.
+    replacement = json.loads(json.dumps(published))
+    replacement["session_date"] = "2026-08-21"
+    replacement["availability"]["index_state"] = "STALE_OR_MISSING"
+    orchestrator._outputs = {"2026-08-21": replacement}
+
+    view, availability, causality = orchestrator.sealed_operational_generation(
+        base + timedelta(seconds=5)
+    )
+    assert view["session_date"] == SESSION
+    assert availability["index_state"] == "AVAILABLE"
+    assert availability["futures_state"] == "AVAILABLE"
+    assert availability["receipt_ages_seconds"]["INDEX"] == 5
+    assert availability["receipt_ages_seconds"]["FUTURES"] == 4.5
+    assert causality == published["public_causality_counters"]
+
+
+def test_shadow_state_age_read_never_iterates_mutable_receipt_mapping():
+    class ConcurrentReceipts(dict):
+        def items(self):
+            raise RuntimeError("dictionary changed size during iteration")
+
+    ingestor = SimpleNamespace(
+        latest_valid=ConcurrentReceipts({
+            "INDEX": datetime.now(IST).isoformat(),
+            "FUTURES": datetime.now(IST).isoformat(),
+            "UNSAFE_DYNAMIC_KEY": datetime.now(IST).isoformat(),
+        }),
+        latest={},
+    )
+    ages = ShadowState(ingestor, {}).ages()
+    assert set(ages) == {"INDEX", "FUTURES"}
+    assert all(value is not None and value >= 0 for value in ages.values())
 
 
 def test_finalized_session_compacts_raw_bucket_without_restart_reload(
