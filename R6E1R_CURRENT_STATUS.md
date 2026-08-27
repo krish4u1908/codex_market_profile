@@ -2,7 +2,7 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **REPAIRED AND SEALED FOR HOST VERIFICATION — NOT YET VERIFIED OR DEPLOYED**
+Status: **DEPLOYMENT DIGEST REPAIRED AND RESEALED — HOST RE-VERIFICATION PENDING**
 
 This file is the authoritative status block for the sanitized v2 branch. Older
 diagnostic results remain useful only when explicitly scoped to their tested
@@ -49,6 +49,9 @@ semantic, lifecycle precedence, or participation clock was changed.
 | New repair selections | 7 passed, 0 failed |
 | Projection reuse, gateway limit, and GUI parity selections | 27 passed, 0 failed |
 | Manifest/package selections | 3 passed, 0 failed |
+| Host regression on `3d0e8c1` | 642 passed, 1 failed; deployment stopped because the backend unit retained the pre-reseal runtime-configuration digest |
+| Runtime-digest repair selection | 3 passed, 0 failed; rendered unit, renderer refusal, and exact package-manifest checks all pass |
+| Deployment/API/security suite after repair | 116 passed, 2 failed because this container has no user-systemd bus; 0 skipped |
 | Historical repaired large-chunk diagnostic | Passed on `bd01b8d`; informative only because the v2 harness has additional diagnostics/tests |
 | Current v2 focused all-nine | Not run |
 | Current v2 full six-session all-nine | Not run |
@@ -62,8 +65,8 @@ semantic, lifecycle precedence, or participation clock was changed.
 | Engine manifest SHA-256 | `51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7` |
 | Engine aggregate | `362474858eda75b18180ad2fce48e50e1d4acdd1b04a0db405eaae199e70b7a7` |
 | Deployment files | 47/47 |
-| Deployment manifest SHA-256 | `d1b955715280670189dfd623f60ec8c57c870397057b7a81de597e68a9d42104` |
-| Package aggregate | `83ac33a6a82bc93db49a1464d237adc9658f9318b5331321a6693622384a6bf8` |
+| Deployment manifest SHA-256 | `d5106846fcbfbc84e172ab00449535cf030b6f641745e6d048223c1b2fc799db` |
+| Package aggregate | `1ba46ae9ac72d458ab2573ebf71d963f6dc36e483963245f97d01f21ccdd2a54` |
 | Runtime configuration | `43654758453b2a39209dbe0df6f6d2587c63c2bf5cb77c99d44df07dd54f485b` |
 
 ## Remaining release gates

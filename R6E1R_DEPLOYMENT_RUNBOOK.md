@@ -41,8 +41,8 @@ port; never open the range.
 | Engine manifest/companion SHA-256 | `51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7` |
 | Engine aggregate hash | `362474858eda75b18180ad2fce48e50e1d4acdd1b04a0db405eaae199e70b7a7` |
 | Deployment package files | PASS — 47/47 |
-| Deployment manifest/companion SHA-256 | `d1b955715280670189dfd623f60ec8c57c870397057b7a81de597e68a9d42104` |
-| Deployment package aggregate hash | `83ac33a6a82bc93db49a1464d237adc9658f9318b5331321a6693622384a6bf8` |
+| Deployment manifest/companion SHA-256 | `d5106846fcbfbc84e172ab00449535cf030b6f641745e6d048223c1b2fc799db` |
+| Deployment package aggregate hash | `1ba46ae9ac72d458ab2573ebf71d963f6dc36e483963245f97d01f21ccdd2a54` |
 | Runtime configuration hash | `43654758453b2a39209dbe0df6f6d2587c63c2bf5cb77c99d44df07dd54f485b` |
 
 Hostinger must fetch the exact final commit, fast-forward only, start from a clean

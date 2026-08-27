@@ -16,6 +16,9 @@ The authoritative status and sealed identities are in
 | New provisional-publication, restart, refresh, tamper, and bounded-diagnostic selections | 7 | 0 | 0 | PASS |
 | Projection reuse, gateway limit, and GUI parity selections | 27 | 0 | 0 | PASS |
 | Engine/package manifest selections | 3 | 0 | 0 | PASS |
+| Host regression on `3d0e8c1` | 642 | 1 | 0 | FAIL CLOSED — stale runtime-configuration digest in the sealed backend unit |
+| Runtime-digest repair selection | 3 | 0 | 0 | PASS |
+| Deployment/API/security suite after repair | 116 | 2 | 0 | NOT ACCEPTED locally; both failures require a user-systemd bus |
 
 The three failures were retained as failures. No test was weakened, skipped,
 deselected, or reclassified to claim acceptance.
@@ -38,6 +41,5 @@ mandatory before deployment.
   causally advancing.
 - Closure opportunities, no-opportunity cases, finalization-only changes, and
   tampered trace fields are distinguished.
-- Failed schedules retain bounded analytical IDs and content hashes without raw
 - Failed schedules retain bounded analytical IDs and content hashes without raw
   rows or source paths.
