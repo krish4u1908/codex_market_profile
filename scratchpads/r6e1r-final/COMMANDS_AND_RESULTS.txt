@@ -315,3 +315,11 @@ RESULT: REJECTED EXTERNAL INTERRUPTION; both processes received signal 2 at the 
 2026-08-27 persistent acceptance relaunch
 COMMAND: install and verify non-transient no-restart user units for focused_merged_v4 and six_session_merged_v3; use pinned c42e703 checkout, explicit pinned PYTHONPATH, clean roots, independent launches, and a SIGINT-ignoring/SIGTERM-controllable exec wrapper
 RESULT: RUNNING from 2026-08-27 15:40:10 and 15:40:14 IST. Unit files verify; Transient=no; StandardInput=null; KillSignal=SIGTERM; Linger=yes. Initial missing-PYTHONPATH launcher preflight was preserved separately and corrected before any analytical work began.
+
+2026-08-27 persistent acceptance external-SIGTERM rejection
+COMMAND: inspect user journal, timing files, and process state after focused_merged_v4 and six_session_merged_v3 stopped
+RESULT: REJECTED EXTERNAL INTERRUPTION; six-session received signal 15 at 15:42:15 IST and focused was stopped through systemd at 15:42:32 IST. No analytical comparison result exists. A separate clean detached host verifier started focused all-nine from exact `19c5489f` at 15:43:11; it remains pending independent completion validation.
+
+2026-08-27 collector and protected-service lifecycle audit
+COMMAND: read-only process/start-tick/unit/hash/journal/watchdog inspection after the acceptance interruptions
+RESULT: PASS for non-interference. Ports 8803/8804 retain exact PIDs, start ticks, unit identities, invocation IDs, and NRestarts=0. Collector code/scripts are unchanged; PID 1006842 followed its recurring in-process near-close watchdog shutdown at 15:40:56 after an active-option silence recovery request. No R6E command signalled, restarted, or modified it, and no replacement PID exists after close.
