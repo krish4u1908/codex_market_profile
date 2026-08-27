@@ -2,7 +2,7 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **SEALED PACKAGE PREPARED — HOSTINGER ACCEPTANCE AND INSTALLATION PENDING**
+Status: **SEALED PACKAGE AND COMPLETE REGRESSION PASS — EQUIVALENCE PENDING — NOT INSTALLED**
 
 The authoritative package guide is
 [deploy/r6e1r/README.md](deploy/r6e1r/README.md). This root-level runbook records
@@ -10,8 +10,8 @@ the acceptance order and unfilled deployment evidence. It does not authorize
 installation before equivalence, regression, source-integrity, browser,
 runtime-file-open, systemd, and package gates pass.
 
-No R6E1R service is currently verified as installed, no external URL is
-verified, and no R6E1R verification tag has been created.
+No R6E1R service is installed, no external URL is deployed, and no R6E1R
+verification tag has been created.
 
 ## Intended isolated layout
 
@@ -19,9 +19,9 @@ verified, and no R6E1R verification tag has been created.
 |---|---|---|
 | Analytical backend | `127.0.0.1:18805` | Localhost only |
 | Sanitized gateway | Prefer `0.0.0.0:8805` if free | Read-only external surface |
-| Repository | `<HOST_REPOSITORY_ROOT>` | Read-only at runtime |
-| Raw collector | `<HOST_RAW_ROOT>` | Backend read-only; hidden from gateway |
-| State/config root | `<HOST_STATE_ROOT>` | Backend state only; hidden from gateway |
+| Repository | `/opt/banknifty/repositories/banknifty-market-profiler` | Read-only at runtime |
+| Raw collector | `/opt/banknifty-collector/data-prod-v4` | Backend read-only; hidden from gateway |
+| State/config root | `<DEPLOYMENT_STATE_ROOT>` | Backend state only; hidden from gateway |
 
 Ports 8803 and 8804 are protected and must not be modified or restarted. Resolve
 listeners with `ss -ltnp` immediately before installation. If 8805 is occupied,
@@ -33,8 +33,9 @@ port; never open the range.
 | Item | Required value |
 |---|---|
 | Feature branch | `fix/r6e1r-final-live-shadow` |
-| Exact pushed commit | `PENDING_FINAL_PUSH` |
-| Clean remote worktree | `PENDING_HOSTINGER_EVIDENCE` |
+| Current pushed repair commit | `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2` |
+| Final report-only pushed commit | `PENDING_FINAL_PUSH` |
+| Clean deployment worktree | `PENDING_AUTHORIZED_HOST_EVIDENCE` |
 | Engine source files | PASS — 38/38 |
 | Engine manifest/companion SHA-256 | `715a82b48e7bffe68f749f94c29b6d0e098bfe0e55f24d91e00db690e38827b3` |
 | Engine aggregate hash | `021935bc0722b16a16e3af52deb7a7f26ef1aa6b4983aa3442420596bc00725d` |
@@ -43,7 +44,16 @@ port; never open the range.
 | Deployment package aggregate hash | `d68f22217f1dfb75817ebb9b7cb6af0d21306cf1081b7d222c6ecca130978380` |
 | Runtime configuration hash | `5ce1058763ecc47494f9bdf231439117c6a4fb64c2e491d70395b4be0c50b031` |
 
-Hostinger must fetch the exact final commit, fast-forward only, start from a clean
+The current pushed repair commit passed the complete repository regression
+636/636 with zero failures or skips in 129.36 seconds (2m09.72 wall,
+685,556 KiB peak RSS). The retained log and timing SHA-256 values are
+`a1132553080052c44424e8c936a33a8b7f548661b11390460fd0492463050bef`
+and `c2127eca2426ccb1a92a48875aa1d8ad2939e2be5ccf99bbaed921de8e175681`.
+That run includes the host-only ptrace/file-open, user-systemd/bubblewrap,
+sealed-reference, and Chromium fixture tests. It does not install or exercise
+the isolated live services.
+
+The authorized host must fetch the exact final commit, fast-forward only, start from a clean
 worktree, and independently verify both companions and every allowlisted byte.
 Any byte mismatch stops installation. Do not regenerate or accept a manifest on
 the deployment host merely to make a mismatch pass.
@@ -66,18 +76,26 @@ evidence.
    zero source mutations, and deterministic restart/checkpoint behavior.
 5. Run the complete repository regression suite, including host-only sealed
    comparison-package tests.
-6. Run Hostinger Chromium/Playwright browser and geometry tests, including
+6. Run Chromium/Playwright browser and geometry tests on the authorized host, including
    fixed-horizon and Intraday-only graceful degradation.
-7. Run the Hostinger ptrace/strace file-open audit and prove the runtime opens no
+7. Run the authorized-host ptrace/strace file-open audit and prove the runtime opens no
    prohibited source.
-8. Verify both user-systemd units with the real Hostinger user manager and run
+8. Verify both user-systemd units with the real authorized-host user manager and run
    the bubblewrap/namespace/refusal probes.
 9. Prove the largest public chart response remains below the gateway's 8 MiB
    per-response ceiling.
 
-These gates are all `PENDING_HOSTINGER_EVIDENCE`. The user-supplied August 20
-archive is an auxiliary parser/replay diagnostic only and must not replace the
-canonical full-six collector inputs.
+The complete regression and current fixture-browser portions of these gates are
+closed on `c42e703...`. Focused merged-v2 and full-six-v1 were stopped and
+rejected after the shared clean-B GUI comparator projected 11,486 dense
+resolution observations instead of the live GUI's 1,294 material transitions.
+The repair changes only that independent comparator and was independently
+reviewed. Fresh focused-v3 and full-six-v2 have been running from the pinned
+repair commit since 2026-08-27 15:03:13 IST. Their equivalence, actual runtime
+file-open, source-integrity, performance, and all installed/deployed-live gates
+remain pending. The user-supplied August 20 archive is an auxiliary
+parser/replay diagnostic only and must not replace the canonical full-six
+collector inputs.
 
 Suggested pre-install checks include:
 
@@ -114,7 +132,7 @@ loginctl show-user "$R6E1R_USER" -p Linger -p State -p RuntimePath
 
 Use the repository's current test commands and report files for the exact
 equivalence and regression invocation. Do not weaken, deselect, or reclassify a
-failure on Hostinger.
+failure on the authorized host.
 
 ## Provision and preload after all gates pass
 
@@ -151,7 +169,7 @@ require:
 - both services stopped;
 - a sorted SHA-256 manifest that passes after copy.
 
-Verified preload source and manifest: `PENDING_HOSTINGER_EVIDENCE`
+Verified preload source and manifest: `PENDING_AUTHORIZED_HOST_EVIDENCE`
 
 ## Install user services
 
@@ -230,7 +248,7 @@ Do not intentionally kill or restart any collector or the services on ports
 
 ## Host limitations to resolve during acceptance
 
-- User-manager linger/startup state must be measured on Hostinger. If
+- User-manager linger/startup state must be measured on the authorized host. If
   `Linger=no`, administrator authorization may be required for unattended
   startup across logout/reboot.
 - Host/provider firewall changes are outside this source package. If required,
@@ -242,20 +260,21 @@ Do not intentionally kill or restart any collector or the services on ports
 
 | Field | Value |
 |---|---|
-| Final pushed commit | `PENDING_FINAL_PUSH` |
+| Current pushed repair commit | `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2` |
+| Final report-only pushed commit | `PENDING_FINAL_PUSH` |
 | Verification tag | `NOT_CREATED` |
-| Selected external port | `PENDING_HOSTINGER_EVIDENCE` |
-| Backend service active/enabled | `PENDING_HOSTINGER_EVIDENCE` |
-| Gateway service active/enabled | `PENDING_HOSTINGER_EVIDENCE` |
-| Health | `PENDING_HOSTINGER_EVIDENCE` |
-| Readiness | `PENDING_HOSTINGER_EVIDENCE` |
-| Six replay checks | `PENDING_HOSTINGER_EVIDENCE` |
-| Backend SIGKILL/gateway continuity | `PENDING_HOSTINGER_EVIDENCE` |
-| Public-interface probe | `PENDING_HOSTINGER_EVIDENCE` |
-| External browser check | `PENDING_HOSTINGER_EVIDENCE` |
+| Selected external port | `PENDING_AUTHORIZED_HOST_EVIDENCE` |
+| Backend service active/enabled | `NOT_INSTALLED` |
+| Gateway service active/enabled | `NOT_INSTALLED` |
+| Health | `PENDING_AUTHORIZED_HOST_EVIDENCE` |
+| Readiness | `PENDING_AUTHORIZED_HOST_EVIDENCE` |
+| Six replay checks | `PENDING_AUTHORIZED_HOST_EVIDENCE` |
+| Backend SIGKILL/gateway continuity | `PENDING_AUTHORIZED_HOST_EVIDENCE` |
+| Public-interface probe | `PENDING_AUTHORIZED_HOST_EVIDENCE` |
+| External browser check | `PENDING_AUTHORIZED_HOST_EVIDENCE` |
 | Verified external URL | `NOT_DEPLOYED` |
-| Ports 8803/8804 unchanged | `PENDING_HOSTINGER_EVIDENCE` |
-| Collectors unchanged | `PENDING_HOSTINGER_EVIDENCE` |
+| Ports 8803/8804 unchanged | `PENDING_AUTHORIZED_HOST_EVIDENCE` |
+| Collectors unchanged | `PENDING_AUTHORIZED_HOST_EVIDENCE` |
 
 Create and push `r6e1r-live-shadow-verified` only after every analytical,
 regression, browser, runtime, service, recovery, and external probe passes.

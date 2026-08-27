@@ -2,11 +2,14 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT SOURCE/PACKAGE SEALED; HOSTINGER LIVE VERIFICATION PENDING**
+Status: **CURRENT REGRESSION 636/636 — SERVICES NOT INSTALLED — LIVE VERIFICATION PENDING**
 
-No R6E1R service has been installed or accepted from this worktree. There is no
-verified external URL and no verification tag. The results below separate local
-source/package evidence from the mandatory Hostinger service evidence.
+Current pushed repair commit: `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`.
+
+No R6E1R service has been installed or accepted from this worktree. No external
+URL has been deployed, and no verification tag has been created. The results
+below separate local source/package evidence from the mandatory authorized-host
+service evidence.
 
 ## Read-only endpoint inventory
 
@@ -64,35 +67,40 @@ replay object.
 | Runtime configuration hash | `5ce1058763ecc47494f9bdf231439117c6a4fb64c2e491d70395b4be0c50b031` |
 
 Both checked-in companion checks pass locally. These hashes identify the package
-Hostinger must verify byte-for-byte before testing or installation; they do not
-constitute live-service acceptance.
+the authorized host must verify byte-for-byte before testing or installation;
+they do not constitute live-service acceptance.
 
-## Current local evidence
+The pushed repair commit passed the complete repository regression 636/636 with
+zero failures or skips in 129.36 seconds (2m09.72 wall, 685,556 KiB peak RSS).
+The retained log/time SHA-256 values are
+`a1132553080052c44424e8c936a33a8b7f548661b11390460fd0492463050bef`
+and `c2127eca2426ccb1a92a48875aa1d8ad2939e2be5ccf99bbaed921de8e175681`.
 
-| Gate | Local result | Hostinger acceptance status |
+## Prior targeted/local evidence
+
+| Gate | Prior targeted/local result | Current authorized-host acceptance status |
 |---|---|---|
-| API tests | PASS — 39/39 | Fresh live probes pending |
-| Gateway security tests | PASS — 13/13, including GET/HEAD redirect refusal and hidden-path validation | Namespace and public-surface probes pending |
-| Deployment/runner tests | 130 passed; 2 user-systemd tests unavailable because this environment has no user bus | Exact user-systemd lifecycle pending |
-| Unit syntax verification | PASS locally | Exact Hostinger unit verification pending |
-| Complete non-browser collection | 545 passed, 20 skipped; 13 failures and 16 errors are host-reference/ptrace/user-systemd environment gates | Complete Hostinger regression pending |
-| Browser acceptance | Chromium/Playwright unavailable locally | Mandatory Hostinger browser/geometry run pending |
-| Runtime file-open trace | Ptrace/strace unavailable locally | Mandatory Hostinger strace audit pending |
+| API and gateway tests | Included in 636/636 current regression | Fresh installed-service probes pending |
+| User-systemd/bubblewrap tests | CURRENT REGRESSION PASS; zero failures/skips | Actual service install/lifecycle pending |
+| Unit syntax verification | CURRENT REGRESSION PASS | Rendered deployment-host unit verification pending |
+| Complete repository collection | 636 passed, 0 failed, 0 skipped | CURRENT REGRESSION PASS |
+| Browser fixture | 1/1 in 4.86 s; zero console/page errors | CURRENT FIXTURE PASS; deployed browser pending |
+| Runtime file-open instrumentation | Host-only ptrace/strace tests pass within 636/636 | Fresh focused/full-six measured trace pending |
 
-## Required Hostinger live evidence
+## Required authorized-host live evidence
 
 | Probe | Expected | Current evidence |
 |---|---|---|
-| Backend `/api/health` | HTTP 200 | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
-| Gateway `/api/health` | HTTP 200 | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
-| Backend `/api/readiness` | 200 or explicitly benign after-hours 503 | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
-| Gateway `/api/readiness` | Same sanitized state | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
-| `/api/audit` | Measured zero causal violations and verified manifest | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
-| Six `/api/session?date=...` checks | Nonempty `HISTORICAL_REPLAY` | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
-| Absent verified replay date | Non-200 unavailable | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
-| Largest public chart response | Less than the gateway's 8 MiB per-response ceiling | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
-| Backend SIGKILL recovery | Gateway remains active; backend recovers automatically without a manual gateway restart | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
-| Public interface | Only the selected research port is exposed | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
+| Backend `/api/health` | HTTP 200 | `PENDING_AUTHORIZED_HOST_LIVE_EVIDENCE` |
+| Gateway `/api/health` | HTTP 200 | `PENDING_AUTHORIZED_HOST_LIVE_EVIDENCE` |
+| Backend `/api/readiness` | 200 or explicitly benign after-hours 503 | `PENDING_AUTHORIZED_HOST_LIVE_EVIDENCE` |
+| Gateway `/api/readiness` | Same sanitized state | `PENDING_AUTHORIZED_HOST_LIVE_EVIDENCE` |
+| `/api/audit` | Measured zero causal violations and verified manifest | `PENDING_AUTHORIZED_HOST_LIVE_EVIDENCE` |
+| Six `/api/session?date=...` checks | Nonempty `HISTORICAL_REPLAY` | `PENDING_AUTHORIZED_HOST_LIVE_EVIDENCE` |
+| Absent verified replay date | Non-200 unavailable | `PENDING_AUTHORIZED_HOST_LIVE_EVIDENCE` |
+| Largest public chart response | Less than the gateway's 8 MiB per-response ceiling | `PENDING_AUTHORIZED_HOST_LIVE_EVIDENCE` |
+| Backend SIGKILL recovery | Gateway remains active; backend recovers automatically without a manual gateway restart | `PENDING_AUTHORIZED_HOST_LIVE_EVIDENCE` |
+| Public interface | Only the selected research port is exposed | `PENDING_AUTHORIZED_HOST_LIVE_EVIDENCE` |
 | External URL | HTTP 200 after all analytical gates pass | `NOT_DEPLOYED` |
 
 The exact acceptance order and probe commands are recorded in

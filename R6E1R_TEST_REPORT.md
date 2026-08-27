@@ -2,52 +2,41 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT FOCUSED INGESTION/ORCHESTRATION SUITES PASSED; LOCAL HOST-BOUND AND COMPLETE HOSTINGER GATES NOT ACCEPTED**
+Status: **COMPLETE REGRESSION 636/636 — FOCUSED-V3/FULL-SIX-V2 RUNNING — DEPLOYMENT PENDING**
 
-No failing or skipped test may be weakened, deselected, reclassified, or omitted to obtain acceptance. Environment-blocked tests are reported as non-passes until they pass in the required Hostinger environment.
+Current pushed repair commit: `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`.
 
-## Current-source local evidence
+No failing or skipped test may be weakened, deselected, reclassified, or omitted to obtain acceptance. Environment-blocked tests are reported as non-passes until they pass on the authorized host.
+
+## Current pushed-commit evidence
 
 | Suite | Passed | Failed | Errors | Skipped/deselected | Elapsed | Standing |
 |---|---:|---:|---:|---:|---:|---|
-| Ingestion suite | 127 | 0 | 0 | 0 | 7.51 s | PASS |
-| Orchestrator suite | 111 | 0 | 0 | 0 | 19.98 s | PASS |
-| Equivalence harness | 32 | 3 | 0 | 0 | 6.64 s | NOT ACCEPTED locally; all three failures require permitted `strace`/`ptrace` |
-| Deployment package, gateway security, and runner | 130 | 2 | 0 | 0 | 42.79 s | NOT ACCEPTED locally; both failures require a user-systemd bus |
-| Pre-final-repair selected functional baseline | 416 | 0 | 0 | 5 deliberately deselected host-only tests | 76.92 s | Historical local baseline; current complete Hostinger rerun required |
-| Full non-browser collection | 545 | 13 | 16 | 20 skipped | 79.30 s | NOT ACCEPTED locally; 29 failures/errors plus 20 skips are environment/reference-bound as inventoried below |
-| Current browser acceptance | 0 | 0 | 0 | Not run | — | UNAVAILABLE locally because Python Playwright/Chromium is absent |
+| Complete repository regression | 636 | 0 | 0 | 0 | 129.36 s pytest; 2m09.72 wall | CURRENT PASS |
+| Equivalence harness after clean-GUI repair | 36 | 0 | 0 | 0 | Included in complete run | CURRENT REGRESSION PASS; fresh A/B pending |
+| Chromium/Playwright fixture | 1 | 0 | 0 | 0 | 4.86 s | CURRENT FIXTURE PASS; zero console/page errors; not deployed-live |
 
-The five deliberately deselected tests in the historical 416-test functional
-selection are two user-systemd/bubblewrap tests and three clean-B `strace`
-tests. The current focused runs above execute rather than deselect those cases:
-three are blocked by this container's ptrace policy and two by its missing user
-systemd bus. They remain mandatory Hostinger gates.
-
-The 29 failures/errors in the full non-browser collection are retained exactly
-as test outcomes. The additional 20 skips are also non-passing outcomes and
-remain mandatory on Hostinger.
-
-| Environment dependency | Failures/errors |
-|---|---:|
-| User-systemd bus unavailable | 2 |
-| `ptrace`/`strace` prohibited | 3 |
-| Sealed R6C0 reference absent under `/opt` | 4 |
-| Sealed R6C2R/R6D references absent under `/opt` | 20 |
-| **Total** | **29** |
-
-This inventory explains the local result; it does not convert those failures or errors into passes. Hostinger must rerun them with the sealed references and host facilities available.
+Peak process RSS for the complete run was 685,556 KiB. Its retained log and
+timing SHA-256 values are
+`a1132553080052c44424e8c936a33a8b7f548661b11390460fd0492463050bef`
+and `c2127eca2426ccb1a92a48875aa1d8ad2939e2be5ccf99bbaed921de8e175681`.
+No test was deselected, skipped, weakened, or reclassified. The run includes and
+closes the current host-only user-systemd/bubblewrap, ptrace/strace clean-B,
+sealed-reference, gateway, API, and fixture-browser regression gates.
 
 Current manifest checks pass for the 38-file engine allowlist and the 47-file
 deployment package. The deployment rerun also caught and corrected a stale
 runtime-config digest embedded in the systemd service before the final package
-reseal. Byte integrity does not substitute for runtime, browser, six-session,
-or deployment acceptance.
+reseal. Byte integrity and complete regression do not substitute for fresh
+focused/full-six equivalence or installed/deployed-live acceptance.
 
-The gateway security suite passes 13/13. Its GET and HEAD redirect regressions
+The current complete suite includes the gateway security tests. Their GET and
+HEAD redirect regressions
 prove an allowlisted backend route cannot make the gateway follow `Location`
 to a second authority; the gateway returns a sanitized 502 and the target sees
-zero requests.
+zero requests. A direct bounded-memory regression streams an
+8-MiB-plus-one-byte upstream body and proves the gateway returns the sanitized
+502 `UPSTREAM_RESPONSE_LIMIT`; gateway security is 14/14.
 
 ## New durability regressions
 
@@ -66,27 +55,40 @@ zero requests.
   publishes the complete canonical snapshot idempotently. The 111/111
   orchestrator result includes periodic-versus-one-shot, restart, and
   post-write-failure identity tests.
+- Focused merged-v2 exposed one clean-B GUI-comparator defect after exact
+  analytical components and eight ledgers: clean B projected 11,486 dense
+  resolution observations instead of live A's 1,294 material transitions.
+  Focused merged-v2 and full-six-v1 were stopped and rejected. Commit
+  `c42e703...` repairs only that clean comparator; independent review found no
+  frozen-rule, clock, dense-artifact, ID, or ledger change. The repaired harness
+  passes 36/36.
 
-## Required Hostinger completion gates
+## Required authorized-host completion gates
 
 | Gate | Current standing |
 |---|---|
-| Full repository regression with sealed `/opt` references | `PENDING_HOSTINGER_EVIDENCE` |
-| All host-only user-systemd/bubblewrap tests | `PENDING_HOSTINGER_EVIDENCE` |
-| All `strace`/clean-B file-open tests | `PENDING_HOSTINGER_EVIDENCE` |
-| Current-source Chromium/browser and geometry tests | `PENDING_HOSTINGER_EVIDENCE` |
-| Focused all-nine incremental schedules | `PENDING_HOSTINGER_EVIDENCE` |
-| Full six-session all-nine equivalence | `PENDING_HOSTINGER_EVIDENCE` |
-| Restart, partial-line, rotation, replay, and transition-boundary host runs | `PENDING_HOSTINGER_EVIDENCE` |
-| Health/readiness and external deployment probes | `PENDING_HOSTINGER_EVIDENCE` |
+| Full repository regression with sealed `/opt` references | PASS — 636/636, zero failed/skipped |
+| All host-only user-systemd/bubblewrap tests | PASS within complete regression |
+| All `strace`/clean-B file-open tests | PASS within complete regression; actual fresh-run traces pending |
+| Current-source Chromium/browser and geometry fixture | PASS — 1/1 in 4.86 s; deployed browser pending |
+| Focused all-nine incremental schedules | Focused-v3 running from pinned `c42e703...` since 2026-08-27 15:03:13 IST; `RUNNING_RESULT_PENDING` |
+| Full six-session all-nine equivalence | Full-six-v2 running from pinned `c42e703...` since 2026-08-27 15:03:13 IST; `RUNNING_RESULT_PENDING` |
+| Restart, partial-line, rotation, replay, and transition-boundary unit regressions | PASS within 636/636; measured fresh A/B schedules pending |
+| Health/readiness and external deployment probes | `PENDING_AUTHORIZED_HOST_EVIDENCE` |
 
-The selected local tests cover callback durability, ingestion, orchestration, API behavior, GUI projection, restart/replay logic, manifest enforcement, and gateway security. The exact host-dependent and end-to-end cases above remain mandatory and may not be inferred from the local pass.
+The current complete tests cover callback durability, ingestion, orchestration,
+API behavior, GUI projection, restart/replay logic, manifest enforcement,
+gateway security, and host-only facilities. The running raw-data equivalence and
+all installed-service/deployed-live cases remain independently mandatory.
 
 ## Historical evidence
 
 The following results were produced at earlier source checkpoints. They are useful regression history only and are not current acceptance evidence:
 
 - 289 passed, 0 failed, 0 skipped in 62.29 s at a prior correctly provisioned checkpoint.
+- A later pre-repair non-browser collection recorded 545 pass, 20 skip, 13 fail,
+  and 16 error; its missing-facility/reference cases are superseded by the
+  current fully provisioned 636/636 result, not retroactively relabelled.
 - 135/135 R6D-parity engine/GUI/API/browser tests at GUI milestone `5efe70e9685b98556ae1ad9a860912c7bb1513fc`.
 - Focused all-nine v12: 21/21 components, 8/8 ledgers, 9/9 schedules, 9/9 invariant groups, 72/72 checkpoint rows, and 2/2 recovery probes.
 - Earlier 216/216 and 151/151 targeted gates at their respective pre-final-review source states.
@@ -97,10 +99,11 @@ The following results were produced at earlier source checkpoints. They are usef
   31/31 harness tests, and 116/116 ingestion/orchestrator/harness tests in
   14.31 seconds (14.60 seconds wall) at 137,536 KiB peak RSS.
 
-Source, tests, runtime closure, and package bytes changed after those checkpoints. None of those counts closes a current Hostinger gate.
+Source, tests, runtime closure, and package bytes changed after those
+checkpoints. Only the current 636/636 result closes current regression gates.
 
 ## Final acceptance summary
 
 Local source verification is sufficient for handoff, not release. Final aggregate status is:
 
-`PENDING_HOSTINGER_COMPLETE_REGRESSION_EQUIVALENCE_BROWSER_AND_DEPLOYMENT_EVIDENCE`
+`COMPLETE_REGRESSION_PASS_FRESH_EQUIVALENCE_AND_LIVE_DEPLOYMENT_PENDING`

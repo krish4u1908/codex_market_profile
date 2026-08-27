@@ -2,7 +2,9 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT HOSTINGER FOCUSED/FULL-SIX CAUSALITY AUDIT PENDING; V12 HISTORICAL**
+Status: **CURRENT REGRESSION 636/636; FOCUSED-V3/FULL-SIX-V2 CAUSALITY RESULTS PENDING**
+
+Current pushed repair commit: `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`.
 
 ## Frozen clock contract
 
@@ -32,9 +34,20 @@ The frozen BN-reference inventory contract is separate: it permits a backward In
 
 The one-record diagnostic probe exposed 668 out-of-order refusals: a raw Futures candidate was durably deferred pending canonical depth selection while later observations advanced the acknowledged high-water. The repair makes the earliest unresolved candidate receipt a strict causal publication barrier, including equal-clock rows, until repository-owned selection releases or rejects candidates. Restart coverage retains the barrier in durable state.
 
-Current local adversarial and functional tests verify the repair logic. Focused
-v12 is historical because the engine identity changed; fresh current-commit
-focused and six-session all-nine causality measurements remain pending.
+Targeted local adversarial and functional tests exercised the repair logic.
+Focused v12 is historical because the engine identity changed; current-commit
+focused and six-session all-nine causality units are running, with results
+pending.
+
+Focused merged-v2 and full-six-v1 were later stopped and rejected because the
+shared clean-B GUI builder projected 11,486 dense resolution observations where
+the live GUI exposed 1,294 material transitions. This was a presentation
+comparator defect, not a production clock or analytical-publication defect.
+Commit `c42e703...` changes only the clean comparator's existing live/R6D
+compaction and passed independent review without changing any frozen clock,
+threshold, dense artifact, ID, or ledger. Fresh focused-v3 and full-six-v2 have
+been running from the pinned repair commit since 2026-08-27 15:03:13 IST; no
+causality value is promoted before their accepted seals complete.
 
 Full-six v6 exposed a separate test-orchestration visibility defect, not a production-clock defect. Its one-record scheduler supplied only the newly changed explicit path, so an already-visible raw file held behind its checkpoint could be omitted while OI advanced the high-water. The repaired harness retains only paths with staged bytes beyond their durable checkpoints and includes them on every nonempty causal-prefix poll; intentional empty polls remain empty. The regression uses byte-exact blank coordinate rows, a 512-byte read bound, and an OI hourly rotation to prove that the old path generated one `OUT_OF_ORDER_RECEIPT` plus one `OUT_OF_ORDER_ANALYTICAL_RECEIPT`, while the repair produces zero, survives restart, drains every checkpoint remainder, and matches the original-chunk snapshot and ledgers exactly. Production discovery, frozen clocks, and refusal semantics were not changed.
 
@@ -51,15 +64,15 @@ Full-six v6 exposed a separate test-orchestration visibility defect, not a produ
 
 | Invariant | Required | Final value |
 |---|---:|---|
-| Future joins | 0 | 0 — PASS |
-| Synchronization tolerance violations | 0 | 0 — PASS |
-| Timestamp backdating | 0 | 0 — PASS |
-| Duplicate analytical IDs | 0 | 0 — PASS |
-| Valid timestamps converted to `NaT` | 0 | 0 — PASS |
-| Analytical refusals | 0 | 0 — PASS |
-| GUI clock-contract violations | 0 | 0 — PASS |
-| GUI display-contract violations | 0 | 0 — PASS |
-| GUI path-clock violations | 0 | 0 — PASS |
+| Future joins | 0 | 0 — HISTORICAL PASS |
+| Synchronization tolerance violations | 0 | 0 — HISTORICAL PASS |
+| Timestamp backdating | 0 | 0 — HISTORICAL PASS |
+| Duplicate analytical IDs | 0 | 0 — HISTORICAL PASS |
+| Valid timestamps converted to `NaT` | 0 | 0 — HISTORICAL PASS |
+| Analytical refusals | 0 | 0 — HISTORICAL PASS |
+| GUI clock-contract violations | 0 | 0 — HISTORICAL PASS |
+| GUI display-contract violations | 0 | 0 — HISTORICAL PASS |
+| GUI path-clock violations | 0 | 0 — HISTORICAL PASS |
 
 Focused causality matrix SHA-256: `f5370e1ce6ce067b2ae5a3a090c0215d9c6c7a548348b724f97d2df963164bf2`.
 
@@ -78,21 +91,22 @@ cannot substitute for any current-commit focused or six-session value.
 
 ## Adversarial evidence checklist
 
-| Case | Local/historical evidence; final Hostinger gate pending |
+| Case | Regression provenance; final focused/full-six measurement pending |
 |---|---|
-| Partial final line deferral/retry | PASS — targeted suite and focused inside-line schedule |
-| Malformed complete record hard refusal | PASS — targeted repaired-engine suite |
-| Truncation and same-inode replacement | PASS — targeted replacement/quarantine/integrity suite |
-| Duplicate replay | PASS — targeted exactly-once suite |
-| Callback exception before acknowledgement | PASS — targeted replayability suite |
-| Failure after durable append for each material ledger | PASS — seven nonempty focused ledger boundaries exactly once |
-| Restart after ingestion before analytical flush | PASS — targeted and focused recovery probes |
-| Out-of-order visibility, candidate barrier, and checkpoint-lagging peers | PASS — targeted barrier fixtures, semantic hourly-peer regression, and focused zero refusals |
-| Exact-second/fractional timestamps | PASS — strict-parser targeted fixtures |
-| Naive/future timestamp refusal | PASS — targeted refusal fixtures |
-| Stale market suspension | PASS — targeted engine/API fixtures |
-| Missing options/fixed context isolation | PASS — targeted engine/API fixtures |
+| Partial final line deferral/retry | TARGETED/HISTORICAL — targeted suite and focused inside-line schedule |
+| Malformed complete record hard refusal | TARGETED — repaired-engine suite |
+| Truncation and same-inode replacement | TARGETED — replacement/quarantine/integrity suite |
+| Duplicate replay | TARGETED — exactly-once suite |
+| Callback exception before acknowledgement | TARGETED — replayability suite |
+| Failure after durable append for each material ledger | HISTORICAL — seven nonempty focused ledger boundaries exactly once |
+| Restart after ingestion before analytical flush | TARGETED/HISTORICAL — recovery probes |
+| Out-of-order visibility, candidate barrier, and checkpoint-lagging peers | TARGETED/HISTORICAL — barrier fixtures and hourly-peer regression |
+| Exact-second/fractional timestamps | TARGETED — strict-parser fixtures |
+| Naive/future timestamp refusal | TARGETED — refusal fixtures |
+| Stale market suspension | TARGETED — engine/API fixtures |
+| Missing options/fixed context isolation | TARGETED — engine/API fixtures |
 
-The pre-final-repair local R6E functional selection passed 416/416, including the
-adversarial code paths above. Hostinger must repeat them with ptrace/open audit
-available and bind the results to the pushed commit.
+The current complete repository regression passed 636/636 with zero failures or
+skips, including the host-only ptrace/file-open and adversarial tests above. This
+closes their regression gate on the pushed commit; the measured focused/full-six
+causality and runtime-open evidence remains pending from the running units.

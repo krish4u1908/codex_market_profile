@@ -68,7 +68,8 @@ evidence gates. There was no remaining code-attributable failure.
   publishes the complete stable canonical snapshot idempotently.
 - The public gateway refuses all backend redirects and returns a sanitized 502;
   GET/HEAD regressions prove no request reaches the redirect target. Gateway
-  security passes 13/13 on the current resealed package.
+  security passes 14/14 on the current resealed package, including a direct
+  oversized-upstream sanitized-refusal regression.
 
 ## Uploaded August 20 diagnostic
 

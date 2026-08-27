@@ -295,3 +295,15 @@ RESULT: PASS; 36/36 harness tests; preserved focused snapshot recomparison 21/21
 2026-08-27 complete repository regression after GUI comparator repair
 COMMAND: same fully provisioned complete pytest invocation as the exact merged gate, now on repaired source and added regression
 RESULT: PASS; 635 passed, 0 failed, 0 skipped in 124.39s; wall 2m04.82s; max process RSS 670,496 KiB; service result success/exit 0. Log SHA-256 5f63c3436f3bb7dd94f822da05dbdb33d9569536d657fd055e234920ade1e31f; timing SHA-256 e76aa1cdcbec963ccaf73c8f55babd258b329f7baf08eda8952396a421364c8a. No test was deselected, skipped, weakened, or reclassified.
+
+2026-08-27 direct oversized-upstream gateway regression
+COMMAND: stream MAX_RESPONSE_BYTES+1 bytes through an allowlisted gateway route; run targeted test and complete deploy/r6e1r/test_gateway_security.py
+RESULT: PASS; exact sanitized HTTP 502 JSON UPSTREAM_RESPONSE_LIMIT; targeted 1/1; gateway security 14/14 in 4.08s; server/error resources closed; diff check PASS.
+
+2026-08-27 final complete regression after gateway security hardening
+COMMAND: fully provisioned PYTHONPATH/research-venv pytest -q with sealed R6C0I/R6B3/R6B3A/R6B3R roots and browser library path
+RESULT: PASS; 636 passed, 0 failed, 0 skipped in 129.36s; wall 2m09.72s; max process RSS 685,556 KiB; service result success/exit 0. Log SHA-256 a1132553080052c44424e8c936a33a8b7f548661b11390460fd0492463050bef; timing SHA-256 c2127eca2426ccb1a92a48875aa1d8ad2939e2be5ccf99bbaed921de8e175681. No test was deselected, skipped, weakened, or reclassified.
+
+2026-08-27 preliminary credential and oversized-file scan
+COMMAND: tracked/history key-token patterns, credential-bearing path inventory, tracked sizes, and all reachable Git blob sizes
+RESULT: PASS; no real key/token signature; fake credential strings confined to redaction tests; no raw JSONL/database/credential files; largest reachable blob 314,380 bytes; blobs over 1 MiB=0 and over 10 MiB=0. Final-commit rerun remains mandatory.

@@ -2,7 +2,9 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT COMMIT HOSTINGER SIX-SESSION EVIDENCE PENDING; V12 HISTORICAL ONLY**
+Status: **FULL-SIX-V2 RUNNING FROM C42E703 — RESULT PENDING; PRIOR RUNS REJECTED**
+
+Current pushed repair commit: `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`.
 
 ## Evaluation contract
 
@@ -79,7 +81,20 @@ current focused or six-session result.
 
 A fresh six-session v3 diagnostic sealed exact A/B baselines and frozen counts but was deliberately stopped before schedules after a reference-only availability-surface mismatch. The historical-availability comparator repair at pushed head `89f135064417ba537dc302027442a110477b5d03` passed 29/29 targeted tests; a separate preserved-material check matched incremental A and batch B 24/24 rows each against Reference C with zero remainder. The diagnostic remains rejected; the accepted six-session report must name the new sealed output root, seal hashes, command line, engine source identity, configuration identity, elapsed time, and peak RSS:
 
-Fresh v6 subsequently proved that baseline and both reference surfaces were exact: 21/21 A/B components, 8/8 append-only ledgers, 9/9 invariants, 30/30 R6C2 rows, and 180/180 R6D rows passed with all frozen counts exact. It is still rejected because the explicit-path `one_record_per_increment` harness omitted a visible checkpoint-lagging raw peer and manufactured 898 ingestion plus 898 analytical out-of-order refusals. The harness now repolls only changed paths plus visible checkpoint remainders and gates the post-drain remainder at zero. A byte-exact sparse-coordinate/hourly-peer regression fails the former scheduler semantically and passes the repair; the complete current harness is 31/31. None of the final cells above is populated from v6; fresh v7 is mandatory.
+Fresh v6 subsequently proved that baseline and both reference surfaces were exact: 21/21 A/B components, 8/8 append-only ledgers, 9/9 invariants, 30/30 R6C2 rows, and 180/180 R6D rows passed with all frozen counts exact. It is still rejected because the explicit-path `one_record_per_increment` harness omitted a visible checkpoint-lagging raw peer and manufactured 898 ingestion plus 898 analytical out-of-order refusals. The harness now repolls only changed paths plus visible checkpoint remainders and gates the post-drain remainder at zero. A byte-exact sparse-coordinate/hourly-peer regression fails the former scheduler semantically and passes the repair. None of the final cells above is populated from v6; the current pinned six-session unit is running and its result remains pending.
+
+Full-six-v1 was stopped and rejected before the remaining schedules because the
+shared clean-B GUI builder had already failed focused merged-v2: it projected
+11,486 dense resolution observations where live A correctly exposed 1,294
+material transitions. Commit `c42e703...` repairs only that independent clean
+comparator. The complete harness passes 36/36, the complete repository passes
+636/636 with zero failures/skips, and an independent review found no frozen-rule,
+clock, dense-artifact, ID, or ledger change. Those regression results do not
+promote any full-six value.
+
+`r6e1r-six-merged-v2.service` has been running from the pinned pushed repair
+commit since 2026-08-27 15:03:13 IST. Its output and trace must seal and pass all
+matrices before any final cell is populated.
 
 - Final output root: `PENDING_FINAL_EVIDENCE`
 - Incremental A seal SHA-256: `PENDING_FINAL_EVIDENCE`

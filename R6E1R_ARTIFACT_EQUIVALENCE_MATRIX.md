@@ -2,7 +2,9 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT COMMIT FOCUSED/FULL-SIX HOSTINGER EVIDENCE PENDING**
+Status: **C42E703 FOCUSED-V3/FULL-SIX-V2 UNITS RUNNING — RESULTS PENDING**
+
+Current pushed repair commit: `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`.
 
 Incremental A and clean chronological B must consume the same selected raw bytes from independent state roots. Comparison is an exact canonical multiset/identity comparison; floating tolerance, count-only equivalence, and inherited R6C2R output are insufficient.
 
@@ -15,9 +17,20 @@ it does not populate any current-commit or six-session result below.
 - Component matrix SHA-256: `7f66920bf67df12767b2b93e5115cd357bc6f12df37c35e799a62ae6b0e8c742`
 - Ledger matrix SHA-256: `8d2c8706637a15ba12d230307e09ec1138ab134f4dc02ee624f25bc82fa22da6`
 - Equivalence summary SHA-256: `19b6c15f426b925fa6ec018d65477f4364242d65cfaaa5425423098d3861de15`
-- Evidence root: `<HOST_HISTORICAL_EVIDENCE_ROOT>` (not published)
+- Historical evidence root: `/opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_evidence/focused_nine_final_v12`
 
 The historical-availability reference comparator added at pushed commit `89f135064417ba537dc302027442a110477b5d03` passed 29/29 targeted harness tests. A separate check over preserved v3 material matched incremental A and batch B 24/24 rows each against Reference C with zero remainder. Final Reference-C status remains pending the fresh six-session run.
+
+Focused merged-v2 exposed one clean-B GUI-comparator defect after its
+analytical components and all eight ledgers were exact: clean B projected
+11,486 dense resolution observations where the live GUI correctly exposed
+1,294 material native-mechanism transitions. Focused merged-v2 and full-six-v1
+were stopped and rejected; neither contributes an acceptance value below.
+Commit `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2` changes only the independent
+clean comparator to apply the existing live/R6D transition compaction.
+Independent review found no frozen-rule, clock, dense-artifact, ID, or ledger
+change. Fresh focused-v3 and full-six-v2 have been running from that pinned
+commit since 2026-08-27 15:03:13 IST; every final matrix cell remains pending.
 
 | Artifact | Incremental A publication | Independent B authority | Frozen count when applicable | Required final result |
 |---|---|---|---:|---|

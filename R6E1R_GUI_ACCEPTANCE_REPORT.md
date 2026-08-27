@@ -2,21 +2,22 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT LOCAL API/FUNCTIONAL EVIDENCE PASSED; CURRENT BROWSER AND EXTERNAL LIVE ACCEPTANCE PENDING**
+Status: **CURRENT FIXTURE GUI PASS — EXTERNAL DEPLOYED-LIVE ACCEPTANCE PENDING**
+
+Current pushed repair commit: `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`.
 
 The intended GUI contract follows the verified R6D visual model while adding operational availability and receipt-age state. The browser must render server-published analytical rows; it may select, sort, filter, and draw them, but it must not recompute detector, inventory, lifecycle, participation, or cross-layer analytics.
 
-## Current local evidence boundary
+## Current regression and fixture evidence
 
 | Evidence | Result | What it proves |
 |---|---|---|
-| Current API suite | 39/39 passed | Current server/API projection behavior |
-| Pre-final-repair selected functional baseline | 416 passed; 5 host-only tests deliberately deselected | Historical selected non-browser behavior; current Hostinger browser run remains mandatory |
-| Gateway security | 13/13 passed | Current sanitized gateway behavior, including hidden-path validation and redirect refusal |
-| Current Playwright/Chromium run | Not available locally | Nothing about current visual rendering; Hostinger run required |
+| Complete repository regression | 636/636, zero failed/skipped | Current API, GUI, gateway, host-only, and fixture-browser regression |
+| Current Playwright/Chromium fixture | 1/1 in 4.86 s; zero console/page errors | Current synthetic rendering, replay/control persistence, and screenshots |
 | External live service | Not deployed by this handoff | External GUI acceptance remains pending |
 
-Python Playwright/Chromium is absent in the local environment. Therefore, every browser-visible requirement below remains pending even where non-browser unit/API coverage passed.
+The current fixture-browser result is accepted for its synthetic scenarios. It
+does not establish that a service is installed, publicly reachable, or healthy.
 
 ## Required GUI contract
 
@@ -42,33 +43,43 @@ Python Playwright/Chromium is absent in the local environment. Therefore, every 
 
 ### Graceful degradation
 
-| Missing/stale layer | Required behavior | Current browser standing |
+| Missing/stale layer | Required behavior | Current suite standing |
 |---|---|---|
-| 3D | Continue 2D, 1D, and Intraday; show reason | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
-| 2D | Continue 1D and Intraday; show reason | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
-| All fixed horizons | Continue Intraday when available | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
-| Stale Index or Futures | Suspend divergence as `STALE_DATA`; retain last chart with warning | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
-| Missing/stale options | Suspend only affected participation layer | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
-| Missing CE/PE | Do not block Index/Futures chart | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
+| 3D | Continue 2D, 1D, and Intraday; show reason | CURRENT SUITE PASS; deployed-live pending |
+| 2D | Continue 1D and Intraday; show reason | CURRENT SUITE PASS; deployed-live pending |
+| All fixed horizons | Continue Intraday when available | CURRENT FIXTURE PASS; deployed-live pending |
+| Stale Index or Futures | Suspend divergence as `STALE_DATA`; retain last chart with warning | CURRENT SUITE PASS; deployed-live pending |
+| Missing/stale options | Suspend only affected participation layer | CURRENT SUITE PASS; deployed-live pending |
+| Missing CE/PE | Do not block Index/Futures chart | CURRENT SUITE PASS; deployed-live pending |
 
 Live events must never be labelled `SUCCESS` or `FAILURE`.
 
-## Historical visual evidence
+## Current fixture visual evidence
 
-The following fixtures were recorded at earlier pushed head `4d160bcc61bcebd88135ce270c17926830022deb`. They remain useful historical references, but they are not current-source browser evidence or external-live proof.
+The complete current regression regenerated the following fixtures. They are
+current-source fixture evidence, not external-live proof.
 
-| Historical scenario | File | Dimensions | Historical SHA-256 |
+| Current fixture scenario | File | Dimensions | Current SHA-256 |
 |---|---|---:|---|
-| Complete fixed horizons | `evidence/r6e1r/gui/complete_fixed_horizons.png` | 1600 x 1915 | `f7676c44a6fa49d2822c3285705abf8749f9675196429ab02e229e53fa976bae` |
-| Intraday-only degradation | `evidence/r6e1r/gui/intraday_only_degradation.png` | 1600 x 1915 | `250ba99fd8f473d428b6069459ed7874423aa2d1d19faf1177a2e7f3783ea005` |
-| Fixture/latest operational | `evidence/r6e1r/gui/live_latest_operational.png` | 1600 x 1915 | `ebb0c7b2afb7e8ea6e6461a733b3b1534822270c870a0cff73a8c917e2ab3b6c` |
+| Complete fixed horizons | `evidence/r6e1r/gui/complete_fixed_horizons.png` | 1600 x 1915 | `532c09190f817ddf697445b3a7351220f3be0d5c19083978ea35065a083a4fdc` |
+| Intraday-only degradation | `evidence/r6e1r/gui/intraday_only_degradation.png` | 1600 x 1915 | `307e33736bd9f9c68c4f6d99fd30a76d5a411352d0b633795f8957db90bb772c` |
+| Fixture/latest operational | `evidence/r6e1r/gui/live_latest_operational.png` | 1600 x 1915 | `a5e75f678a90ef67567222d2ed87d0bf57aad0d3a197f1b58371ecdaabdec3c2` |
+
+Focused merged-v2 was stopped and rejected after its clean-B GUI builder
+projected 11,486 dense resolution observations instead of the live GUI's 1,294
+material transitions; full-six-v1 shared the same comparator and was also
+stopped. The independently reviewed `c42e703...` repair changes only the clean
+comparator. Focused-v3 and full-six-v2 have been running from that pinned commit
+since 2026-08-27 15:03:13 IST, so their GUI A/B equality remains pending.
 
 At GUI milestone `5efe70e9685b98556ae1ad9a860912c7bb1513fc`, the R6D-parity engine/GUI/API/browser suite passed 135/135 and recorded zero console/page errors. Later source and package changes mean that result is historical only.
 
 ## Final acceptance gate
 
-Hostinger must run current-source Chromium/Playwright coverage, visually inspect complete fixed-horizon, Intraday-only, and live/latest scenarios, verify toggle persistence and graceful degradation, observe zero console/page errors, measure the largest sanitized chart response below the 8 MiB gateway cap, and repeat the operational checks against the isolated deployed URL.
+The current fixture coverage and screenshots pass. Final GUI acceptance still
+requires actual response-size measurement plus repetition of the operational
+checks against the isolated deployed URL.
 
-`GUI_ACCEPTANCE: PENDING_HOSTINGER_BROWSER_AND_EXTERNAL_LIVE_EVIDENCE`
+`GUI_ACCEPTANCE: FIXTURE_PASS_EXTERNAL_LIVE_PENDING`
 
 Detailed pending browser cases are listed in [R6E1R_BROWSER_TEST_REPORT.md](R6E1R_BROWSER_TEST_REPORT.md).

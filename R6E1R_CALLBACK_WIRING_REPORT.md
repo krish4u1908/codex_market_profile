@@ -2,7 +2,9 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT FOCUSED LOCAL SUITES RECORDED; HOSTINGER FOCUSED/SIX-SESSION AND COMPLETE GATES PENDING**
+Status: **CURRENT REGRESSION 636/636 — FOCUSED-V3/FULL-SIX-V2 RUNNING — EQUIVALENCE PENDING**
+
+Current pushed repair commit: `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`.
 
 ## Production path
 
@@ -59,17 +61,26 @@ The ingestor registers the orchestrator as its callback. Polling owns ingestion 
 
 The fixed 1D/2D/3D context reader uses predecessor raw bytes, excludes the current evaluation session, caches source identities, and avoids hashing or rebuilding unchanged history on every poll. Finalized session observation buckets are compacted after durable publication while output and deterministic stage identities remain restart-safe.
 
-## Verified targeted evidence
+## Recorded targeted and historical evidence
 
 | Evidence | Recorded result | Final standing |
 |---|---|---|
-| Pre-write, post-fsync, partial multi-session, publication exception, continuation, checkpoint-authority, unstable-terminal-group, and runner coverage | Ingestion 127/127; orchestrator 111/111 | Local PASS; Hostinger complete regression pending |
+| Pre-write, post-fsync, partial multi-session, publication exception, continuation, checkpoint-authority, unstable-terminal-group, and runner coverage | Ingestion 127/127; orchestrator 111/111; included in current 636/636 | CURRENT REGRESSION PASS; fresh A/B pending |
 | Production callback registration | Covered by ingestor/orchestrator integration tests | Implemented |
 | API reads do not flush analytics | Covered by live API/state tests | Implemented |
 | One-record unresolved Futures candidate | Earlier probe exposed 668 refusals | Repaired; focused v12 exercised all nine schedules with zero analytical refusals |
-| Current-source focused callback path | Earlier v12 passed 21/21 components, 8/8 ledgers, 9/9 schedules, 9/9 invariants, 2/2 recovery probes | Superseded by post-review runtime changes; fresh run required |
-| Fresh six-session production callback path | Every required schedule and canonical artifact | `PENDING_FINAL_EVIDENCE` |
-| Current-source complete regression | Local full non-browser: 545 pass, 20 skip, 29 host/reference failures or errors | Hostinger complete run pending |
+| Historical focused callback path | Earlier v12 passed 21/21 components, 8/8 ledgers, 9/9 schedules, 9/9 invariants, 2/2 recovery probes | Superseded; focused-v3 running from current repair commit |
+| Fresh six-session production callback path | Every required schedule and canonical artifact | Full-six-v2 running since 2026-08-27 15:03:13 IST; `PENDING_FINAL_EVIDENCE` |
+| Current-source complete regression | 636 passed, 0 failed, 0 skipped in 129.36 s | CURRENT REGRESSION PASS; fresh equivalence and deployment pending |
+
+Focused merged-v2 reached exact analytical components and all eight ledgers but
+then exposed one clean-B GUI-comparator defect: clean B emitted 11,486 dense
+resolution observations where live A emitted 1,294 material native-mechanism
+transitions. Because full-six-v1 shared that comparator, both units were stopped
+and rejected without promoting partial results. Commit `c42e703...` repairs only
+the independent clean GUI builder, was independently reviewed, and does not
+change the callback path, frozen analytical rules, clocks, IDs, dense artifacts,
+or ledgers. Fresh focused-v3 and full-six-v2 are running from that pinned commit.
 
 The detailed stage ownership and evidence requirements are in [R6E1R_CALLBACK_WIRING_MATRIX.md](R6E1R_CALLBACK_WIRING_MATRIX.md).
 
@@ -80,4 +91,5 @@ manifest SHA-256
 `715a82b48e7bffe68f749f94c29b6d0e098bfe0e55f24d91e00db690e38827b3`
 and engine hash
 `021935bc0722b16a16e3af52deb7a7f26ef1aa6b4983aa3442420596bc00725d`;
-it requires a fresh Hostinger focused and full-six run.
+it requires fresh focused-v3 and full-six-v2 runs on the pushed repair commit;
+both units are currently running and their results remain pending.

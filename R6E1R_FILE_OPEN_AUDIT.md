@@ -2,7 +2,9 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT COMMIT HOSTINGER STRACE/FILE-OPEN EVIDENCE PENDING; V12 HISTORICAL**
+Status: **CURRENT FILE-OPEN REGRESSION PASS — FRESH A/B RUNTIME AUDIT PENDING**
+
+Current pushed repair commit: `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`.
 
 ## Acceptance rule
 
@@ -27,12 +29,29 @@ Focused v8 reported prohibited opens zero, but an independent audit rejected tha
 
 Therefore the v8 zero must not appear as the final file-open result.
 
+## Current regression evidence
+
+The pushed repair commit passed the complete repository regression 636/636 with
+zero failures or skips. That fully provisioned invocation includes the host-only
+ptrace/strace, clean-B child observation, required-source, unknown-path
+fail-closed, and package/refusal tests that earlier containers could not run.
+Its log and timing SHA-256 values are
+`a1132553080052c44424e8c936a33a8b7f548661b11390460fd0492463050bef`
+and `c2127eca2426ccb1a92a48875aa1d8ad2939e2be5ccf99bbaed921de8e175681`.
+
+This closes the current regression gate for the instrumentation. It does not
+substitute test-fixture observations for the measured focused/full-six runtime
+audit. Focused-v3 and full-six-v2 have been running from pinned commit
+`c42e703...` since 2026-08-27 15:03:13 IST; all final values below remain
+pending until accepted run seals and traces exist.
+
 ## Historical focused-v12 result
 
-Focused v12 recorded the values below for its historical commit. The local
-sandbox prohibits ptrace, so the three current clean-B strace tests cannot run
-here. These values do not populate any current-commit final cell; Hostinger must
-rerun the instrumented focused and full-six paths.
+Focused v12 recorded the values below for its historical commit. The earlier
+local container prohibited ptrace, so its three clean-B strace tests could not
+run. Current regression now proves those tests on the authorized host, but these
+historical measurements still do not populate any current-commit final cell;
+the instrumented focused and full-six paths must finish.
 
 | Scope | Audit rows | Summed observed opens | Required-source rows | Prohibited | Unmeasured |
 |---|---:|---:|---:|---:|---:|
@@ -51,13 +70,13 @@ The 2,340 figure is the number of aggregated evidence rows, not the observed-ope
 
 | Requirement | Final evidence |
 |---|---|
-| Parent incremental-A opens observed | `PENDING_FINAL_EVIDENCE` |
-| Every clean-B child process observed or independently traced | `PENDING_FINAL_EVIDENCE` |
-| Every required A source opened | `PENDING_FINAL_EVIDENCE` |
-| Every required B source opened | `PENDING_FINAL_EVIDENCE` |
-| Unknown external data-like path fails closed | `PENDING_FINAL_EVIDENCE` |
-| Same-run B intermediates explicitly classified | `PENDING_FINAL_EVIDENCE` |
-| Post-seal reference opens separately classified | `PENDING_FINAL_EVIDENCE` |
+| Parent incremental-A opens observed | Instrumentation regression PASS; fresh A/B observation count pending |
+| Every clean-B child process observed or independently traced | PASS in current 636/636 regression; fresh A/B trace pending |
+| Every required A source opened | Required-source regression PASS; fresh A/B coverage rows pending |
+| Every required B source opened | Required-source regression PASS; fresh A/B coverage rows pending |
+| Unknown external data-like path fails closed | PASS in current 636/636 regression |
+| Same-run B intermediates explicitly classified | Classification regression PASS; fresh A/B rows pending |
+| Post-seal reference opens separately classified | Classification regression PASS; fresh A/B rows pending |
 | Prohibited open count | `PENDING_FINAL_EVIDENCE` — required 0 |
 | Unmeasured required rows | `PENDING_FINAL_EVIDENCE` — required 0 |
 | Audit evidence SHA-256 | `PENDING_FINAL_EVIDENCE` |

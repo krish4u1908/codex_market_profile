@@ -2,14 +2,17 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **IMPLEMENTATION REVIEWED AND SEALED — HOSTINGER VERIFICATION AND DEPLOYMENT PENDING**
+Status: **COMPLETE REGRESSION 636/636 — FRESH EQUIVALENCE RUNNING — DEPLOYMENT NOT STARTED**
 
 This report is a controlled handoff. `PENDING_FINAL_EVIDENCE` means the value
-must come from a newly completed Hostinger run over the exact pushed commit.
+must come from a newly completed run on the authorized `/opt/banknifty` host
+over the exact pushed repair commit.
 Earlier diagnostic runs and all stale 26/34-file identities are historical only.
 
 ## Current local implementation record — 2026-08-27
 
+- Current pushed repair commit:
+  `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`.
 - Engine closure: 38/38 files; manifest SHA-256
   `715a82b48e7bffe68f749f94c29b6d0e098bfe0e55f24d91e00db690e38827b3`;
   engine hash
@@ -20,28 +23,42 @@ Earlier diagnostic runs and all stale 26/34-file identities are historical only.
   `d68f22217f1dfb75817ebb9b7cb6af0d21306cf1081b7d222c6ecca130978380`;
   runtime configuration hash
   `5ce1058763ecc47494f9bdf231439117c6a4fb64c2e491d70395b4be0c50b031`.
-- Independent source and package reviews found no known blocker within the
-  completed local code, durability, callback, bounded-memory, schema, GUI/API,
-  bootstrap, and package-pin scope. Pending Hostinger gates can still expose a
-  host/data-scale defect.
-- Current focused suites: ingestion 127/127 and orchestration 111/111 passed.
-  The equivalence harness passed 32 tests with three non-passes caused by this
-  container prohibiting `strace`/`ptrace`. Deployment/package/gateway/runner
-  coverage passed 130 tests with two non-passes caused by its unavailable user
-  systemd bus. Every host-bound case remains mandatory on Hostinger.
-- The stabilized full non-browser collection passed 545 tests, skipped 20,
-  failed 13, and errored 16 in 79.30 seconds. Its 29 failures/errors are exactly
-  the same unavailable host/reference classes: user-systemd/bubblewrap (2),
-  ptrace/strace (3), absent sealed R6C0 evidence (4), and absent sealed R6C2R/R6D
-  evidence (20); the 20 skips are additional non-passing outcomes. No
-  code-attributable failure remained.
+- The complete repository regression passed 636/636 with zero failures and zero
+  skips. Pytest reported 129.36 seconds; `/usr/bin/time` reported 2m09.72 wall
+  and 685,556 KiB peak process RSS. Retained log/time SHA-256 values are
+  `a1132553080052c44424e8c936a33a8b7f548661b11390460fd0492463050bef`
+  and `c2127eca2426ccb1a92a48875aa1d8ad2939e2be5ccf99bbaed921de8e175681`.
+  No test was deselected, skipped, weakened, or reclassified.
+- That complete suite closes the current host-only ptrace/file-open,
+  user-systemd/bubblewrap, sealed-reference, API, gateway, and fixture-browser
+  regression gates. It does not supply the final focused/full-six runtime trace
+  or any installed-service evidence.
 - Gateway redirects are refused before following `Location`; focused GET/HEAD
-  regressions prove the redirect target receives zero requests. Gateway
-  security is 13/13 and the resealed runtime/package closure is exact.
-- Browser collection cannot run locally because Python Playwright/Chromium is
-  absent. It is not waived; Hostinger browser acceptance remains mandatory.
-- No service was installed, no public URL was verified, and no verification tag
+  regressions recorded that the redirect target received zero requests. The
+  targeted gateway-security record is 14/14 and includes a real
+  8-MiB-plus-one-byte upstream response refused as the sanitized 502
+  `UPSTREAM_RESPONSE_LIMIT`; deployed end-to-end evidence remains pending. The
+  resealed runtime/package closure is exact.
+- The current Chromium/Playwright fixture passed 1/1 in 4.86 seconds with zero
+  console and page errors. The complete suite regenerated the three 1600 x 1915
+  fixture screenshots with SHA-256 values
+  `532c09190f817ddf697445b3a7351220f3be0d5c19083978ea35065a083a4fdc`,
+  `307e33736bd9f9c68c4f6d99fd30a76d5a411352d0b633795f8957db90bb772c`,
+  and `a5e75f678a90ef67567222d2ed87d0bf57aad0d3a197f1b58371ecdaabdec3c2`.
+  The latest/operational image is fixture evidence, not proof of a deployed
+  service; deployed-browser acceptance remains pending.
+- No service was installed, no public URL was deployed, and no verification tag
   was created in this environment.
+
+Focused merged-v2 reached exact analytical components and all eight ledgers,
+then exposed one clean-B GUI-comparator defect: clean B projected 11,486 dense
+resolution observations where live A correctly projected 1,294 material
+native-mechanism transitions. Full-six-v1 shared that comparator. Both units
+were stopped, preserved, and rejected without promoting partial results.
+Commit `c42e703...` repairs only the independent clean GUI comparator, and an
+independent review found no frozen-rule, clock, dense-artifact, ID, or ledger
+change. Fresh focused-v3 and full-six-v2 have been running from that pinned
+commit since 2026-08-27 15:03:13 IST. Their results remain pending.
 
 The uploaded August 20 archive also served its intended purpose: it exposed a
 real schedule-dependent append-only-ledger defect. Large-chunk refreshes had
@@ -54,13 +71,13 @@ bootstrap has now been removed, every source represented by trusted checkpoint
 or normalized-ledger evidence must retain causally covering SQLite authority,
 and missing, partial, or rolled-back authority fails closed. Both
 repairs have dedicated restart/idempotency tests. A fresh August 20 current-seal
-rerun and the canonical Hostinger gates remain required.
+rerun and the canonical authorized-host gates remain required.
 
 ## Authorized scope
 
 R6E1R prepares the durable raw-JSONL callback path, six-session
 incremental-versus-clean-batch equivalence harness, live read-only GUI/API, and
-isolated shadow deployment package. Deployment remains gated by Hostinger
+isolated shadow deployment package. Deployment remains gated by authorized-host
 evidence. It does not authorize trading, orders, alerts, collector changes,
 changes to ports 8803/8804, or changes to frozen analytical semantics.
 
@@ -75,8 +92,8 @@ changes to ports 8803/8804, or changes to frozen analytical semantics.
 | Public reconstruction base | `f0d6db65bf41357965f76e067569255919cc8031` |
 | Public runtime repair commit | `8038c9fcdf1760f25e9b5ddf2d468e47935f749c` — callback, ledger, GUI, harness, and regression repairs |
 | Public code/package commit | `d6736b0108fb40722d2370da422b42e0425c112d` — portable deployment and exact sealed package bytes |
-| Final remote branch head | The sanitized evidence commit at the published branch head follows the code/package commit |
-| Verified tag | `PENDING_FINAL_EVIDENCE` — do not create unless every gate passes |
+| Current pushed repair commit | `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2` |
+| Verified tag | `NOT_CREATED` — do not create unless every gate passes |
 
 Published milestone commits already present on the feature branch are:
 
@@ -97,31 +114,31 @@ Published milestone commits already present on the feature branch are:
 - `4d160bcc61bcebd88135ce270c17926830022deb` — isolated deployment startup-gate hardening.
 - `6eec67bf11ad4ae1e88fda33565c3988d1ca2806` — historical R6D availability equivalence repair on the concurrent remote line.
 - `f0d6db65bf41357965f76e067569255919cc8031` — causal-prefix schedule repair on the concurrent remote line.
-The final public continuation is reconstructed linearly from the existing
-remote head so the additional local-only unsanitized commits and evidence never
-become reachable from the public branch. This does not rewrite or erase older
-already-public history. The code/package commit contains the exact reviewed runtime,
-tests, and sealed package bytes; a following sanitized handoff commit contains
-only public-safe reports. The exact verified remote head must still be read from
-the branch after publication.
-No verified tag is authorized before Hostinger completes every gate.
+- `dcccc723c6584bd929fab1aef531c3aad32eb1a2` — merge of the authorized concurrent feature milestones.
+- `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2` — clean-B GUI resolution-transition comparator repair.
+The pushed repair at `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`
+contains the reviewed runtime, preload binding, tests, and sealed package bytes.
+This report cleanup changes evidence text only. Record the later report commit
+and verify the exact remote head after it is pushed. No verified tag is
+authorized before every gate completes on the authorized host.
 
 ## Verified foundation
 
 The following facts were independently recorded before this draft:
 
-- The host-private authoritative raw root was readable and contained the required
-  raw and OI streams. Its physical location is intentionally omitted from public
-  evidence.
+- The authoritative raw root `/opt/banknifty-collector/data-prod-v4` was readable
+  and contained the required `raw` and `oi` streams.
 - Frozen tag manifests passed before modification: R6C2R 94/94 repository files and R6D 105/105 repository files.
 - The focused August 19 sample retained 46,550/46,550 selected byte identities, comprising 46,210 raw records and 340 OI outer records.
 - The sample selected `NSE:BANKNIFTY26AUGFUT` through repository contract-discovery logic; eight authoritative source files retained identical hashes, sizes, and mtimes.
 - The source-hour-preserving sample manifest SHA-256 is `31077f42ae1bf639f746e5980aba028b1369b8d44ba9a15973b2a517cc8a8382`; the authoritative focused A/B input is its eight-file `collector/` tree.
-- A correctly provisioned repository regression invocation passed 289 tests with zero failures and zero skips in 62.29 seconds at that checkpoint. Current-source final rerun: `PENDING_FINAL_EVIDENCE`.
+- A correctly provisioned historical repository invocation passed 289 tests at
+  its checkpoint; the current pushed repair supersedes it with 636/636, zero
+  failed/skipped, as recorded above.
 - The final local 38-file engine and 47-file deployment closures are recorded in
   the current implementation record above. Both companion checks, exact
   per-file inventories, unit digest pins, and package aggregate tests pass.
-  Hostinger must independently rerun them before installation.
+  They must be independently rerun on the authorized host before installation.
 
 ## Diagnostic evidence that is not final evidence
 
@@ -132,7 +149,7 @@ Focused A/B v8 exited successfully and reported 21/21 component equality, zero c
 Focused v12 passed its historical scope on commit `71a868f...`, but predates
 the current durable-authority, authenticated-import, gateway, and manifest
 repairs. It is diagnostic precedent only; the exact pushed commit requires a
-fresh focused all-nine run on Hostinger.
+fresh focused all-nine run on the pushed repair commit.
 
 ## Final acceptance gates
 
@@ -140,12 +157,12 @@ fresh focused all-nine run on Hostinger.
 |---|---|---|
 | Current engine allowlist | Checked-in manifest, companion SHA-256, explicit runtime pin, 38/38 identities | PASS — manifest `715a82b4...`, engine `021935bc...` |
 | Deployment closure | Exact per-file package and companion, 47/47 identities | PASS — manifest `7dcd1d15...`, package `d68f2221...` |
-| Focused production-path A/B | Exact component, ledger, availability, GUI, open-audit, and causality equality | Historical v12 only; current Hostinger run pending |
-| Six-session A/B | All required schedules and frozen canonical counts | `PENDING_FINAL_EVIDENCE` |
+| Focused production-path A/B | Exact component, ledger, availability, GUI, open-audit, and causality equality | Focused-v3 running since 2026-08-27 15:03:13 IST; `PENDING_FINAL_EVIDENCE` |
+| Six-session A/B | All required schedules and frozen canonical counts | Full-six-v2 running since 2026-08-27 15:03:13 IST; `PENDING_FINAL_EVIDENCE` |
 | Causality | Future joins, tolerance violations, backdating, duplicate IDs, refusals all zero | `PENDING_FINAL_EVIDENCE` |
-| Source integrity | Focused pre/post hashes and source mutations zero; final six still required | FOCUSED PASS; six-session `PENDING_FINAL_EVIDENCE` |
-| Current complete regression | Passed, failed, skipped, elapsed, peak RSS | Local non-browser: 545 pass, 20 skip, 13 fail, 16 error; all 29 failures/errors and 20 skips host/reference-bound; complete Hostinger run pending |
-| Browser acceptance | Current screenshots, console/page errors, toggle/degradation checks | Current Playwright/Chromium run pending on Hostinger |
+| Source integrity | Focused pre/post hashes and source mutations zero; final six still required | Historical fixture integrity recorded; current focused/full-six post-run evidence pending |
+| Current complete regression | Passed, failed, skipped, elapsed, peak RSS | PASS — 636/636, zero failed/skipped; 129.36 s pytest; 2m09.72 wall; 685,556 KiB |
+| Browser acceptance | Current screenshots, console/page errors, toggle/degradation checks | FIXTURE PASS — 1/1 in 4.86 s, zero console/page errors; deployed-browser pending |
 | Deployment | Installed units, health/readiness, replay checks, public-interface URL | `PENDING_FINAL_EVIDENCE` |
 | Final Git state | Clean worktree, pushed commits, remote head, annotated tag | `PENDING_FINAL_EVIDENCE` |
 
@@ -153,11 +170,11 @@ fresh focused all-nine run on Hostinger.
 
 | Field | Final value |
 |---|---|
-| Final status | `PENDING_FINAL_EVIDENCE` |
+| Final status | `IN PROGRESS — NOT VERIFIED` |
 | Branch | `fix/r6e1r-final-live-shadow` |
-| All new commit hashes | Runtime repair `8038c9fcdf1760f25e9b5ddf2d468e47935f749c`; deployment package `d6736b0108fb40722d2370da422b42e0425c112d`; the sanitized handoff commit is the published branch head |
-| Remote push verification | Verify the exact published branch head after connector publication; no tag authorized |
-| Test counts | Ingestion 127/127; orchestration 111/111; local stable-seal non-browser 545 pass, 20 skip, 13 fail, 16 error; complete Hostinger run required |
+| All new commit hashes | Runtime repair `8038c9fcdf1760f25e9b5ddf2d468e47935f749c`; deployment package `d6736b0108fb40722d2370da422b42e0425c112d`; merged implementation `dcccc723c6584bd929fab1aef531c3aad32eb1a2`; clean-comparator repair `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`; later report-only commit pending |
+| Remote push verification | Repair commit `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2` is the recorded remote branch head; verify the later report-only remote head after push; no tag authorized |
+| Test counts | Complete current regression 636/636, zero failed/skipped, including fixture browser 1/1; fresh focused-v3/full-six-v2 results pending |
 | Stream-versus-batch differences | `PENDING_FINAL_EVIDENCE` |
 | Canonical reference mismatches | `PENDING_FINAL_EVIDENCE` |
 | Future joins | `PENDING_FINAL_EVIDENCE` |
@@ -166,9 +183,9 @@ fresh focused all-nine run on Hostinger.
 | Prohibited runtime opens | `PENDING_FINAL_EVIDENCE` |
 | Source mutations | `PENDING_FINAL_EVIDENCE` |
 | Package manifest result | PASS — 47/47 files, companion and package aggregate exact; manifest `7dcd1d15b36f4b84f367153f5842bd02a94da75bff06e5aae1ca7466a91c9af1` |
-| Service status | `PENDING_FINAL_EVIDENCE` |
-| Exact deployed URL | `PENDING_FINAL_EVIDENCE` |
-| Remaining limitations | `PENDING_FINAL_EVIDENCE` |
-| Ports 8803/8804 and collectors unchanged | Local work made no host/service/collector mutation; Hostinger pre/post verification pending |
+| Service status | `NOT_INSTALLED` |
+| Exact deployed URL | `NOT_DEPLOYED` |
+| Remaining limitations | Fresh focused/full-six equivalence, measured run-specific runtime-open/source/performance evidence, installed services, deployed-browser, health/readiness, recovery, and external-interface evidence remain pending |
+| Ports 8803/8804 and collectors unchanged | No deployment action has been taken; mandatory pre/post verification remains pending |
 
 Related evidence is organized in the callback, equivalence, GUI, performance, deployment, readiness, causality, matrix, test, browser, file-open, and source-hash reports at repository root.
