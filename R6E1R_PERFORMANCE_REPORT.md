@@ -2,16 +2,45 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **FOCUSED V12 MEASURED; FINAL SIX-SESSION MEASUREMENTS PENDING**
+Status: **CURRENT LOCAL TEST TIMINGS RECORDED; CURRENT-SEALED FOCUSED AND SIX-SESSION HOST MEASUREMENTS PENDING**
 
-## Measured repair history
+## Current-source local measurements
 
-| Run | Outcome | Elapsed | Peak RSS | Notes |
+| Workload | Result | Elapsed | Peak RSS | Standing |
 |---|---|---:|---:|---|
-| Inherited focused incremental baseline | Interrupted after defect confirmation | 8m56.43s | 343,064 KiB | Full dirty session rebuilt per poll; output grew to 2,862,368 KiB before interruption |
-| Focused A/B v2 | Repair required | 3m11.34s | 1,063,876 KiB | Core analytics matched; legacy batch omitted required Intraday fallback rows |
+| Ingestion suite | 127 passed | 7.51 s | Not recorded | Current local functional evidence |
+| Orchestrator suite | 111 passed | 19.98 s | Not recorded | Current local functional evidence |
+| Equivalence harness | 32 passed, 3 ptrace/strace failures | 6.64 s | Not recorded | Host rerun required |
+| Deployment package, gateway security, and runner | 130 passed, 2 user-systemd-bus failures | 42.79 s | Not recorded | Host rerun required |
+| Pre-final-repair selected functional baseline | 416 passed; 5 host-only tests deliberately deselected | 76.92 s | Not recorded | Historical local baseline only |
+| Stabilized full non-browser collection | 545 passed, 20 skipped, 13 failed, 16 errors | 79.30 s | Not recorded | All 29 failures/errors and 20 skips require host facilities or sealed references; Hostinger rerun required |
+
+These timings describe test execution, not raw-data equivalence throughput. No current-source full six-session elapsed time, peak parent/child RSS, output size, or filesystem-usage measurement has yet been accepted.
+
+## Required final measurements
+
+| Workload | Elapsed | Peak parent RSS | Peak child RSS | Output/filesystem size | Standing |
+|---|---:|---:|---:|---:|---|
+| Focused August 19 all-nine schedules using current seals | `PENDING_HOSTINGER_EVIDENCE` | `PENDING_HOSTINGER_EVIDENCE` | `PENDING_HOSTINGER_EVIDENCE` | `PENDING_HOSTINGER_EVIDENCE` | Pending |
+| Auxiliary uploaded August 20 diagnostic, pre-fix seal | Large chunks: 700.086 s; original chunks: 478.448 s | Large schedule: 1,132,316 KiB; original schedule: 1,198,476 KiB | Not separately recorded | Combined retained output/log footprint about 1.4 GiB | Failed ledger identity by +12 lifecycle/+24 cross-layer rows; exposed and drove the terminal-group publication repair; not acceptance |
+| Auxiliary uploaded August 20 sample using current seals | `PENDING_HOSTINGER_RERUN` | `PENDING_HOSTINGER_RERUN` | `PENDING_HOSTINGER_RERUN` | `PENDING_HOSTINGER_RERUN` | Auxiliary proof of the repair only; cannot replace canonical acceptance |
+| Six-session original chunks | `PENDING_HOSTINGER_EVIDENCE` | `PENDING_HOSTINGER_EVIDENCE` | `PENDING_HOSTINGER_EVIDENCE` | `PENDING_HOSTINGER_EVIDENCE` | Pending |
+| Six-session one-record schedule | `PENDING_HOSTINGER_EVIDENCE` | `PENDING_HOSTINGER_EVIDENCE` | `PENDING_HOSTINGER_EVIDENCE` | `PENDING_HOSTINGER_EVIDENCE` | Pending |
+| Complete six-session all-nine schedule set | `PENDING_HOSTINGER_EVIDENCE` | `PENDING_HOSTINGER_EVIDENCE` | `PENDING_HOSTINGER_EVIDENCE` | `PENDING_HOSTINGER_EVIDENCE` | Pending |
+| Largest sanitized public chart response | `PENDING_HOSTINGER_EVIDENCE` | — | — | Must remain below the 8 MiB per-response gateway cap | Pending |
+
+Each accepted host run must record its exact command, source and seal hashes, `/usr/bin/time -v` output, child-process resource measurement, output-tree size, and clean input/output roots. A killed run, an older-seal run, or a comparator-invalid run remains diagnostic only.
+
+## Historical measurements
+
+The following measurements predate the current sealed runtime/package. They explain prior design work but are not current performance acceptance evidence:
+
+| Historical run | Outcome | Elapsed | Peak RSS | Notes |
+|---|---|---:|---:|---|
+| Inherited focused incremental baseline | Interrupted after defect confirmation | 8m56.43s | 343,064 KiB | Rebuilt the full dirty session per poll; output reached 2,862,368 KiB before interruption |
+| Focused A/B v2 | Repair required | 3m11.34s | 1,063,876 KiB | Core analytics matched; legacy batch omitted Intraday fallback rows |
 | Focused A/B v4 | Rehearsal only | 3m49.54s | 1,113,236 KiB | Running process contained a pre-edit GUI comparator |
-| Focused A/B v8 | Diagnostic only | 3m58.44s | Parent 1,121,076 KiB; child 696,360 KiB | Later audit rejected the comparator as final evidence |
+| Focused A/B v8 | Diagnostic only | 3m58.44s | Parent 1,121,076 KiB; child 696,360 KiB | Later audit rejected this comparator as final evidence |
 | Authoritative sample-source rehash | Passed | 1.08s | 3,712 KiB | Eight source identities remained unchanged |
 | Source-hour-preserving sample build/integrity check | Passed | 9.91s | 434,972 KiB | Eight hourly collector paths; manifest `31077f42...`; 46,550/46,550 identities |
 | Frozen reference-manifest verification | Passed | 0.96s | 18,668 KiB | R6C2R 74/74 and R6D 40/40 package files |
@@ -20,47 +49,12 @@ Status: **FOCUSED V12 MEASURED; FINAL SIX-SESSION MEASUREMENTS PENDING**
 | Full-six v6 before interruption | Rejected diagnostic | 1h22m19s | 12,992,404 KiB | Baselines/references exact; one-record harness visibility defect produced 1,796 refusal rows, so no value is promoted |
 | Causal-backlog targeted gate | Passed | 14.60s wall | 137,536 KiB | 116/116 ingestion, orchestrator, and equivalence-harness tests |
 
-The baseline measurement directly identified the quadratic rebuild. The repaired design stages and acknowledges incrementally, refreshes analytics at a bounded interval or explicit boundary, and prevents API reads from rebuilding a session.
+The historical focused v12 accepted-output size was 465,846,934 bytes and its retained work root was 33,365,301 bytes. Its summary, state-manifest, and state-tree hashes belong only to that historical run and must not be presented as current-seal evidence.
 
-## Final measurements
+## Scaling design and pending conclusion
 
-| Workload | Records/bytes | Elapsed | Peak parent RSS | Peak child RSS | Output bytes | Status |
-|---|---:|---:|---:|---:|---:|---|
-| Focused August 19 sample, complete all-nine v12 | 46,550 records / 33,326,536 bytes | 22m09.73s | 1,586,204 KiB | 803,968 KiB | 465,846,934 bytes accepted output; 33,365,301 bytes retained work root | PASS |
-| Six-session original chunks | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` |
-| Six-session one-record schedule | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` |
-| Complete required schedule set | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` |
+The implementation reads raw files in bounded chunks, caches discovery and source identities, source-hash caches fixed context, excludes the evaluation session from fixed context, compacts finalized raw buckets after durable publication, retains protected replay outputs independently of the rolling live window, and tail-limits browser responses. These are design properties, not a measured guarantee.
 
-Record the exact command, seal hashes, `/usr/bin/time -v` output, child-resource measurement, and filesystem usage for each accepted run. A killed or comparator-invalid run remains diagnostic only.
+The committed but uninstalled backend unit uses `MemoryHigh=8G` and `MemoryMax=10G`. Hostinger must compare those limits with current-seal focused and six-session peaks before installation.
 
-Accepted focused command:
-
-```bash
-PYTHONPATH=src /usr/bin/time -v -o /tmp/r6e1r_focused_nine_final_v12.time.txt \
-  /opt/banknifty/research/.venv/bin/python scripts/run_r6e1r_equivalence.py \
-  --data-root /opt/banknifty/research/sample_fixtures/r6e1r0_aug19_0915_1205/collector \
-  --output-root /dev/shm/r6e1r_focused_nine_final_v12 \
-  --work-root /dev/shm/r6e1r_focused_nine_final_v12_work --keep-work \
-  --config configs/r6e_shadow.json \
-  --stack-config /tmp/r6e1r_focused_stack.json \
-  --inventory-config /tmp/r6e1r_focused_inventory.json \
-  --sessions 2026-08-19 --skip-references --no-expected-count-gate
-```
-
-Focused summary SHA-256: `19b6c15f426b925fa6ec018d65477f4364242d65cfaaa5425423098d3861de15`; state manifest SHA-256: `d38ca5e40e60d87d117894df84386fb19b5e1c08347392838a86eef832d92fb3`; state tree SHA-256: `ece5d41515f182761e397b2bf06e1545daab6a91b6d313af18505fd01932a37f`.
-
-## Scaling design
-
-- Raw files are read in bounded per-file chunks.
-- Discovery and source identities are cached and invalidated by directory/file identity changes.
-- Fixed context is source-hash cached and excludes the evaluation session.
-- Finalized raw observation buckets are compacted after durable output publication.
-- Six protected replay outputs are retained independently of a rolling live-session window.
-- The configured live output ceiling is 32 non-protected sessions; dense output cost still varies by session.
-- Browser responses are tail-limited and never load all raw or dense analytical history.
-
-These properties support extension toward 20-30 sessions without loading all raw history into browser memory. The final report must still record an evidence-backed conclusion:
-
-`20-30 session extension assessment: PENDING_FINAL_EVIDENCE`
-
-The current committed but uninstalled backend unit uses `MemoryHigh=8G` and `MemoryMax=10G`. Those limits and the final six-session peak must be verified together before installation; no passing run may be truncated to fit the service budget.
+`20-30 session extension assessment: PENDING_HOSTINGER_PERFORMANCE_EVIDENCE`

@@ -2,43 +2,59 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT FIXTURE VERIFIED; DEPLOYED BROWSER RUN PENDING**
+Status: **CURRENT BROWSER RUN UNAVAILABLE LOCALLY; HOSTINGER BROWSER AND DEPLOYED-LIVE EVIDENCE PENDING**
 
-## Required scenarios
+Python Playwright/Chromium is not installed in the current local environment. No current-source browser run was executed here, so historical screenshots or browser counts are not promoted to current acceptance evidence.
 
-| Browser scenario | Required assertion | Final result |
+## Current local evidence
+
+| Check | Result | Scope |
 |---|---|---|
-| Complete fixed horizons | 3D/2D/1D/Intraday controls and selected Price/OI VPOC render | PASS — current tracked fixture |
-| Intraday-only degradation | Intraday remains visible; fixed controls/lines absent; reasons shown | PASS — current tracked fixture |
-| Live/latest operational | Last chart retained with stale warning and receipt ages when appropriate | PASS — fixture/latest only; deployed live proof pending |
-| Index/Futures paths | Independently sorted multi-point paths plus aligned Basis | PASS — current tracked fixture |
-| Category masters | Hide/show all children without losing child selections | PASS — current tracked fixture |
-| 1D-only | Only selected 1D children visible | PASS — current tracked fixture |
-| Replay movement | Selections persist across all six replay dates | PASS — all six canonical replay dates exercised |
-| Poll and refresh | Selections persist across polling and reload | PASS — current tracked fixture |
-| Return to latest | Selections and current operational state remain correct | PASS — fixture/latest only |
-| Missing options | Chart remains available; participation alone degrades | PASS — targeted fixture/API coverage |
-| No outcome language | No live event labelled SUCCESS or FAILURE | PASS — targeted fixture/browser coverage |
-| No client analytics | No detector/inventory/lifecycle/participation recomputation | PASS — targeted fixture/browser coverage |
-| Security | No raw records, paths, secrets, or credentials in page/payload/log | PASS — targeted fixture/API coverage |
-| Console/page errors | Exactly zero | PASS — current fixture browser run |
+| Current API suite | 39/39 passed | Server/API behavior only; not a browser result |
+| Pre-final-repair selected functional baseline | 416 passed; 5 host-only tests deliberately deselected | Historical non-browser GUI/API/runtime coverage; not a Chromium result |
+| Gateway security | 13/13 passed | Sanitization, concurrency, hidden-path validation, and GET/HEAD redirect-refusal tests; not a browser result |
+| Current Playwright/Chromium run | `NOT_RUN_LOCALLY` | Browser runtime unavailable |
+| Console errors | `PENDING_HOSTINGER_EVIDENCE` | Must be measured in current Chromium run |
+| Page errors | `PENDING_HOSTINGER_EVIDENCE` | Must be measured in current Chromium run |
+| External URL result | `PENDING_DEPLOYMENT_EVIDENCE` | No service has been deployed from this handoff |
 
-## Screenshot files
+## Mandatory current-source browser scenarios
 
-| File | Current dimensions | Current tracked-fixture SHA-256 | Deployed-live standing |
-|---|---:|---|---|
-| `evidence/r6e1r/gui/complete_fixed_horizons.png` | 1600 x 1915 | `f7676c44a6fa49d2822c3285705abf8749f9675196429ab02e229e53fa976bae` | Fixture accepted; external proof not applicable |
-| `evidence/r6e1r/gui/intraday_only_degradation.png` | 1600 x 1915 | `250ba99fd8f473d428b6069459ed7874423aa2d1d19faf1177a2e7f3783ea005` | Fixture accepted; external proof not applicable |
-| `evidence/r6e1r/gui/live_latest_operational.png` | 1600 x 1915 | `ebb0c7b2afb7e8ea6e6461a733b3b1534822270c870a0cff73a8c917e2ab3b6c` | Fixture/latest only; deployed live capture `PENDING_FINAL_EVIDENCE` |
+| Scenario | Required assertion | Standing |
+|---|---|---|
+| Complete fixed horizons | 3D/2D/1D/Intraday controls and selected Price/OI VPOC render | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
+| Intraday-only degradation | Intraday remains visible; fixed controls/lines are absent; reasons are shown | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
+| Live/latest operational | Last chart remains visible with stale warning and receipt ages when appropriate | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
+| Index/Futures paths | Independently sorted multi-point paths plus aligned Basis | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
+| Category masters | Disable/enable all category children without losing child selections | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
+| 1D-only | Only selected 1D children render | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
+| Replay movement | Selections persist across all six replay dates | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
+| Poll, refresh, latest | Selections persist across polling, reload, and return to latest | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
+| Missing fixed horizons | Available Intraday remains visible with per-layer reasons | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
+| Missing options | Index/Futures chart remains available; only participation degrades | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
+| Stale Index/Futures | Divergence becomes `STALE_DATA`; last valid chart remains with warning | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
+| No outcome language | No live event is labelled SUCCESS or FAILURE | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
+| No client analytics | Browser performs no detector/inventory/lifecycle/participation recomputation | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
+| Security | No raw records, filesystem paths, secrets, or credentials appear in page/payload/log | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
+| Browser health | Zero console errors and zero page errors | `PENDING_HOSTINGER_BROWSER_EVIDENCE` |
+| Response size | Largest sanitized chart response remains below 8 MiB | `PENDING_HOSTINGER_EVIDENCE` |
 
-The hashes above bind the current tracked fixture images at pushed head `4d160bcc61bcebd88135ce270c17926830022deb`. The third image is generated from the operational fixture and is not evidence that the external service is live. Record a separate deployed live/latest capture, browser engine/version, viewport, command, test count, console errors, and page errors after installation.
+## Historical fixture evidence
 
-## Recorded foundation
+These tracked images and hashes were recorded at earlier pushed head `4d160bcc61bcebd88135ce270c17926830022deb`. They remain historical visual fixtures only; they are not proof of current-source rendering or a deployed service.
 
-At pushed GUI milestone `5efe70e9685b98556ae1ad9a860912c7bb1513fc`, the R6D-parity engine/GUI/API/browser targeted suite passed 135/135 tests. No tracked GUI/browser bytes have changed since that gate. All three current fixture screenshots were visually inspected, including the independently sorted Index/Futures paths and enriched dependency, price-change, option-premium-change, and transition projection. The later repaired-engine targeted gate passed 216/216 for the current runtime path. A separate deployed-browser run remains mandatory.
+| Historical fixture | Dimensions | Historical SHA-256 |
+|---|---:|---|
+| `evidence/r6e1r/gui/complete_fixed_horizons.png` | 1600 x 1915 | `f7676c44a6fa49d2822c3285705abf8749f9675196429ab02e229e53fa976bae` |
+| `evidence/r6e1r/gui/intraday_only_degradation.png` | 1600 x 1915 | `250ba99fd8f473d428b6069459ed7874423aa2d1d19faf1177a2e7f3783ea005` |
+| `evidence/r6e1r/gui/live_latest_operational.png` | 1600 x 1915 | `ebb0c7b2afb7e8ea6e6461a733b3b1534822270c870a0cff73a8c917e2ab3b6c` |
 
-Final browser command: `PENDING_FINAL_EVIDENCE`
+The third historical image used an operational fixture. It is not evidence that an external live service existed.
 
-Current targeted suite count: 135 passed, 0 failed. Final isolated/deployed browser test count: `PENDING_FINAL_EVIDENCE`
+At GUI milestone `5efe70e9685b98556ae1ad9a860912c7bb1513fc`, an R6D-parity engine/GUI/API/browser gate passed 135/135 with zero recorded console/page errors. Runtime, tests, and package bytes changed afterward, so that result is regression history only.
 
-External deployed URL/browser result: `PENDING_FINAL_EVIDENCE`
+## Final standing
+
+Browser acceptance remains open until Hostinger runs the current source and sealed package in Chromium, visually inspects all required screenshots, records browser/version/viewport and exact command, observes zero console/page errors, and repeats the relevant checks against the isolated deployed URL.
+
+`CURRENT_BROWSER_ACCEPTANCE: PENDING_HOSTINGER_BROWSER_AND_DEPLOYED_LIVE_EVIDENCE`

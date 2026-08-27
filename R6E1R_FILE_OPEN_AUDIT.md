@@ -2,7 +2,7 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **FOCUSED V12 RUNTIME-OPEN EVIDENCE VERIFIED; FINAL SIX-SESSION EVIDENCE PENDING**
+Status: **CURRENT COMMIT HOSTINGER STRACE/FILE-OPEN EVIDENCE PENDING; V12 HISTORICAL**
 
 ## Acceptance rule
 
@@ -27,9 +27,12 @@ Focused v8 reported prohibited opens zero, but an independent audit rejected tha
 
 Therefore the v8 zero must not appear as the final file-open result.
 
-## Accepted focused-v12 result
+## Historical focused-v12 result
 
-Focused v12 recorded 2,340 audit rows representing 380,844 observed opens across incremental A, all three clean-B child processors, and all required schedules. Required source coverage passed, prohibited opens were zero, and unmeasured required rows were zero.
+Focused v12 recorded the values below for its historical commit. The local
+sandbox prohibits ptrace, so the three current clean-B strace tests cannot run
+here. These values do not populate any current-commit final cell; Hostinger must
+rerun the instrumented focused and full-six paths.
 
 | Scope | Audit rows | Summed observed opens | Required-source rows | Prohibited | Unmeasured |
 |---|---:|---:|---:|---:|---:|

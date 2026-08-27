@@ -2,7 +2,7 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **FOCUSED V12 AUDIT VERIFIED; FINAL SIX-SESSION AUDIT PENDING**
+Status: **CURRENT HOSTINGER FOCUSED/FULL-SIX CAUSALITY AUDIT PENDING; V12 HISTORICAL**
 
 ## Frozen clock contract
 
@@ -32,7 +32,9 @@ The frozen BN-reference inventory contract is separate: it permits a backward In
 
 The one-record diagnostic probe exposed 668 out-of-order refusals: a raw Futures candidate was durably deferred pending canonical depth selection while later observations advanced the acknowledged high-water. The repair makes the earliest unresolved candidate receipt a strict causal publication barrier, including equal-clock rows, until repository-owned selection releases or rejects candidates. Restart coverage retains the barrier in durable state.
 
-The current engine manifest, 216/216 repaired-engine targeted tests, and focused v12 all-nine run now verify this repair for focused scope. The fresh six-session all-nine gate remains pending.
+Current local adversarial and functional tests verify the repair logic. Focused
+v12 is historical because the engine identity changed; fresh current-commit
+focused and six-session all-nine causality measurements remain pending.
 
 Full-six v6 exposed a separate test-orchestration visibility defect, not a production-clock defect. Its one-record scheduler supplied only the newly changed explicit path, so an already-visible raw file held behind its checkpoint could be omitted while OI advanced the high-water. The repaired harness retains only paths with staged bytes beyond their durable checkpoints and includes them on every nonempty causal-prefix poll; intentional empty polls remain empty. The regression uses byte-exact blank coordinate rows, a 512-byte read bound, and an OI hourly rotation to prove that the old path generated one `OUT_OF_ORDER_RECEIPT` plus one `OUT_OF_ORDER_ANALYTICAL_RECEIPT`, while the repair produces zero, survives restart, drains every checkpoint remainder, and matches the original-chunk snapshot and ledgers exactly. Production discovery, frozen clocks, and refusal semantics were not changed.
 
@@ -45,7 +47,7 @@ Full-six v6 exposed a separate test-orchestration visibility defect, not a produ
 - An exception after a durable append reconciles the identity before retry.
 - Current-session raw bytes are excluded from fixed 1D/2D/3D context.
 
-## Accepted focused-v12 measured invariants
+## Historical focused-v12 measured invariants
 
 | Invariant | Required | Final value |
 |---|---:|---|
@@ -71,11 +73,12 @@ Focused causality matrix SHA-256: `f5370e1ce6ce067b2ae5a3a090c0215d9c6c7a548348b
 
 Fresh six-session causality matrix and SHA-256: `PENDING_FINAL_EVIDENCE`.
 
-Focused v8 remains rejected after comparator audit. The replacement focused v12 is accepted for focused scope; it cannot substitute for final six-session values.
+Focused v8 remains rejected. Focused v12 passed its own source identity but
+cannot substitute for any current-commit focused or six-session value.
 
 ## Adversarial evidence checklist
 
-| Case | Final evidence |
+| Case | Local/historical evidence; final Hostinger gate pending |
 |---|---|
 | Partial final line deferral/retry | PASS — targeted suite and focused inside-line schedule |
 | Malformed complete record hard refusal | PASS — targeted repaired-engine suite |
@@ -90,4 +93,6 @@ Focused v8 remains rejected after comparator audit. The replacement focused v12 
 | Stale market suspension | PASS — targeted engine/API fixtures |
 | Missing options/fixed context isolation | PASS — targeted engine/API fixtures |
 
-These adversarial results are part of the 216/216 repaired-engine targeted gate and focused v12. Their fresh complete-regression confirmation remains `PENDING_FINAL_EVIDENCE`.
+The pre-final-repair local R6E functional selection passed 416/416, including the
+adversarial code paths above. Hostinger must repeat them with ptrace/open audit
+available and bind the results to the pushed commit.
