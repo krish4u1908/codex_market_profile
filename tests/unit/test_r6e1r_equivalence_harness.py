@@ -1886,6 +1886,53 @@ def test_rebuild_clean_gui_compacts_dense_resolution_like_live_callback() -> Non
     assert payload["counts"]["resolution_mechanisms"] == 3
 
 
+def test_rebuild_clean_gui_compacts_interleaved_episodes_independently() -> None:
+    session = "2026-08-19"
+    sequence = (
+        ("E1", "CONVERGENCE"),
+        ("E2", "STALL"),
+        ("E1", "CONVERGENCE"),
+        ("E2", "STALL"),
+        ("E1", "STALL"),
+        ("E2", "CONVERGENCE"),
+    )
+    snapshot = {
+        "availability_detail": {
+            session: {
+                "calculation_timestamp": f"{session}T12:05:00+05:30",
+                "evidence_cutoff_timestamp": f"{session}T12:05:00+05:30",
+                "reference_timestamp": f"{session}T12:05:00+05:30",
+                "layers": {},
+            }
+        },
+        "resolution": [
+            {
+                "evaluation_date": session,
+                "episode_id": episode,
+                "timestamp": f"{session}T09:15:{ordinal:02d}+05:30",
+                "resolution_mechanism_native": mechanism,
+            }
+            for ordinal, (episode, mechanism) in enumerate(sequence)
+        ],
+        "gui_payload": {session: {}},
+    }
+
+    harness.rebuild_clean_gui_payload(snapshot, (session,))
+
+    rows = harness._as_rows(
+        snapshot["gui_payload"][session]["resolution_mechanisms"]
+    )
+    assert [
+        (row["episode_id"], row["resolution_mechanism_native"])
+        for row in rows
+    ] == [
+        ("E1", "CONVERGENCE"),
+        ("E2", "STALL"),
+        ("E1", "STALL"),
+        ("E2", "CONVERGENCE"),
+    ]
+
+
 def test_reference_comparison_uses_reference_fields_after_type_normalization() -> None:
     a = {
         "episodes": [

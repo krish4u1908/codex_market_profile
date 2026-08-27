@@ -583,6 +583,67 @@ def test_provisional_expiration_and_linked_rows_publish_only_if_sealed(
         assert_unique_stage_and_publication_ids(orchestrator)
 
 
+@pytest.mark.parametrize("late_response", [False, True])
+def test_provisional_expiration_restart_matches_one_shot_ledgers(
+    tmp_path, late_response,
+):
+    prefix, late_index = provisional_expiration_fixture()
+    root = tmp_path / ("restart-late" if late_response else "restart-seal")
+    periodic = LiveAnalyticalOrchestrator(contract(root))
+    periodic.process(prefix)
+    provisional = periodic.snapshot(SESSION)
+    expiration = next(
+        row for row in provisional["lifecycle"]
+        if row["state"] == "EXPIRED_OR_UNRESOLVED"
+        and row["reason_code"]
+        == "LIFECYCLE_END_WITHOUT_FAVOURABLE_RESPONSE"
+    )
+    assert expiration["record_id"] not in {
+        row["record_id"]
+        for row in periodic.ledgers["lifecycle_transitions"].rows()
+    }
+
+    restarted = LiveAnalyticalOrchestrator(contract(root))
+    observations = [*prefix, late_index] if late_response else prefix
+    if late_response:
+        restarted.process([late_index])
+    actual = restarted.finalize_session(SESSION)
+
+    one_shot = LiveAnalyticalOrchestrator(contract(tmp_path / "one-shot"))
+    one_shot.process(observations)
+    expected = one_shot.finalize_session(SESSION)
+    for artifact in (
+        "lifecycle", "participation_transitions", "cross_layer_transitions",
+    ):
+        assert actual[artifact] == expected[artifact]
+
+    material_ledgers = tuple(
+        name for name in orchestrator_module.LEDGER_NAMES
+        if name != "refusals_data_quality"
+    )
+    assert len(material_ledgers) == 8
+    for name in material_ledgers:
+        actual_rows = sorted(
+            orchestrator_module._material_ledger_content(name, row)
+            for row in restarted.ledgers[name].rows()
+        )
+        expected_rows = sorted(
+            orchestrator_module._material_ledger_content(name, row)
+            for row in one_shot.ledgers[name].rows()
+        )
+        assert actual_rows == expected_rows, name
+    if late_response:
+        assert expiration["record_id"] not in {
+            row["record_id"] for row in actual["lifecycle"]
+        }
+    else:
+        assert sum(
+            row["record_id"] == expiration["record_id"]
+            for row in restarted.ledgers["lifecycle_transitions"].rows()
+        ) == 1
+    assert_unique_stage_and_publication_ids(restarted)
+
+
 def test_unconfirmed_candidate_defers_terminal_group_publication(
     tmp_path,
 ):
