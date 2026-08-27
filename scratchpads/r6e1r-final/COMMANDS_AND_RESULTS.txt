@@ -378,3 +378,55 @@ PERFORMANCE: harness 3,429.450s; wall 57m10.47s; parent peak RSS 1,775,736 KiB; 
 2026-08-27 post-focused integrity/interference gate
 COMMAND: verify focused fixture manifest; inspect pinned checkout cleanliness; inspect protected service PID/start/invocation/restart identities and listener set
 RESULT: PASS; fixture and checkout exact; 8803/8804 identities unchanged with NRestarts0; 8805/18805 remain free.
+
+2026-08-27 full-six v1 preflight and launcher correction
+COMMAND: verify pushed e107280 head, manifests, engine runtime-open closure, reference packages, eight causal raw/OI dates, resources and protected services; install/verify hardened persistent unit
+RESULT: PREFLIGHT PASS. First start rejected before analytics because systemd removed inline-Python quotes; no projection/output/work/time root existed. Preserved 671-byte launcher log at SHA-256 55ae7148f6ae4fdf3f19e0037facee1425bd6c5455849cd463325ed2c5d5e807. Direct engine verifier passed 38 files and 39/39 allowed runtime opens with prohibited 0; both references passed. Removed redundant broken inline checks and reverified the unit.
+
+2026-08-27 full-six v1 fresh start
+COMMAND: fresh authoritative raw projection plus six evaluation sessions, both verified references, frozen count gate, all nine required schedules, retained variant snapshots; persistent AF_UNIX-only service pinned to clean e107280
+RESULT: RUNNING from 18:32:23 IST, invocation 1e09d6da7a064fbf855869968b56d8ad; MemoryHigh/Max 24/28 GiB, swap 0, fresh projection/output/work roots. No acceptance result claimed before final exit and independent matrices/seals validation.
+
+2026-08-27 full-six v1 external-stop rejection
+COMMAND: independently inspect systemd status/show/cat, journal, process disappearance, terminal output files, time file and partial ledger counts after the unit became inactive
+RESULT: REJECTED EXTERNAL INTERRUPTION at 20:18:00 IST. Journal records an explicit systemd `Stopping` request; no process-completion line exists. The unit consumed 1h42m21.447s CPU with about 8.5 GiB cgroup peak, but `equivalence_summary.json` is absent and the timing file is empty. Partial incremental counts were 54 divergence, 11,364 lifecycle, 26,959 participation transitions and 49,971 cross-layer transitions, not the frozen contract. The root is not acceptance evidence. Main and independent monitor command audits found no stop/kill/restart/signal command.
+
+2026-08-27 full-six v1 projection preservation
+COMMAND: inspect and hash the fresh raw projection manifest/provenance/source comparison; verify pinned detached checkout
+RESULT: PASS for reusable raw projection only. Pinned checkout remains clean at e107280c886039a70c0128dbda64ea1998e15e24. Manifest SHA-256 d9456635a7dce996b45932e522e179eba6b6cb37d4c958352d86dabb76fd09b1; provenance SHA-256 ea2430747045621a1a835ce84d9888b5179bdc5c2e14f7a68b73eb78a99507e0; source-comparison SHA-256 3726fbfba76ff4b3cdab50cba4288eca2a34506140f167a6adaba5583d0c5c56. Inventory: 141 sources, 139 projection files, 746,890 selected complete records, zero malformed records/source mutations; August 17 remains canonical rejection. Only complete harness revalidation may reuse the projection; v1 analytical state is prohibited from reuse.
+
+2026-08-27 full-six v2 protected fresh relaunch
+COMMAND: verify persistent unit; daemon-reload; start brand-new output/work roots from pinned clean e107280; reuse only v1 raw projection through --use-existing-projection-manifest; require both references, frozen counts, all nine schedules and retained variant snapshots
+RESULT: RUNNING from 20:20:42 IST, PID 1178834, invocation 38a2f191ee654b2ca0bc2fa622a59e1d. Unit SHA-256 c1da4f639bef8a7d4150dcba8f33dc91ac08f7dbbbf7624715145fd5e8b04a9f; RefuseManualStop=yes; KillSignal=SIGINT (ignored by the pinned wrapper); TimeoutStopSec=infinity; RuntimeMaxSec=infinity; AF_UNIX only; MemoryHigh/Max 24/28 GiB; swap 0. Protected 8803/8804 identities remained exact and 8805/18805 remained free.
+
+2026-08-27 full-six v2 direct-SIGTERM rejection
+COMMAND: inspect systemd/journal, GNU time, log, state and summary after process exit 143
+RESULT: REJECTED EXTERNAL INTERRUPTION. A direct signal 15 terminated GNU time/Python at 20:24:47 IST after 4m04.08s; systemd recorded process exit 143, not a stop request. Projection reuse had already passed 141 authoritative hashes, 139 projection hashes, 746,890 provenance rows and eight dynamic contracts. No summary or analytical mismatch exists. Time/log SHA-256 values are adee4d1c18de191c15c25fb9865e46dc36d8b6e22e8e700db08ec77d447688ab and ca3e619f186dcc9885d0ea3b59453230d3970d60eef3970bb8633013a7d0f746.
+
+2026-08-27 external-signal shield validation and full-six v3 launch
+COMMAND: create a hash-pinned host-only launcher ignoring SIGHUP/SIGINT/SIGTERM across exec; run disposable isolated cgroup test through GNU time/Python; deliver HUP/INT/TERM to all processes; terminate only the disposable test with SIGKILL; verify and launch fresh v3 unit
+RESULT: PASS signal shield; Python reported all three dispositions as SIG_IGN and the isolated service survived cgroup-wide TERM, INT and HUP. Fresh v3 RUNNING from 20:26:54 IST, PID 1181469, invocation 8373f3d0a14d402ca4d08eeddac37aa1. Launcher SHA-256 bd7805804128578221a79f5043bf5ba383dad1a282713bbc1464b62578a5d3b2; unit SHA-256 083acc0f5ef8a50235ec79bf26e414b8b4d0cb30060686f09284068c95b99c47. New output/work roots; same pinned commit/projection/references/frozen gates/all nine schedules; protected ports exact.
+
+2026-08-27 full-six v3 direct-SIGKILL rejection
+COMMAND: independently inspect process exit, systemd properties/journal, cgroup memory peak, GNU time, output tree and kernel OOM evidence after v3 disappeared
+RESULT: REJECTED EXTERNAL INTERRUPTION. A direct signal 9 terminated the process at 20:58:10 IST after 31m16.12s; exit 137. Cgroup peak was 10,301,947,904 bytes below MemoryHigh/Max 24/28 GiB, child peak RSS was 4,995,188 KiB, swap was zero, and no OOM evidence was present. `equivalence_summary.json`, canonical seals and acceptance matrices are absent. Time/log SHA-256 values are 2d201e34f6b937240cc7bf8d58bc9840f6878e671f16b390653e3db837caf7b7 and ca3e619f186dcc9885d0ea3b59453230d3970d60eef3970bb8633013a7d0f746.
+
+2026-08-27 concurrent-session safety audit
+COMMAND: inspect process ancestry, remote refs, detached worktrees and user-manager chronology read-only after v3 interruption
+RESULT: A separate pre-existing Codex session was concurrently advancing `origin/fix/r6e1r-final-live-shadow-v2`. Four seconds after v3's SIGKILL, the user manager recorded a daemon reload; that session then ran its own complete regression and started a focused all-nine run from detached `a12a586`. No process-control or write action was directed at that session. Competing acceptance launches are suspended while its evidence is audited.
+
+2026-08-27 v2 deployment-digest audit
+COMMAND: compare e107280 and a12a586 engine, deployment-unit and package-manifest identities read-only
+RESULT: Engine manifest and engine/orchestrator bytes are exact. V2 commit bf182fa repairs a real fail-closed defect: e107280 embeds stale raw config SHA c38479... while the committed raw template SHA is ecfa9e1a8afb4622f8d4f3128511817bef451f5353ff1998d72e6475c67ebab2. The repair reseals the 47-file package. Do not deploy e107280's unit unchanged.
+
+2026-08-27 authorized-branch runtime-digest repair and reseal
+COMMAND: replace only the backend unit's stale raw-config digest; recompute the service row, NUL-delimited 47-file package aggregate, manifest digest and companion; verify every allowlisted byte and both companions
+RESULT: PASS. Correct raw config ecfa9e1a8afb4622f8d4f3128511817bef451f5353ff1998d72e6475c67ebab2; service e5dbf764dc89f1b5200fce2032851b737eda0f06d3047b316202b766b50709da; package aggregate a73163704cb8131ab0f1a157738bdea358accd5b7985f6b846a95bc3c760127f; deployment manifest aa1e0280613e4418db01bbaed9a14d79468dbbaf8cb98fdee33581c5621b5dd4; 47/47 exact. Engine remains 38/38 at manifest 51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7 and aggregate 362474858eda75b18180ad2fce48e50e1d4acdd1b04a0db405eaae199e70b7a7.
+
+2026-08-27 restart/GUI correctness hardening selection
+COMMAND: add interleaved per-episode GUI compaction regression and parametrized provisional-expiration restart/one-shot ledger regression; run those cases plus isolated/resource-bounded unit and exact deployment-manifest gate
+RESULT: Initial invocation omitted PYTHONPATH and failed collection; corrected invocation used PYTHONPATH=src and passed 5/5 in 2.90s. No production engine or equivalence-harness byte changed.
+
+2026-08-27 complete repository regression after deployment repair
+COMMAND: first plain PYTHONPATH invocation; then unchanged full suite with explicit venv PYTHON, sealed R6C0I/R6B3/R6B3A/R6B3R evidence roots and documented Chromium library root
+RESULT: First invocation rejected as environment-incomplete: 613 passed, 9 failed and 20 skipped; failures were missing Chromium libnspr4, missing `python` subprocess alias and absent sealed-evidence variables. Fully provisioned rerun PASS: 642 passed, 0 failed, 0 skipped in 116.61s; wall 1m56.96s; peak RSS 672,784 KiB; exit 0. Passing log SHA-256 3a6d09ffb892e0a2ce6d34c19131ca924d0c924df4032ac65af003aaae120f36; timing SHA-256 9271e89f9a11cf5ae623498dffaa2415b5d8a698d08f426d7b3d027996a9a283. Current fixture screenshot SHA-256 values are 4e917dc7ce2e3dd940e5fe9230b7cab80e54a112794318caa5a48bda56a51903, 92ac4c273a537d484aeba4c40d451da2c98eca370bb1bb147c8e186ac8e09391 and e5d1ab71f190a05851745c5173f84bb24d085f8f0c968d38fbad37d1112179c2; all are 1600x1915.

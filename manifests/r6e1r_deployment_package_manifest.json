@@ -80,7 +80,7 @@
     },
     {
       "path": "deploy/r6e1r/r6e1r-shadow.service",
-      "sha256": "6c07a262cfbe84e4d331d6c50be4d27091a2bb05fcac8ab886a681f7c08c058e",
+      "sha256": "e5dbf764dc89f1b5200fce2032851b737eda0f06d3047b316202b766b50709da",
       "size": 3761
     },
     {
@@ -289,7 +289,7 @@
       "size": 10039
     }
   ],
-  "package_hash": "940ef119e7caf4cbc0599fd5bd24f79b5bca352061da67b00541242c33d1435e",
+  "package_hash": "a73163704cb8131ab0f1a157738bdea358accd5b7985f6b846a95bc3c760127f",
   "runtime_configuration_hash": "43654758453b2a39209dbe0df6f6d2587c63c2bf5cb77c99d44df07dd54f485b",
   "schema": "R6E1R_DEPLOYMENT_PACKAGE_MANIFEST_V1"
 }
