@@ -207,3 +207,17 @@ COMMAND: PYTHONPATH=src python -m pytest -q tests/unit/test_r6e1r_equivalence_ha
 RESULT: PASS; 3 passed, 27 deselected; operational STALE_DATA remains unchanged; missing A material fails only A; mixed canonical/operational B refuses.
 COMMAND: load preserved sealed v5 A/B snapshots and compare_gui_visual_authority against all six verified R6D payloads with current source
 RESULT: PASS; 180/180 rows, failures 0; wall 1m19.43s; max RSS 7,306,544 KiB.
+
+2026-08-27 full six-session v6 diagnostic
+COMMAND: /opt/banknifty/research/.venv/bin/python scripts/run_r6e1r_equivalence.py --data-root /opt/banknifty-collector/data-prod-v4 --output-root /tmp/r6e1r_six_final_v6_output --work-root /dev/shm/r6e1r_six_final_v6_work --keep-work --config configs/r6e_shadow.json --use-existing-projection-manifest /tmp/r6e1r_six_final_v1_projection/projection_manifest.json
+RESULT: INTERRUPTED AND REJECTED; A/B baseline 21/21 components, 8/8 ledgers, 9/9 invariants, R6C2 30/30 and R6D 180/180 PASS; one-record schedule produced 898 ingestion plus 898 analytical OUT_OF_ORDER refusals; wall 1:22:19; max RSS 12,992,404 KiB; no result promoted.
+
+2026-08-27 causal-backlog schedule repair validation
+COMMAND: PYTHONPATH=src /opt/banknifty/research/.venv/bin/python -m pytest -q tests/unit/test_r6e1r_equivalence_harness.py::test_checkpoint_lagging_hourly_peer_is_repolled_before_later_receipt
+RESULT: PASS; 1 passed; the same fixture produces one OUT_OF_ORDER_RECEIPT plus one OUT_OF_ORDER_ANALYTICAL_RECEIPT on the pre-repair scheduler; repaired one-record and hourly paths have zero refusals, exact checkpoints/snapshots/ledgers, and measured backlog repolls.
+COMMAND: PYTHONPATH=src /opt/banknifty/research/.venv/bin/python -m pytest -q tests/unit/test_r6e1r_equivalence_harness.py
+RESULT: PASS; 31 passed in 10.52s; post-drain checkpoint-remainder gate exact at zero.
+COMMAND: PYTHONPATH=src /usr/bin/time -v -o /tmp/r6e1r_causal_backlog_targeted.time.txt /opt/banknifty/research/.venv/bin/python -m pytest -q tests/unit/test_r6e1r_ingestion.py tests/unit/test_r6e1r_orchestrator.py tests/unit/test_r6e1r_equivalence_harness.py
+RESULT: PASS; 116 passed in 14.31s; wall 14.60s; max RSS 137,536 KiB.
+COMMAND: /opt/banknifty/research/.venv/bin/python -m py_compile scripts/run_r6e1r_equivalence.py tests/unit/test_r6e1r_equivalence_harness.py; git diff --check
+RESULT: PASS.

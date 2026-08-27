@@ -17,6 +17,8 @@ Status: **FOCUSED V12 MEASURED; FINAL SIX-SESSION MEASUREMENTS PENDING**
 | Frozen reference-manifest verification | Passed | 0.96s | 18,668 KiB | R6C2R 74/74 and R6D 40/40 package files |
 | Correctly provisioned prior complete regression | Passed | 62.29s | 663,256 KiB | 289 passed, zero failed, zero skipped at that checkpoint |
 | Accepted focused all-nine v12 | Passed | 22m09.73s | Parent 1,586,204 KiB; child 803,968 KiB | 21/21 components, 8/8 ledgers, 9/9 schedules, all invariant/open/source gates zero |
+| Full-six v6 before interruption | Rejected diagnostic | 1h22m19s | 12,992,404 KiB | Baselines/references exact; one-record harness visibility defect produced 1,796 refusal rows, so no value is promoted |
+| Causal-backlog targeted gate | Passed | 14.60s wall | 137,536 KiB | 116/116 ingestion, orchestrator, and equivalence-harness tests |
 
 The baseline measurement directly identified the quadratic rebuild. The repaired design stages and acknowledges incrementally, refreshes analytics at a bounded interval or explicit boundary, and prevents API reads from rebuilding a session.
 

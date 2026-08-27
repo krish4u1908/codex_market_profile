@@ -34,6 +34,8 @@ The one-record diagnostic probe exposed 668 out-of-order refusals: a raw Futures
 
 The current engine manifest, 216/216 repaired-engine targeted tests, and focused v12 all-nine run now verify this repair for focused scope. The fresh six-session all-nine gate remains pending.
 
+Full-six v6 exposed a separate test-orchestration visibility defect, not a production-clock defect. Its one-record scheduler supplied only the newly changed explicit path, so an already-visible raw file held behind its checkpoint could be omitted while OI advanced the high-water. The repaired harness retains only paths with staged bytes beyond their durable checkpoints and includes them on every nonempty causal-prefix poll; intentional empty polls remain empty. The regression uses byte-exact blank coordinate rows, a 512-byte read bound, and an OI hourly rotation to prove that the old path generated one `OUT_OF_ORDER_RECEIPT` plus one `OUT_OF_ORDER_ANALYTICAL_RECEIPT`, while the repair produces zero, survives restart, drains every checkpoint remainder, and matches the original-chunk snapshot and ledgers exactly. Production discovery, frozen clocks, and refusal semantics were not changed.
+
 ## Evidence and publication durability
 
 - Evidence is never backdated to calculation, snapshot, or display time.
@@ -82,7 +84,7 @@ Focused v8 remains rejected after comparator audit. The replacement focused v12 
 | Callback exception before acknowledgement | PASS — targeted replayability suite |
 | Failure after durable append for each material ledger | PASS — seven nonempty focused ledger boundaries exactly once |
 | Restart after ingestion before analytical flush | PASS — targeted and focused recovery probes |
-| Out-of-order visibility and candidate barrier | PASS — targeted barrier fixtures and focused zero refusals |
+| Out-of-order visibility, candidate barrier, and checkpoint-lagging peers | PASS — targeted barrier fixtures, semantic hourly-peer regression, and focused zero refusals |
 | Exact-second/fractional timestamps | PASS — strict-parser targeted fixtures |
 | Naive/future timestamp refusal | PASS — targeted refusal fixtures |
 | Stale market suspension | PASS — targeted engine/API fixtures |

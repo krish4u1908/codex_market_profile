@@ -2725,6 +2725,9 @@ def run_schedule(
     maximum_record_group_bytes = 0
     post_poll_hourly_path_introductions = 0
     polled_live_paths: set[Path] = set()
+    causal_backlog_paths: set[Path] = set()
+    causal_backlog_path_repolls = 0
+    maximum_causal_backlog_paths = 0
     original_checkpoint_chunk_counts: Counter[str] = Counter()
     original_checkpoint_delta_bytes: Counter[str] = Counter()
     original_checkpoint_delta_oversize_count = 0
@@ -2747,6 +2750,39 @@ def run_schedule(
         count = context.poll(source_paths)
         poll_count += 1
         return count
+
+    def poll_visible_causal_prefix(changed_paths: Iterable[Path]) -> int:
+        """Poll new bytes plus visible peers still behind their checkpoints.
+
+        Production discovery polls every visible stream.  Schedule fixtures
+        pass explicit paths so a one-record increment does not accidentally
+        become a broad filesystem rescan, but they must retain any peer whose
+        staged bytes could not advance because an unresolved candidate or
+        selection-replay barrier held its primary checkpoint.  Omitting that
+        peer lets a newly changed OI path advance the watermark ahead of the
+        earlier raw backlog and manufactures out-of-order refusals that the
+        real discovery poll would not produce.
+        """
+        nonlocal causal_backlog_paths, causal_backlog_path_repolls
+        nonlocal maximum_causal_backlog_paths
+        changed = set(changed_paths)
+        repolled = causal_backlog_paths - changed
+        candidates = changed | causal_backlog_paths
+        causal_backlog_path_repolls += len(repolled)
+        result = poll_for_schedule(candidates)
+        remaining: set[Path] = set()
+        for path in candidates:
+            if not path.is_file():
+                continue
+            relative = str(path.relative_to(staging_root))
+            offset = int(context.checkpoints.get(relative, {}).get("offset", 0))
+            if offset < path.stat().st_size:
+                remaining.add(path)
+        causal_backlog_paths = remaining
+        maximum_causal_backlog_paths = max(
+            maximum_causal_backlog_paths, len(remaining)
+        )
+        return result
 
     try:
         groups = schedule.line_groups
@@ -2788,7 +2824,7 @@ def run_schedule(
                         # would invent a future observation ahead of unpolled
                         # peer files and turn a chunk test into an ordering
                         # mutation.
-                        poll_for_schedule(changed_paths)
+                        poll_visible_causal_prefix(changed_paths)
                     split_line_boundary_count += 1
                 else:
                     _append(destination, pending_line)
@@ -2803,7 +2839,7 @@ def run_schedule(
                     for prior in polled_live_paths
                 ):
                     post_poll_hourly_path_introductions += 1
-            poll_for_schedule(changed_paths)
+            poll_visible_causal_prefix(changed_paths)
             polled_live_paths.update(changed_paths)
             if (
                 schedule.restart_every
@@ -2947,6 +2983,12 @@ def run_schedule(
                     flush_pending()
             flush_pending()
         _drain(context, sources, staging_root)
+        causal_checkpoint_remainders_after_drain = sum(
+            int(context.checkpoints.get(str(relative), {}).get("offset", 0))
+            < (staging_root / relative).stat().st_size
+            for relative in exposed_source_paths
+            if (staging_root / relative).is_file()
+        )
         if schedule.restart_on_analytical_transition:
             analytical_boundary_probe = analytical_transition_boundary_probe(
                 context, sessions
@@ -3025,6 +3067,11 @@ def run_schedule(
             "record_group_sequence_sha256": record_group_sequence.hexdigest(),
             "maximum_record_group_bytes": maximum_record_group_bytes,
             "maximum_exposure_bytes": maximum_exposure_bytes,
+            "causal_backlog_path_repolls": causal_backlog_path_repolls,
+            "maximum_causal_backlog_paths": maximum_causal_backlog_paths,
+            "causal_checkpoint_remainders_after_drain": (
+                causal_checkpoint_remainders_after_drain
+            ),
             "hourly_rotation_boundary_count": post_poll_hourly_path_introductions,
             "expected_hourly_rotation_boundaries": sum(
                 max(
@@ -4440,6 +4487,8 @@ def schedule_exercise_failures(
         failures.append("NOT_ALL_SOURCE_RECORDS_EXPOSED")
     if poll_calls <= 0:
         failures.append("NO_PRODUCTION_POLLS")
+    if int(seal.get("causal_checkpoint_remainders_after_drain", 0) or 0) != 0:
+        failures.append("CAUSAL_CHECKPOINT_REMAINDER_AFTER_DRAIN")
 
     if name == "original_source_chunks":
         counts = {

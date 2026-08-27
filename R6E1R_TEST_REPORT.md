@@ -21,6 +21,8 @@ No failing or skipped test may be weakened, deselected, reclassified, or omitted
 | Historical-availability reference comparator | 29/29 targeted tests; separate preserved-v3 check matched A and B 24/24 rows each to Reference C with zero remainder | Current accepted targeted evidence |
 | R6D-parity engine/GUI/API/browser gate | 135/135 passed at pushed GUI milestone `5efe70e`; three current fixture screenshots visually inspected; no tracked GUI/browser bytes changed afterward | Accepted targeted evidence |
 | Focused all-nine v12 | 21/21 components, 8/8 ledgers, 9/9 schedules, 9/9 invariants, 72/72 checkpoint rows, 2/2 recovery probes | Current accepted focused evidence |
+| Full-six v6 | Exact A/B and both reference surfaces, then 898 ingestion plus 898 analytical out-of-order refusals in one-record schedule | Rejected diagnostic; no acceptance value promoted |
+| Causal-backlog repair | Semantic hourly-peer regression 1/1; equivalence harness 31/31; ingestion/orchestrator/harness 116/116 in 14.31s | Current accepted targeted evidence |
 
 Source, test, GUI, and harness files changed after several results above. Final counts must therefore come from a new current-source run.
 
@@ -58,7 +60,8 @@ All rows above are accepted targeted/focused evidence. The complete current-sour
 | Suite | Passed | Failed | Skipped | Elapsed | Peak RSS | Command/evidence |
 |---|---:|---:|---:|---:|---:|---|
 | Callback/runner targeted portion | 120 | 0 | Not separately reported | Recorded within 216/216 gate | Not separately recorded | Exact final command rerun `PENDING_FINAL_EVIDENCE` |
-| Equivalence harness targeted | 29 | 0 | Not separately reported | Current comparator gate recorded | Not separately recorded | Historical-availability comparator at pushed head `89f1350` |
+| Equivalence harness targeted | 31 | 0 | 0 | 10.52 s | Not separately recorded | Current causal-backlog, schedule, reference, and comparator gate |
+| Ingestion/orchestrator/equivalence targeted | 116 | 0 | 0 | 14.31 s (14.60 s wall) | 137,536 KiB | Current repair command recorded in tracked scratchpad |
 | Engine/API/runtime/cross-layer targeted portion | 68 | 0 | Not separately reported | Recorded within 216/216 gate | Not separately recorded | Exact final command rerun `PENDING_FINAL_EVIDENCE` |
 | R6D-parity engine/GUI/API/browser targeted | 135 | 0 | Not separately reported | GUI milestone gate recorded | Not separately recorded | Three tracked fixtures visually inspected; GUI/browser bytes unchanged afterward |
 | Deployment package plus live GUI/API | 98 | 0 | 0 | 19.50 s | 135,972 KiB | Current 34-file package, systemd/bubblewrap, readiness, redaction, API contract |

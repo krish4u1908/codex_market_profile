@@ -859,6 +859,13 @@ def test_every_configured_schedule_predicate_is_exact() -> None:
             broken["maximum_record_group_bytes"] = 10
             broken["record_group_sizes_exercised"] = [2]
         assert harness.schedule_exercise_failures(name, broken), name
+    remainder = {
+        **passing["one_record_per_increment"],
+        "causal_checkpoint_remainders_after_drain": 1,
+    }
+    assert "CAUSAL_CHECKPOINT_REMAINDER_AFTER_DRAIN" in (
+        harness.schedule_exercise_failures("one_record_per_increment", remainder)
+    )
 
 
 def test_schedule_feasibility_quantifies_without_claiming_semantics(tmp_path: Path) -> None:
@@ -1614,6 +1621,22 @@ def test_gui_visual_authority_compares_historical_availability_by_target_role() 
 
 def test_real_live_path_chunk_split_and_restart_equivalence(tmp_path: Path) -> None:
     physical, sessions = _physical_fixture(tmp_path / "collector")
+    session = sessions[0]
+    raw_path = physical / f"raw/{session}/events_09.jsonl"
+    raw_rows = [json.loads(line) for line in raw_path.read_text().splitlines()]
+    raw_rows.insert(
+        2,
+        {
+            "received_at": f"{session}T09:15:00.250000+05:30",
+            "event_time": f"{session}T09:15:00.240000+05:30",
+            "message": {
+                "symbol": "NSE:NIFTYBANK-INDEX",
+                "ltp": 57_001.0,
+                "vol_traded_today": 0,
+            },
+        },
+    )
+    _write_jsonl(raw_path, raw_rows)
     config = _config(tmp_path / "shadow.json")
     all_sources = harness.discover_sources(physical, sessions)
     sources = harness.discover_sources(
@@ -1642,6 +1665,15 @@ def test_real_live_path_chunk_split_and_restart_equivalence(tmp_path: Path) -> N
         sessions=sessions,
         context_sources=context_sources,
     )
+    one_record, one_record_accounting, one_record_metrics = harness.run_schedule(
+        schedule=harness.SCHEDULES["one_record_per_increment"],
+        sources=sources,
+        staging_root=tmp_path / "one_record_collector",
+        state_root=tmp_path / "one_record_state",
+        config_path=config,
+        sessions=sessions,
+        context_sources=context_sources,
+    )
     middle_split, middle_split_accounting, middle_split_metrics = harness.run_schedule(
         schedule=harness.Schedule(
             "middle_split_fixture", (8192,), split_inside_lines=True, split_events=1
@@ -1654,7 +1686,10 @@ def test_real_live_path_chunk_split_and_restart_equivalence(tmp_path: Path) -> N
         context_sources=context_sources,
     )
     restarted, restart_accounting, restart_metrics = harness.run_schedule(
-        schedule=harness.Schedule("restart_fixture", (1,), restart_every=2),
+        # Restart after the raw candidate and the later Index row are visible.
+        # The next increment changes only OI, so equality proves the unchanged
+        # raw checkpoint remainder survives process recreation and is repolled.
+        schedule=harness.Schedule("restart_fixture", (1,), restart_every=3),
         sources=sources,
         staging_root=tmp_path / "restart_collector",
         state_root=tmp_path / "restart_state",
@@ -1674,16 +1709,36 @@ def test_real_live_path_chunk_split_and_restart_equivalence(tmp_path: Path) -> N
 
     assert all(row["status"] == "PASS" for row in chunked_accounting)
     assert all(row["status"] == "PASS" for row in split_accounting)
+    assert all(row["status"] == "PASS" for row in one_record_accounting)
     assert all(row["status"] == "PASS" for row in middle_split_accounting)
     assert all(row["status"] == "PASS" for row in restart_accounting)
     assert all(row["status"] == "PASS" for row in boundary_accounting)
     assert split_metrics["split_line_boundary_count"] > 0
     assert middle_split_metrics["split_line_boundary_count"] == 1
     assert middle_split_metrics["analytical_refusals"] == 0
+    assert one_record_metrics["analytical_refusals"] == 0
+    assert one_record_metrics["causal_backlog_path_repolls"] > 0
+    assert one_record_metrics["maximum_causal_backlog_paths"] > 0
+    assert one_record_metrics["causal_checkpoint_remainders_after_drain"] == 0
+    assert harness.schedule_exercise_failures(
+        "one_record_per_increment", one_record_metrics
+    ) == []
+    assert not any(
+        str(row.get("reason", "")).startswith("OUT_OF_ORDER")
+        for row in harness._as_rows(
+            one_record.get("analytical_ledgers", {}).get(
+                "refusals_data_quality", []
+            )
+        )
+    )
     assert chunked["session_snapshots"][sessions[0]]["session_date"] == sessions[0]
     assert boundary_metrics["unexpected_staged_sessions"] == []
     assert boundary_metrics["dirty_sessions_after_seal"] == []
     assert restart_metrics["restart_count"] > 0
+    assert restart_metrics["causal_backlog_path_repolls"] > 0
+    assert restart_metrics["maximum_causal_backlog_paths"] > 0
+    assert restart_metrics["causal_checkpoint_remainders_after_drain"] == 0
+    assert restart_metrics["analytical_refusals"] == 0
     probe = boundary_metrics["analytical_boundary_probe"]
     assert probe["measured"] is True
     assert boundary_metrics["analytical_boundary_restart_count"] == probe[
@@ -1705,6 +1760,13 @@ def test_real_live_path_chunk_split_and_restart_equivalence(tmp_path: Path) -> N
     )
     assert all(
         row["status"] == "PASS"
+        for row in harness.compare_snapshots(chunked, one_record, expected=None)
+    )
+    assert harness.analytical_ledger_rows(chunked) == (
+        harness.analytical_ledger_rows(one_record)
+    )
+    assert all(
+        row["status"] == "PASS"
         for row in harness.compare_snapshots(chunked, middle_split, expected=None)
     )
     assert all(
@@ -1716,6 +1778,153 @@ def test_real_live_path_chunk_split_and_restart_equivalence(tmp_path: Path) -> N
         for row in harness.compare_snapshots(chunked, boundary, expected=None)
     )
     assert len(chunked["basis"]) >= 1
+
+
+def test_checkpoint_lagging_hourly_peer_is_repolled_before_later_receipt(
+    tmp_path: Path,
+) -> None:
+    """A visible partial prefix cannot be omitted when a later hour changes.
+
+    The blank rows model a byte-exact raw projection: they preserve physical
+    source coordinates but are not schedule records.  With a 512-byte read
+    bound, the second Index record remains beyond the durable raw checkpoint
+    after its one-record increment.  Polling only the newly introduced OI hour
+    would publish 09:15:00.600 before that visible 09:15:00.500 Index row.
+    """
+    session = "2026-08-20"
+    projection_root = tmp_path / "projection"
+    physical = projection_root / "collector"
+    raw = physical / f"raw/{session}/events_09.jsonl"
+    raw.parent.mkdir(parents=True, exist_ok=True)
+
+    def index_record(fraction: str, price: float) -> dict:
+        return {
+            "received_at": f"{session}T09:15:00.{fraction}+05:30",
+            "event_time": f"{session}T09:15:00.{int(fraction) - 10_000:06d}+05:30",
+            "message": {
+                "symbol": "NSE:NIFTYBANK-INDEX",
+                "ltp": price,
+                "vol_traded_today": 0,
+            },
+        }
+
+    raw.write_bytes(
+        json.dumps(index_record("100000", 57_000.0), separators=(",", ":")).encode()
+        + b"\n"
+        + b"\n" * 700
+        + json.dumps(index_record("500000", 57_002.0), separators=(",", ":")).encode()
+        + b"\n"
+    )
+
+    def option_record(fraction: str, oi: int) -> dict:
+        return {
+            "received_at": f"{session}T09:15:00.{fraction}+05:30",
+            "request_time": f"{session}T09:15:00.{int(fraction) - 10_000:06d}+05:30",
+            "source": "option_chain",
+            "response": {
+                "data": {
+                    "expiryData": [{"date": "27-08-2026"}],
+                    "optionsChain": [
+                        {
+                            "symbol": "NSE:BANKNIFTY26AUG57000CE",
+                            "strike_price": 57_000,
+                            "oi": oi,
+                            "ltp": 250.0,
+                            "volume": 50,
+                        },
+                        {
+                            "symbol": "NSE:BANKNIFTY26AUG57000PE",
+                            "strike_price": 57_000,
+                            "oi": oi - 50,
+                            "ltp": 230.0,
+                            "volume": 45,
+                        },
+                    ],
+                }
+            },
+        }
+
+    oi_09 = physical / f"oi/{session}/oi_09.jsonl"
+    oi_10 = physical / f"oi/{session}/oi_10.jsonl"
+    _write_jsonl(oi_09, [option_record("300000", 500)])
+    _write_jsonl(oi_10, [option_record("600000", 510)])
+
+    projection_files = []
+    for path, selected_records in ((raw, 2), (oi_09, 1), (oi_10, 1)):
+        physical_rows, ends_with_newline = harness._count_lines(path)
+        assert ends_with_newline is True
+        projection_files.append(
+            {
+                "relative_path": str(path.relative_to(physical)),
+                "bytes": path.stat().st_size,
+                "physical_rows": physical_rows,
+                "selected_json_records": selected_records,
+                "sha256": harness._sha256_file(path),
+            }
+        )
+    (projection_root / "projection_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema": "R6E1R_BYTE_EXACT_RAW_RECORD_PROJECTION_V1",
+                "collector_root": str(physical.resolve()),
+                "source_mutations": 0,
+                "projection_files": projection_files,
+            }
+        )
+    )
+
+    config = _config(tmp_path / "shadow.json")
+    config_payload = json.loads(config.read_text())
+    config_payload["max_read_bytes_per_file_per_poll"] = 512
+    config.write_text(json.dumps(config_payload))
+    sources = harness.discover_sources(
+        physical, (session,), include_predecessors=False
+    )
+
+    runs = {}
+    for name in (
+        "original_source_chunks",
+        "one_record_per_increment",
+        "hourly_file_rotation",
+    ):
+        snapshot, accounting, metrics = harness.run_schedule(
+            schedule=harness.SCHEDULES[name],
+            sources=sources,
+            staging_root=tmp_path / f"{name}_collector",
+            state_root=tmp_path / f"{name}_state",
+            config_path=config,
+            sessions=(session,),
+        )
+        assert all(row["status"] == "PASS" for row in accounting)
+        assert metrics["analytical_refusals"] == 0
+        assert metrics["causal_checkpoint_remainders_after_drain"] == 0
+        assert harness.schedule_exercise_failures(name, metrics) == []
+        assert not any(
+            str(row.get("reason", "")).startswith("OUT_OF_ORDER")
+            for row in harness._as_rows(
+                snapshot.get("analytical_ledgers", {}).get(
+                    "refusals_data_quality", []
+                )
+            )
+        )
+        runs[name] = (snapshot, metrics)
+
+    baseline = runs["original_source_chunks"][0]
+    for name in ("one_record_per_increment", "hourly_file_rotation"):
+        snapshot, metrics = runs[name]
+        assert metrics["causal_backlog_path_repolls"] > 0
+        assert metrics["maximum_causal_backlog_paths"] > 0
+        assert all(
+            row["status"] == "PASS"
+            for row in harness.compare_snapshots(baseline, snapshot, expected=None)
+        )
+        assert harness.analytical_ledger_rows(baseline) == (
+            harness.analytical_ledger_rows(snapshot)
+        )
+    assert runs["hourly_file_rotation"][1]["hourly_rotation_boundary_count"] == 1
+    assert runs["hourly_file_rotation"][1][
+        "expected_hourly_rotation_boundaries"
+    ] == 1
 
 
 def test_original_byte_chunks_and_hourly_rotation_are_measured(tmp_path: Path) -> None:
