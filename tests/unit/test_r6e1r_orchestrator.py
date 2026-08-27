@@ -113,6 +113,53 @@ def independent_confirmation_fixture() -> list[dict]:
     return rows
 
 
+def provisional_expiration_fixture() -> tuple[list[dict], dict]:
+    """Expose a terminal expiration before a later standalone Index response."""
+    rows = full_stack_fixture()
+    shift = timedelta(hours=6, minutes=5)
+    for row in rows:
+        for field in ("receipt_timestamp", "exchange_timestamp"):
+            row[field] = (
+                datetime.fromisoformat(row[field]) + shift
+            ).isoformat()
+
+    ordinal = len(rows)
+
+    def add(instrument, symbol, instant, **values):
+        nonlocal ordinal
+        ordinal += 1
+        rows.append(observation(
+            f"O{ordinal:04d}", instrument, symbol, instant, **values,
+        ))
+
+    # These constituent receipts fall after the last stable lifecycle state.
+    # They are admitted only while the 15:30 expiration extends the live
+    # participation window.
+    add(
+        "FUTURES_OI", FUTURES,
+        datetime(2026, 8, 20, 15, 29, 30, tzinfo=IST),
+        price=57_025, volume=900, oi=3_000, expiry="2026-08-27",
+    )
+    add(
+        "CE", "NSE:BANKNIFTY26AUG57000CE",
+        datetime(2026, 8, 20, 15, 29, 30, 100_000, tzinfo=IST),
+        price=240, volume=500, oi=2_500, strike=57_000,
+        expiry="2026-08-27",
+    )
+    add(
+        "PE", "NSE:BANKNIFTY26AUG57000PE",
+        datetime(2026, 8, 20, 15, 30, tzinfo=IST),
+        price=140, volume=600, oi=2_600, strike=57_000,
+        expiry="2026-08-27",
+    )
+    late_index = observation(
+        f"O{ordinal + 1:04d}", "INDEX", INDEX,
+        datetime(2026, 8, 20, 15, 31, tzinfo=IST),
+        price=56_975, volume=0,
+    )
+    return rows, late_index
+
+
 def ledger_counts(orchestrator: LiveAnalyticalOrchestrator) -> dict[str, int]:
     return {name: len(ledger.rows()) for name, ledger in orchestrator.ledgers.items()}
 
@@ -396,6 +443,205 @@ def test_periodic_flush_keeps_mutable_closure_fields_out_of_event_ledgers(
         )
         assert actual_rows == expected_rows
     assert_unique_stage_and_publication_ids(incremental)
+
+
+def test_provisional_expiration_and_linked_rows_publish_only_if_sealed(
+    tmp_path,
+):
+    prefix, late_index = provisional_expiration_fixture()
+    periodic = LiveAnalyticalOrchestrator(contract(tmp_path / "periodic"))
+    periodic.process(prefix)
+    provisional = periodic.snapshot(SESSION)
+
+    expiration = next(
+        row for row in provisional["lifecycle"]
+        if row["state"] == "EXPIRED_OR_UNRESOLVED"
+        and row["reason_code"]
+        == "LIFECYCLE_END_WITHOUT_FAVOURABLE_RESPONSE"
+    )
+    episode_id = expiration["episode_id"]
+    provisional_participation_ids = {
+        row["transition_id"]
+        for row in provisional["participation_transitions"]
+        if row["episode_id"] == episode_id
+    }
+    assert provisional_participation_ids
+    provisional_source_ids = {
+        expiration["record_id"],
+    } | provisional_participation_ids
+    provisional_linked_cross_ids = {
+        row["transition_id"]
+        for row in provisional["cross_layer_transitions"]
+        if row["source_record_id"] in provisional_source_ids
+    }
+    assert provisional_linked_cross_ids
+    assert expiration["record_id"] not in {
+        row["record_id"]
+        for row in periodic.ledgers["lifecycle_transitions"].rows()
+    }
+    assert not provisional_participation_ids & {
+        row["transition_id"]
+        for row in periodic.ledgers["participation_transitions"].rows()
+    }
+    assert not provisional_linked_cross_ids & {
+        row["transition_id"]
+        for row in periodic.ledgers["cross_layer_transitions"].rows()
+    }
+
+    periodic.process([late_index])
+    final = periodic.snapshot(SESSION)
+    assert final["responses"] == [{
+        "episode_id": episode_id,
+        "first_favourable_timestamp": "2026-08-20T15:31:00+05:30",
+        "first_adverse_timestamp": "2026-08-20T15:27:40+05:30",
+        "ordering": "ADVERSE_FIRST",
+    }]
+    assert expiration["record_id"] not in {
+        row["record_id"] for row in final["lifecycle"]
+    }
+    final_participation_ids = {
+        row["transition_id"] for row in final["participation_transitions"]
+    }
+    disappeared_participation_ids = (
+        provisional_participation_ids - final_participation_ids
+    )
+    assert len(disappeared_participation_ids) == 6
+    last_stable_lifecycle_entry = max(
+        row["state_entry_timestamp"]
+        for row in provisional["lifecycle"]
+        if row["record_id"] != expiration["record_id"]
+    )
+    assert all(
+        row["effective_timestamp"] > last_stable_lifecycle_entry
+        for row in provisional["participation_transitions"]
+        if row["transition_id"] in disappeared_participation_ids
+    )
+    final_cross_ids = {
+        row["transition_id"] for row in final["cross_layer_transitions"]
+    }
+    disappeared_cross_ids = provisional_linked_cross_ids - final_cross_ids
+    assert len(disappeared_cross_ids) == 7
+    assert not disappeared_participation_ids & {
+        row["transition_id"]
+        for row in periodic.ledgers["participation_transitions"].rows()
+    }
+    assert not disappeared_cross_ids & {
+        row["transition_id"]
+        for row in periodic.ledgers["cross_layer_transitions"].rows()
+    }
+    periodic.finalize_session(SESSION)
+
+    one_shot = LiveAnalyticalOrchestrator(contract(tmp_path / "one-shot"))
+    one_shot.process([*prefix, late_index])
+    expected = one_shot.finalize_session(SESSION)
+    for artifact in (
+        "lifecycle", "participation_transitions", "cross_layer_transitions",
+    ):
+        assert final[artifact] == expected[artifact]
+
+    material_ledgers = tuple(
+        name for name in orchestrator_module.LEDGER_NAMES
+        if name != "refusals_data_quality"
+    )
+    assert len(material_ledgers) == 8
+    for name in material_ledgers:
+        actual_rows = sorted(
+            orchestrator_module._material_ledger_content(name, row)
+            for row in periodic.ledgers[name].rows()
+        )
+        expected_rows = sorted(
+            orchestrator_module._material_ledger_content(name, row)
+            for row in one_shot.ledgers[name].rows()
+        )
+        assert actual_rows == expected_rows, name
+    sealed = LiveAnalyticalOrchestrator(contract(tmp_path / "sealed"))
+    sealed.process(prefix)
+    sealed.finalize_session(SESSION)
+    assert expiration["record_id"] in {
+        row["record_id"]
+        for row in sealed.ledgers["lifecycle_transitions"].rows()
+    }
+    assert provisional_participation_ids <= {
+        row["transition_id"]
+        for row in sealed.ledgers["participation_transitions"].rows()
+    }
+    assert provisional_linked_cross_ids <= {
+        row["transition_id"]
+        for row in sealed.ledgers["cross_layer_transitions"].rows()
+    }
+    for orchestrator in (periodic, one_shot, sealed):
+        assert all(
+            "episode_end_timestamp" not in row
+            for row in orchestrator.ledgers[
+                "divergence_confirmations"
+            ].rows()
+        )
+        assert all(
+            "state_exit_timestamp" not in row
+            for row in orchestrator.ledgers["lifecycle_transitions"].rows()
+        )
+        assert_unique_stage_and_publication_ids(orchestrator)
+
+
+@pytest.mark.parametrize("late_response", [False, True])
+def test_provisional_expiration_restart_matches_one_shot_ledgers(
+    tmp_path, late_response,
+):
+    prefix, late_index = provisional_expiration_fixture()
+    root = tmp_path / ("restart-late" if late_response else "restart-seal")
+    periodic = LiveAnalyticalOrchestrator(contract(root))
+    periodic.process(prefix)
+    provisional = periodic.snapshot(SESSION)
+    expiration = next(
+        row for row in provisional["lifecycle"]
+        if row["state"] == "EXPIRED_OR_UNRESOLVED"
+        and row["reason_code"]
+        == "LIFECYCLE_END_WITHOUT_FAVOURABLE_RESPONSE"
+    )
+    assert expiration["record_id"] not in {
+        row["record_id"]
+        for row in periodic.ledgers["lifecycle_transitions"].rows()
+    }
+
+    restarted = LiveAnalyticalOrchestrator(contract(root))
+    observations = [*prefix, late_index] if late_response else prefix
+    if late_response:
+        restarted.process([late_index])
+    actual = restarted.finalize_session(SESSION)
+
+    one_shot = LiveAnalyticalOrchestrator(contract(tmp_path / "one-shot"))
+    one_shot.process(observations)
+    expected = one_shot.finalize_session(SESSION)
+    for artifact in (
+        "lifecycle", "participation_transitions", "cross_layer_transitions",
+    ):
+        assert actual[artifact] == expected[artifact]
+
+    material_ledgers = tuple(
+        name for name in orchestrator_module.LEDGER_NAMES
+        if name != "refusals_data_quality"
+    )
+    assert len(material_ledgers) == 8
+    for name in material_ledgers:
+        actual_rows = sorted(
+            orchestrator_module._material_ledger_content(name, row)
+            for row in restarted.ledgers[name].rows()
+        )
+        expected_rows = sorted(
+            orchestrator_module._material_ledger_content(name, row)
+            for row in one_shot.ledgers[name].rows()
+        )
+        assert actual_rows == expected_rows, name
+    if late_response:
+        assert expiration["record_id"] not in {
+            row["record_id"] for row in actual["lifecycle"]
+        }
+    else:
+        assert sum(
+            row["record_id"] == expiration["record_id"]
+            for row in restarted.ledgers["lifecycle_transitions"].rows()
+        ) == 1
+    assert_unique_stage_and_publication_ids(restarted)
 
 
 def test_unconfirmed_candidate_defers_terminal_group_publication(
