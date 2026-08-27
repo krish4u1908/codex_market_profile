@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import replace
-from datetime import datetime
+from datetime import date, datetime
 import hashlib
 import json
 import math
@@ -18,9 +18,12 @@ from banknifty_profiler.runtime.timestamps import parse_timestamp
 from banknifty_profiler.shadow.ledger import AppendOnlyLedger, atomic_json
 from banknifty_profiler.shadow.observation import TypedObservation
 from banknifty_profiler.shadow.symbols import (
+    CANONICAL_INDEX_SYMBOL,
     InstrumentClass,
     SymbolClassification,
     SymbolRegistry,
+    _FUTURES,
+    _OPTION,
     normalize_expiry,
 )
 
@@ -41,6 +44,404 @@ _OI_PAYLOAD_FIELDS = (
     "ltp", "volume", "v", "oi", "prev_oi", "pdoi", "oich", "strike_price",
     "option_type", "expiry", "bid", "ask", "ltpch", "ltt",
 )
+_INGESTION_PROVENANCE_FIELDS = (
+    "engine_hash", "configuration_hash", "raw_run_id",
+)
+
+
+def _ledger_nonempty_string(
+    row: Mapping[str, object], field: str, context: str,
+) -> str:
+    value = row.get(field)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{context} has invalid {field}")
+    return value
+
+
+def _ledger_string(
+    row: Mapping[str, object], field: str, context: str,
+) -> str:
+    value = row.get(field)
+    if not isinstance(value, str):
+        raise ValueError(f"{context} has invalid {field}")
+    return value
+
+
+def _ledger_date(
+    row: Mapping[str, object], field: str, context: str,
+) -> str:
+    value = _ledger_nonempty_string(row, field, context)
+    try:
+        canonical = date.fromisoformat(value).isoformat()
+    except ValueError as error:
+        raise ValueError(f"{context} has invalid {field}") from error
+    if canonical != value:
+        raise ValueError(f"{context} has noncanonical {field}")
+    return value
+
+
+def _ledger_timestamp(
+    row: Mapping[str, object], field: str, context: str,
+) -> str:
+    value = _ledger_nonempty_string(row, field, context)
+    try:
+        parse_timestamp(value, field_name=f"{context} {field}")
+    except (TypeError, ValueError) as error:
+        raise ValueError(
+            f"{context} has invalid timezone-aware {field}"
+        ) from error
+    return value
+
+
+def _ledger_nonnegative_integer(
+    value: object, field: str, context: str,
+) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"{context} has invalid {field}")
+    return value
+
+
+def _validate_ingestion_ledger_row(
+    ledger_name: str,
+    row: object,
+    *,
+    ordinal: int | None = None,
+    allow_filtered_candidate: bool = False,
+) -> Mapping[str, object]:
+    location = f" row {ordinal}" if ordinal is not None else " row"
+    context = f"{ledger_name} ledger{location}"
+    if not isinstance(row, Mapping):
+        raise ValueError(f"{context} is not an object")
+    _ledger_nonempty_string(row, "event_id", context)
+    _ledger_string(row, "session_date", context)
+    _ledger_timestamp(row, "effective_timestamp", context)
+    _ledger_timestamp(row, "publication_timestamp", context)
+    identifiers = row.get("source_receipt_identifiers")
+    if not isinstance(identifiers, Mapping):
+        raise ValueError(f"{context} has invalid source_receipt_identifiers")
+    for field in _INGESTION_PROVENANCE_FIELDS:
+        _ledger_nonempty_string(row, field, context)
+
+    if ledger_name == "refusals_data_quality":
+        # The bad session text may itself be the refused evidence.
+        if row.get("status") != "REFUSED":
+            raise ValueError(f"{context} has invalid status")
+        if row.get("effective_timestamp_provenance") not in {
+            "EVIDENCE", "WALL_CLOCK_FALLBACK",
+        }:
+            raise ValueError(
+                f"{context} has invalid effective_timestamp_provenance"
+            )
+        if "file" not in identifiers or not isinstance(
+            identifiers.get("file"), str
+        ):
+            raise ValueError(
+                f"{context} has invalid source_receipt_identifiers.file"
+            )
+        for field in ("byte_offset", "source_row"):
+            _ledger_nonnegative_integer(
+                identifiers.get(field),
+                f"source_receipt_identifiers.{field}",
+                context,
+            )
+        _ledger_nonempty_string(row, "reason", context)
+        _ledger_string(row, "detail", context)
+        return row
+
+    _ledger_date(row, "session_date", context)
+    if ledger_name == "raw_file_checkpoints":
+        if row.get("status") != "COMMITTED":
+            raise ValueError(f"{context} has invalid status")
+        if row.get("reason") != "COMPLETE_LINES_ONLY":
+            raise ValueError(f"{context} has invalid reason")
+        source_file = identifiers.get("file")
+        identity = identifiers.get("identity")
+        if not isinstance(source_file, str) or not source_file:
+            raise ValueError(f"{context} has invalid checkpoint file")
+        if not isinstance(identity, str) or not identity:
+            raise ValueError(f"{context} has invalid checkpoint identity")
+        _ledger_nonnegative_integer(
+            identifiers.get("offset"), "checkpoint offset", context
+        )
+        return row
+
+    if ledger_name != "normalized_raw_events":
+        raise ValueError(f"unknown ingestion producer ledger: {ledger_name}")
+    missing = [field for field in TypedObservation.keys() if field not in row]
+    if missing:
+        raise ValueError(
+            f"{context} is missing required fields: {','.join(missing)}"
+        )
+    observation_id = _ledger_nonempty_string(
+        row, "observation_id", context
+    )
+    if observation_id != row["event_id"]:
+        raise ValueError(f"{context} has mismatched observation identity")
+    instrument = _ledger_nonempty_string(
+        row, "instrument_class", context
+    )
+    allowed_classes = {item.value for item in InstrumentClass}
+    if instrument not in allowed_classes:
+        raise ValueError(f"{context} has invalid instrument_class")
+    _ledger_nonempty_string(row, "source_symbol", context)
+    status = _ledger_nonempty_string(row, "status", context)
+    if status != "OBSERVED" and not (
+        allow_filtered_candidate
+        and status == "FILTERED"
+        and row.get("classification_reason")
+        == "FUTURES_SELECTION_PENDING"
+    ):
+        raise ValueError(f"{context} has invalid status")
+    if status == "OBSERVED":
+        _ledger_nonempty_string(row, "canonical_symbol", context)
+    elif row.get("canonical_symbol") is not None and not isinstance(
+        row.get("canonical_symbol"), str
+    ):
+        raise ValueError(f"{context} has invalid canonical_symbol")
+    receipt = parse_timestamp(
+        _ledger_timestamp(row, "receipt_timestamp", context)
+    )
+    if parse_timestamp(row["effective_timestamp"]) != receipt:
+        raise ValueError(f"{context} has mismatched effective_timestamp")
+    for field in ("event_timestamp", "exchange_timestamp"):
+        if row.get(field) not in (None, ""):
+            _ledger_timestamp(row, field, context)
+    _ledger_nonempty_string(row, "source_file", context)
+    if row.get("source_stream") not in {"raw", "oi"}:
+        raise ValueError(f"{context} has invalid source_stream")
+    for field in (
+        "source_byte_offset", "source_row_number", "source_row",
+    ):
+        _ledger_nonnegative_integer(row.get(field), field, context)
+    if row["source_row"] != row["source_row_number"]:
+        raise ValueError(f"{context} has mismatched source_row")
+    _ledger_nonempty_string(row, "raw_record_id", context)
+    if not isinstance(row.get("canonical_payload"), dict):
+        raise ValueError(f"{context} has invalid canonical_payload")
+    if not isinstance(row.get("out_of_order"), bool):
+        raise ValueError(f"{context} has invalid out_of_order")
+    _ledger_nonempty_string(row, "availability_status", context)
+    _ledger_nonempty_string(row, "freshness_status", context)
+    _ledger_nonempty_string(row, "reason", context)
+    _ledger_nonempty_string(row, "classification_reason", context)
+    for field in (
+        "file", "raw_record_id", "source_stream",
+    ):
+        value = identifiers.get(field)
+        if not isinstance(value, str) or not value:
+            raise ValueError(
+                f"{context} has invalid source_receipt_identifiers.{field}"
+            )
+    for field in ("byte_offset", "source_row", "item_number"):
+        _ledger_nonnegative_integer(
+            identifiers.get(field),
+            f"source_receipt_identifiers.{field}",
+            context,
+        )
+    expected_identifiers = {
+        "file": row["source_file"],
+        "byte_offset": row["source_byte_offset"],
+        "source_row": row["source_row_number"],
+        "raw_record_id": row["raw_record_id"],
+        "source_stream": row["source_stream"],
+    }
+    if any(
+        identifiers.get(field) != value
+        for field, value in expected_identifiers.items()
+    ):
+        raise ValueError(
+            f"{context} has mismatched source_receipt_identifiers"
+        )
+    for field in (
+        "price", "cumulative_volume", "open_interest",
+        "previous_open_interest", "open_interest_change", "oi",
+        "previous_oi", "delta_oi", "strike", "underlying_price",
+        "forward_price", "bid_price", "ask_price",
+    ):
+        value = row.get(field)
+        if value is not None and (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(float(value))
+        ):
+            raise ValueError(f"{context} has invalid {field}")
+    for canonical, alias in (
+        ("open_interest", "oi"),
+        ("previous_open_interest", "previous_oi"),
+        ("open_interest_change", "delta_oi"),
+    ):
+        if row.get(canonical) != row.get(alias):
+            raise ValueError(
+                f"{context} has mismatched {canonical}/{alias}"
+            )
+    for field in ("option_type", "expiry", "expiry_date"):
+        if row.get(field) is not None and not isinstance(row.get(field), str):
+            raise ValueError(f"{context} has invalid {field}")
+    if row.get("expiry") != row.get("expiry_date"):
+        raise ValueError(f"{context} has mismatched expiry/expiry_date")
+    if row.get("expiry"):
+        try:
+            canonical_expiry = date.fromisoformat(row["expiry"]).isoformat()
+        except ValueError as error:
+            raise ValueError(f"{context} has invalid expiry") from error
+        if canonical_expiry != row["expiry"]:
+            raise ValueError(f"{context} has noncanonical expiry")
+    if status == "OBSERVED":
+        canonical_symbol = str(row["canonical_symbol"])
+        if instrument not in _OBSERVED_CLASSES:
+            raise ValueError(f"{context} has invalid observed instrument_class")
+        if row["source_symbol"] != canonical_symbol:
+            raise ValueError(f"{context} has mismatched canonical/source symbol")
+        source_parts = Path(str(row["source_file"])).parts
+        if (
+            len(source_parts) != 3
+            or source_parts[0] != row["source_stream"]
+            or source_parts[1] != row["session_date"]
+        ):
+            raise ValueError(f"{context} has invalid source file identity")
+        if instrument == InstrumentClass.INDEX.value:
+            if (
+                canonical_symbol != CANONICAL_INDEX_SYMBOL
+                or row["source_stream"] != "raw"
+            ):
+                raise ValueError(f"{context} has invalid Index identity")
+        elif instrument == InstrumentClass.FUTURES.value:
+            futures_match = _FUTURES.fullmatch(canonical_symbol)
+            if (
+                futures_match is None
+                or row["source_stream"] != "raw"
+                or (
+                    row.get("expiry")
+                    and not SymbolRegistry._expiry_matches(
+                        futures_match, str(row["expiry"])
+                    )
+                )
+            ):
+                raise ValueError(f"{context} has invalid Futures identity")
+        elif instrument == InstrumentClass.FUTURES_OI.value:
+            futures_match = _FUTURES.fullmatch(canonical_symbol)
+            if (
+                futures_match is None
+                or row["source_stream"] != "oi"
+                or (
+                    row.get("expiry")
+                    and not SymbolRegistry._expiry_matches(
+                        futures_match, str(row["expiry"])
+                    )
+                )
+            ):
+                raise ValueError(f"{context} has invalid Futures OI identity")
+        else:
+            option_match = _OPTION.fullmatch(canonical_symbol)
+            option_strike = (
+                _number(option_match.group("strike"))
+                if option_match is not None else None
+            )
+            if (
+                option_match is None
+                or row["source_stream"] != "oi"
+                or row.get("option_type") != instrument
+                or row.get("strike") is None
+                or row.get("strike") != option_strike
+                or not row.get("expiry")
+                or not SymbolRegistry._expiry_matches(
+                    option_match, str(row["expiry"])
+                )
+            ):
+                raise ValueError(f"{context} has invalid option identity")
+    return row
+
+
+def _ingestion_ledger_content(
+    ledger_name: str, row: Mapping[str, object],
+) -> str:
+    """Digest immutable producer content for same-ID conflict detection."""
+    value = dict(row)
+    # A run identifier and publication clock describe transport, not the raw
+    # evidence.  A clean process restart may legitimately supply a new run ID
+    # for the same normalized record; receipt/value/source content may not
+    # change under the same event identity.
+    value.pop("raw_run_id", None)
+    if ledger_name in {"normalized_raw_events", "refusals_data_quality"}:
+        # Publication is a transport clock and changes on a legitimate replay.
+        value.pop("publication_timestamp", None)
+    if ledger_name == "normalized_raw_events":
+        # This flag is derived from physical append order and is authenticated
+        # independently at startup below.  Excluding it lets a replay start
+        # from the raw envelope's default False before the trusted derived flag
+        # is restored.
+        value.pop("out_of_order", None)
+    if (
+        ledger_name == "refusals_data_quality"
+        and value.get("effective_timestamp_provenance")
+        == "WALL_CLOCK_FALLBACK"
+    ):
+        value.pop("effective_timestamp", None)
+    encoded = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), default=str
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _require_matching_ingestion_identity(
+    ledger_name: str,
+    row: Mapping[str, object],
+    content_index: Mapping[str, str],
+) -> bool:
+    """Return whether a producer ID exists, refusing changed same-ID data."""
+    identity = str(row["event_id"])
+    prior = content_index.get(identity)
+    if prior is None:
+        return False
+    current = _ingestion_ledger_content(ledger_name, row)
+    if prior != current:
+        raise ValueError(
+            f"{ledger_name} ledger event_id reused with different "
+            f"immutable content: {identity}"
+        )
+    return True
+
+
+def _encoded_outbox_payload(
+    observation: TypedObservation,
+) -> tuple[str, str]:
+    row = observation.to_dict()
+    _validate_ingestion_ledger_row(
+        "normalized_raw_events",
+        row,
+        allow_filtered_candidate=(
+            observation.classification_reason
+            == "FUTURES_SELECTION_PENDING"
+        ),
+    )
+    payload = json.dumps(row, sort_keys=True, separators=(",", ":"))
+    return payload, hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _validate_normalized_ledger_order(
+    rows: Iterable[Mapping[str, object]],
+) -> None:
+    """Recompute the derived out-of-order flag from physical ledger order."""
+    high_water = None
+    for ordinal, row in enumerate(rows, start=1):
+        if (
+            row.get("instrument_class") not in _OBSERVED_CLASSES
+            or row.get("status") != "OBSERVED"
+        ):
+            expected = False
+        else:
+            receipt = parse_timestamp(
+                row.get("receipt_timestamp"),
+                field_name=f"normalized ledger receipt at row {ordinal}",
+            )
+            expected = high_water is not None and receipt < high_water
+            if not expected and (high_water is None or receipt >= high_water):
+                high_water = receipt
+        if row.get("out_of_order") is not expected:
+            raise ValueError(
+                "normalized_raw_events ledger has invalid derived "
+                f"out_of_order at row {ordinal}"
+            )
 
 
 def now() -> str:
@@ -176,7 +577,8 @@ class IncrementalJSONLIngestor:
         self.state = contract["state_root"]
         self.state.mkdir(parents=True, exist_ok=True)
         self.checkpoint_path = self.state / "checkpoints.json"
-        self.checkpoints = self._load_checkpoints()
+        checkpoint_mirror = self._load_checkpoints()
+        self.checkpoints = checkpoint_mirror
         self.buffer_limit = int(contract["config"]["max_buffer_bytes_per_file"])
         self.read_limit = int(contract["config"]["max_read_bytes_per_file_per_poll"])
         self.symbols = SymbolRegistry(
@@ -193,23 +595,153 @@ class IncrementalJSONLIngestor:
             name: AppendOnlyLedger(self.state / "ledgers" / f"{name}.jsonl")
             for name in ledger_names
         }
-        normalized_rows = self.ledgers["normalized_raw_events"].rows()
-        self._normalized_seen = {row.get("event_id") for row in normalized_rows}
+        normalized_rows = self._unique_event_rows("normalized_raw_events")
+        _validate_normalized_ledger_order(normalized_rows.values())
+        self._normalized_content = {
+            identity: _ingestion_ledger_content(
+                "normalized_raw_events", row
+            )
+            for identity, row in normalized_rows.items()
+        }
+        self._normalized_seen = set(normalized_rows)
         self._normalized_out_of_order = {
-            row.get("event_id"): bool(row.get("out_of_order"))
-            for row in normalized_rows
+            identity: bool(row.get("out_of_order"))
+            for identity, row in normalized_rows.items()
         }
-        self._quality_seen = {
-            row.get("event_id") for row in self.ledgers["refusals_data_quality"].rows()
+        quality_rows = self._unique_event_rows("refusals_data_quality")
+        self._quality_content = {
+            identity: _ingestion_ledger_content(
+                "refusals_data_quality", row
+            )
+            for identity, row in quality_rows.items()
         }
-        self._checkpoint_seen = {
-            row.get("event_id") for row in self.ledgers["raw_file_checkpoints"].rows()
+        self._quality_seen = set(quality_rows)
+        checkpoint_rows = self._unique_event_rows("raw_file_checkpoints")
+        self._checkpoint_content = {
+            identity: _ingestion_ledger_content(
+                "raw_file_checkpoints", row
+            )
+            for identity, row in checkpoint_rows.items()
         }
+        self._checkpoint_seen = set(checkpoint_rows)
         self._quality_pending: list[dict[str, Any]] = []
         self._quality_pending_ids: set[str] = set()
+        self._quality_pending_content: dict[str, str] = {}
         self._checkpoint_pending: list[dict[str, Any]] = []
         self._checkpoint_dirty = False
-        self.db = sqlite3.connect(self.state / "dedup.sqlite3")
+        database_path = self.state / "dedup.sqlite3"
+        # checkpoints.json is only a replaceable operator-facing mirror.  No
+        # surviving ingestion evidence may recreate the SQLite checkpoint
+        # authority: a forged EOF mirror could skip valid raw bytes, while a
+        # deleted mirror must not hide the same rollback when its append-only
+        # checkpoint/normalization/refusal evidence survives.  Existing SQLite
+        # rows remain authoritative and repair a missing/stale mirror below;
+        # any prior ingestion evidence without that authority requires a clean
+        # rebuild.
+        prior_ingestion_evidence = bool(
+            checkpoint_mirror
+            or checkpoint_rows
+            or normalized_rows
+            or quality_rows
+        )
+        if prior_ingestion_evidence and not database_path.is_file():
+            raise ValueError(
+                "prior ingestion evidence lacks durable SQLite authority; "
+                "clean rebuild required"
+            )
+        self.db = sqlite3.connect(database_path)
+        if prior_ingestion_evidence:
+            runtime_meta_table = self.db.execute(
+                "select 1 from sqlite_master where type='table' "
+                "and name='runtime_meta'"
+            ).fetchone()
+            runtime_authority = (
+                self.db.execute(
+                    "select 1 from runtime_meta where key='raw_run_id'"
+                ).fetchone()
+                if runtime_meta_table is not None
+                else None
+            )
+            if runtime_authority is None:
+                self.db.close()
+                raise ValueError(
+                    "prior ingestion evidence lacks durable SQLite authority; "
+                    "clean rebuild required"
+                )
+        checkpoint_progress_evidence = bool(
+            checkpoint_mirror or checkpoint_rows or normalized_rows
+        )
+        if checkpoint_progress_evidence:
+            checkpoint_table = self.db.execute(
+                "select 1 from sqlite_master where type='table' "
+                "and name='file_checkpoint'"
+            ).fetchone()
+            checkpoint_authority = (
+                {
+                    str(row[0]): {
+                        "offset": int(row[1]),
+                        "row": int(row[2]),
+                        "identity": str(row[3]),
+                    }
+                    for row in self.db.execute(
+                        "select source_file,offset,row_number,identity "
+                        "from file_checkpoint"
+                    )
+                }
+                if checkpoint_table is not None
+                else {}
+            )
+            trusted_checkpoint_requirements: dict[str, tuple[int, str]] = {}
+            for row in checkpoint_rows.values():
+                identifiers = row["source_receipt_identifiers"]
+                trusted_checkpoint_requirements[str(identifiers["file"])] = (
+                    int(identifiers["offset"]),
+                    str(identifiers["identity"]),
+                )
+            normalized_requirements: dict[str, tuple[int, int]] = {}
+            for row in normalized_rows.values():
+                source = str(row["source_file"])
+                requirement = (
+                    int(row["source_row_number"]),
+                    int(row["source_byte_offset"]),
+                )
+                prior = normalized_requirements.get(source, (-1, -1))
+                normalized_requirements[source] = (
+                    max(prior[0], requirement[0]),
+                    max(prior[1], requirement[1]),
+                )
+            # The JSON mirror is untrusted and therefore cannot demand an
+            # exact source match.  Trusted append-only rows must all retain a
+            # causally covering SQLite checkpoint.  SQLite can be ahead of an
+            # audit append after a crash, but it cannot omit a trusted source,
+            # change its current identity, or move behind a trusted offset/row.
+            authority_valid = bool(checkpoint_authority)
+            for source, (offset, identity) in (
+                trusted_checkpoint_requirements.items()
+            ):
+                durable = checkpoint_authority.get(source)
+                authority_valid = bool(
+                    authority_valid
+                    and durable is not None
+                    and durable["identity"] == identity
+                    and durable["offset"] >= offset
+                )
+            for source, (row_number, byte_offset) in (
+                normalized_requirements.items()
+            ):
+                durable = checkpoint_authority.get(source)
+                authority_valid = bool(
+                    authority_valid
+                    and durable is not None
+                    and durable["row"] >= row_number
+                    and durable["offset"] > byte_offset
+                )
+            if not authority_valid:
+                self.db.close()
+                raise ValueError(
+                    "prior ingestion evidence lacks durable SQLite authority; "
+                    "clean rebuild required"
+                )
         self.db.execute("create table if not exists seen(id text primary key)")
         self.db.execute("create table if not exists runtime_meta(key text primary key,value text not null)")
         persisted_run = self.db.execute(
@@ -226,13 +758,23 @@ class IncrementalJSONLIngestor:
             self.c["raw_run_id"] = persisted_run[0]
         self.db.execute(
             "create table if not exists observation_outbox("
-            "id text primary key,payload text not null)"
+            "id text primary key,payload text not null,"
+            "content_sha256 text)"
         )
         self.db.execute(
             "create table if not exists futures_candidate_outbox("
             "id text primary key,session_date text not null,"
-            "receipt_timestamp text,payload text not null)"
+            "receipt_timestamp text,payload text not null,"
+            "content_sha256 text)"
         )
+        observation_columns = {
+            row[1]
+            for row in self.db.execute("pragma table_info(observation_outbox)")
+        }
+        if "content_sha256" not in observation_columns:
+            self.db.execute(
+                "alter table observation_outbox add column content_sha256 text"
+            )
         candidate_columns = {
             row[1]
             for row in self.db.execute("pragma table_info(futures_candidate_outbox)")
@@ -241,18 +783,31 @@ class IncrementalJSONLIngestor:
             self.db.execute(
                 "alter table futures_candidate_outbox add column receipt_timestamp text"
             )
-        # Older replay state predates the causal candidate-watermark column.
-        # Populate it once from the durable payload rather than reparsing every
-        # unresolved candidate on every live poll.
-        for candidate_id, payload in self.db.execute(
-            "select id,payload from futures_candidate_outbox "
-            "where receipt_timestamp is null"
-        ).fetchall():
-            receipt = TypedObservation(**json.loads(payload)).receipt_timestamp
+        if "content_sha256" not in candidate_columns:
             self.db.execute(
-                "update futures_candidate_outbox set receipt_timestamp=? where id=?",
-                (receipt, candidate_id),
+                "alter table futures_candidate_outbox add column content_sha256 text"
             )
+        # A legacy nonempty outbox has no independent binding to the raw bytes
+        # whose checkpoint may already have advanced.  Hashing its current
+        # payload now would bless possible corruption, so only empty legacy
+        # tables may migrate in place.
+        if self.db.execute(
+            "select 1 from observation_outbox "
+            "where content_sha256 is null limit 1"
+        ).fetchone() is not None:
+            raise ValueError(
+                "legacy observation_outbox lacks a durable content binding; "
+                "clean rebuild required"
+            )
+        if self.db.execute(
+            "select 1 from futures_candidate_outbox "
+            "where content_sha256 is null or receipt_timestamp is null limit 1"
+        ).fetchone() is not None:
+            raise ValueError(
+                "legacy futures_candidate_outbox lacks durable column/content "
+                "bindings; clean rebuild required"
+            )
+        self._validate_sqlite_outboxes()
         self.db.execute(
             "create index if not exists futures_candidate_receipt "
             "on futures_candidate_outbox(receipt_timestamp)"
@@ -398,19 +953,6 @@ class IncrementalJSONLIngestor:
             self.db.execute(
                 "alter table file_checkpoint add column mtime_ns_at_commit integer not null default 0"
             )
-        for rel, checkpoint in self.checkpoints.items():
-            self.db.execute(
-                "insert or ignore into file_checkpoint("
-                "source_file,offset,row_number,identity,size_at_commit,updated_at,frontier,"
-                "prefix_fingerprint,mtime_ns_at_commit) values (?,?,?,?,?,?,?,?,?)",
-                (
-                    rel, checkpoint.get("offset", 0), checkpoint.get("row", 0),
-                    checkpoint.get("identity", ""), checkpoint.get("size_at_commit", 0),
-                    checkpoint.get("updated_at", now()), None,
-                    checkpoint.get("prefix_fingerprint", ""),
-                    checkpoint.get("mtime_ns_at_commit", 0),
-                ),
-            )
         self.db.commit()
         self.checkpoints = {
             row[0]: {
@@ -424,6 +966,26 @@ class IncrementalJSONLIngestor:
                 "from file_checkpoint"
             )
         }
+        checkpoint_mirror_needs_rewrite = checkpoint_mirror != self.checkpoints
+        # The SQLite file checkpoint is committed before its audit-ledger
+        # append.  If that append failed after a durable prefix (or before any
+        # bytes), reconstruct only missing deterministic audit rows here so an
+        # abrupt process restart cannot strand the unwritten suffix.
+        for rel, checkpoint in sorted(self.checkpoints.items()):
+            row = self._checkpoint_ledger_row(rel, checkpoint)
+            _validate_ingestion_ledger_row("raw_file_checkpoints", row)
+            if not _require_matching_ingestion_identity(
+                "raw_file_checkpoints", row, self._checkpoint_content
+            ):
+                self._checkpoint_pending.append(row)
+        if self._checkpoint_pending:
+            self._checkpoint_dirty = True
+        elif checkpoint_mirror_needs_rewrite:
+            # A fully durable audit-ledger append can still raise before the
+            # JSON mirror is replaced.  With no audit suffix left to publish,
+            # SQLite and the append-only ledger already establish the required
+            # durability order, so repair the derived mirror immediately.
+            atomic_json(self.checkpoint_path, self.checkpoints)
         self.latest = {
             key.removeprefix("latest:"): value
             for key, value in self.db.execute(
@@ -500,6 +1062,21 @@ class IncrementalJSONLIngestor:
         }
         self.selection_probe_budget = max(self.read_limit, self.buffer_limit)
         self._queue_quarantine_audits()
+
+    def _unique_event_rows(self, ledger_name: str) -> dict[str, dict[str, Any]]:
+        """Load one ingestion ledger and fail closed on identity corruption."""
+        indexed: dict[str, dict[str, Any]] = {}
+        for ordinal, row in enumerate(self.ledgers[ledger_name].rows(), start=1):
+            _validate_ingestion_ledger_row(
+                ledger_name, row, ordinal=ordinal
+            )
+            identity = row["event_id"]
+            if identity in indexed:
+                raise ValueError(
+                    f"duplicate {ledger_name} ledger event_id: {identity}"
+                )
+            indexed[identity] = row
+        return indexed
 
     def register_callback(self, callback: Callable[[TypedObservation], object] | object) -> None:
         registration = self._callback_registration(callback)
@@ -621,10 +1198,9 @@ class IncrementalJSONLIngestor:
         pending_before = self._pending_observations()
         pending_files = {observation.source_file for observation in pending_before}
         pending_files.update(
-            json.loads(payload).get("source_file", "")
-            for (payload,) in self.db.execute(
-                "select payload from futures_candidate_outbox"
-            )
+            observation.source_file
+            for _identity, _session, observation
+            in self._candidate_outbox_rows()
         )
         self._quarantine_missing_probe_sources()
         self._quarantine_missing_candidate_sources()
@@ -727,14 +1303,147 @@ class IncrementalJSONLIngestor:
         self.metrics["last_poll_ms"] = (time.monotonic() - begun) * 1000
         return committed
 
+    @staticmethod
+    def _decode_bound_outbox_payload(
+        payload: object, digest: object, *, context: str,
+    ) -> dict[str, Any]:
+        if not isinstance(payload, str):
+            raise ValueError(f"{context} payload is not text")
+        expected_digest = hashlib.sha256(payload.encode()).hexdigest()
+        if (
+            not isinstance(digest, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", digest)
+            or digest != expected_digest
+        ):
+            raise ValueError(f"{context} payload digest mismatch")
+        try:
+            row = json.loads(payload)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"{context} payload is invalid JSON") from error
+        if not isinstance(row, dict):
+            raise ValueError(f"{context} payload is not an object")
+        if set(row) != set(TypedObservation.keys()):
+            raise ValueError(f"{context} payload has invalid observation shape")
+        _validate_ingestion_ledger_row(
+            "normalized_raw_events",
+            row,
+            allow_filtered_candidate=(
+                row.get("classification_reason")
+                == "FUTURES_SELECTION_PENDING"
+            ),
+        )
+        return row
+
+    def _decode_observation_outbox_row(
+        self, outbox_id: object, payload: object, digest: object,
+    ) -> TypedObservation:
+        context = f"observation_outbox row {outbox_id!r}"
+        if not isinstance(outbox_id, str) or not outbox_id:
+            raise ValueError(f"{context} has invalid SQLite identity")
+        row = self._decode_bound_outbox_payload(
+            payload, digest, context=context
+        )
+        if row["observation_id"] != outbox_id or row["event_id"] != outbox_id:
+            raise ValueError(f"{context} has mismatched payload identity")
+        if (
+            row["status"] != "OBSERVED"
+            or row["instrument_class"] not in _OBSERVED_CLASSES
+        ):
+            raise ValueError(f"{context} is not a committed observation")
+        return TypedObservation(**row)
+
+    def _decode_candidate_outbox_row(
+        self,
+        outbox_id: object,
+        session_date: object,
+        receipt_timestamp: object,
+        payload: object,
+        digest: object,
+    ) -> TypedObservation:
+        context = f"futures_candidate_outbox row {outbox_id!r}"
+        if not isinstance(outbox_id, str) or not outbox_id:
+            raise ValueError(f"{context} has invalid SQLite identity")
+        row = self._decode_bound_outbox_payload(
+            payload, digest, context=context
+        )
+        if row["observation_id"] != outbox_id or row["event_id"] != outbox_id:
+            raise ValueError(f"{context} has mismatched payload identity")
+        if session_date != row["session_date"]:
+            raise ValueError(f"{context} has mismatched session_date column")
+        _ledger_date(
+            {"session_date": session_date}, "session_date", context
+        )
+        if receipt_timestamp != row["receipt_timestamp"]:
+            raise ValueError(
+                f"{context} has mismatched receipt_timestamp column"
+            )
+        _ledger_timestamp(
+            {"receipt_timestamp": receipt_timestamp},
+            "receipt_timestamp",
+            context,
+        )
+        source_parts = Path(str(row["source_file"])).parts
+        if (
+            row["status"] != "FILTERED"
+            or row["instrument_class"] != InstrumentClass.UNKNOWN_SYMBOL.value
+            or row["canonical_symbol"] is not None
+            or row["classification_reason"] != "FUTURES_SELECTION_PENDING"
+            or _FUTURES.fullmatch(str(row["source_symbol"])) is None
+            or row["source_stream"] != "raw"
+            or len(source_parts) != 3
+            or source_parts[0] != "raw"
+            or source_parts[1] != session_date
+        ):
+            raise ValueError(f"{context} has invalid candidate identity")
+        return TypedObservation(**row)
+
+    def _observation_outbox_rows(self) -> list[tuple[str, TypedObservation]]:
+        return [
+            (
+                str(outbox_id),
+                self._decode_observation_outbox_row(
+                    outbox_id, payload, digest
+                ),
+            )
+            for outbox_id, payload, digest in self.db.execute(
+                "select id,payload,content_sha256 from observation_outbox"
+            ).fetchall()
+        ]
+
+    def _candidate_outbox_rows(
+        self,
+    ) -> list[tuple[str, str, TypedObservation]]:
+        return [
+            (
+                str(outbox_id),
+                str(session_date),
+                self._decode_candidate_outbox_row(
+                    outbox_id, session_date, receipt_timestamp,
+                    payload, digest,
+                ),
+            )
+            for (
+                outbox_id, session_date, receipt_timestamp, payload, digest,
+            ) in self.db.execute(
+                "select id,session_date,receipt_timestamp,payload,"
+                "content_sha256 from futures_candidate_outbox"
+            ).fetchall()
+        ]
+
+    def _validate_sqlite_outboxes(self) -> None:
+        self._observation_outbox_rows()
+        self._candidate_outbox_rows()
+
     def _pending_observations(
         self,
         watermark: object = ...,
         *,
         exclusive_before: object | None = None,
     ) -> list[TypedObservation]:
-        rows = self.db.execute("select payload from observation_outbox").fetchall()
-        observations = [TypedObservation(**json.loads(payload)) for (payload,) in rows]
+        observations = [
+            observation
+            for _outbox_id, observation in self._observation_outbox_rows()
+        ]
         if watermark is ...:
             eligible = observations
         elif watermark is None:
@@ -761,17 +1470,15 @@ class IncrementalJSONLIngestor:
         ]
 
     def _unresolved_candidate_watermark(self):
-        candidate = self.db.execute(
-            "select min(receipt_timestamp) from futures_candidate_outbox"
-        ).fetchone()[0]
-        return (
+        candidates = [
             parse_timestamp(
-                candidate,
+                observation.receipt_timestamp,
                 field_name="unresolved futures candidate causal watermark",
             )
-            if candidate is not None
-            else None
-        )
+            for _identity, _session, observation
+            in self._candidate_outbox_rows()
+        ]
+        return min(candidates) if candidates else None
 
     def _safe_watermark(self):
         blocking = [
@@ -790,12 +1497,10 @@ class IncrementalJSONLIngestor:
         )
 
     def _selected_candidate_source_files(self) -> set[str]:
-        result = set()
-        for session, payload in self.db.execute(
-            "select session_date,payload from futures_candidate_outbox"
-        ):
+        result: set[str] = set()
+        for _identity, session, observation in self._candidate_outbox_rows():
             if self.symbols.selected_futures_for_session(session):
-                result.add(str(json.loads(payload).get("source_file", "")))
+                result.add(observation.source_file)
         return result
 
     def _session_has_candidates(self, session: str) -> bool:
@@ -823,12 +1528,9 @@ class IncrementalJSONLIngestor:
         rel = str(path.relative_to(self.data))
         session = Path(rel).parts[1]
         is_candidate_source = any(
-            str(json.loads(payload).get("source_file", "")) == rel
-            for (payload,) in self.db.execute(
-                "select payload from futures_candidate_outbox "
-                "where session_date=?",
-                (session,),
-            )
+            candidate_session == session and observation.source_file == rel
+            for _identity, candidate_session, observation
+            in self._candidate_outbox_rows()
         )
         self._quarantine_source(
             path,
@@ -1263,13 +1965,11 @@ class IncrementalJSONLIngestor:
     def _quarantine_changed_candidate_source(self, path: Path) -> bool:
         """Retire a candidate whose already-checkpointed raw source mutated."""
         rel = str(path.relative_to(self.data))
-        rows = self.db.execute(
-            "select session_date,payload from futures_candidate_outbox"
-        ).fetchall()
         sessions = {
-            str(session)
-            for session, payload in rows
-            if str(json.loads(payload).get("source_file", "")) == rel
+            session
+            for _identity, session, observation
+            in self._candidate_outbox_rows()
+            if observation.source_file == rel
         }
         if not sessions:
             return False
@@ -1297,14 +1997,11 @@ class IncrementalJSONLIngestor:
         return True
 
     def _quarantine_missing_candidate_sources(self) -> None:
-        rows = self.db.execute(
-            "select session_date,payload from futures_candidate_outbox"
-        ).fetchall()
         missing: dict[str, str] = {}
-        for session, payload in rows:
-            rel = str(json.loads(payload).get("source_file", ""))
+        for _identity, session, observation in self._candidate_outbox_rows():
+            rel = observation.source_file
             if rel and not (self.data / rel).is_file():
-                missing.setdefault(rel, str(session))
+                missing.setdefault(rel, session)
         for rel, session in missing.items():
             checkpoint = self.checkpoints.get(rel, {})
             self._quarantine_source(
@@ -1387,6 +2084,13 @@ class IncrementalJSONLIngestor:
             "invalidates_selection": bool(invalidates_selection),
             "detected_at": detected_at,
         }
+        validated_candidates = [
+            (candidate_id, observation)
+            for candidate_id, candidate_session, observation
+            in self._candidate_outbox_rows()
+            if candidate_session == session
+            and (invalidates_selection or observation.source_file == rel)
+        ]
         with self.db:
             self.db.execute(
                 "insert into quarantined_source("
@@ -1407,41 +2111,29 @@ class IncrementalJSONLIngestor:
                     "delete from runtime_meta where key=?",
                     (f"selected_futures:{session}",),
                 )
-                candidate_rows = self.db.execute(
-                    "select id,payload from futures_candidate_outbox "
-                    "where session_date=?",
-                    (session,),
-                ).fetchall()
                 self.db.execute(
                     "delete from futures_selection_probe where session_date=?",
                     (session,),
                 )
                 refusal_reason = "FUTURES_SELECTION_EVIDENCE_QUARANTINED"
             else:
-                candidate_rows = [
-                    (candidate_id, payload)
-                    for candidate_id, payload in self.db.execute(
-                        "select id,payload from futures_candidate_outbox "
-                        "where session_date=?",
-                        (session,),
-                    )
-                    if str(json.loads(payload).get("source_file", "")) == rel
-                ]
                 refusal_reason = "FUTURES_CANDIDATE_SOURCE_QUARANTINED"
             refused = [
                 replace(
-                    TypedObservation(**json.loads(payload)),
+                    observation,
                     classification_reason=refusal_reason,
                 )
-                for _, payload in candidate_rows
+                for _, observation in validated_candidates
             ]
             self._aggregate_unknown(refused)
             self.db.executemany(
                 "delete from futures_candidate_outbox where id=?",
-                [(candidate_id,) for candidate_id, _ in candidate_rows],
+                [(candidate_id,) for candidate_id, _ in validated_candidates],
             )
         self._quarantined_sources[rel] = quarantine
-        self.metrics["candidate_source_quarantine_refusals"] += len(candidate_rows)
+        self.metrics["candidate_source_quarantine_refusals"] += len(
+            validated_candidates
+        )
         self._queue_quarantine_audit(rel, quarantine)
 
     def _queue_quarantine_audit(self, rel: str, row: dict[str, Any]) -> None:
@@ -1922,19 +2614,17 @@ class IncrementalJSONLIngestor:
                 )
 
     def _retire_exhausted_candidates(self) -> None:
-        rows = self.db.execute(
-            "select id,session_date,payload from futures_candidate_outbox"
-        ).fetchall()
+        rows = self._candidate_outbox_rows()
         refused = []
         deleted = []
-        for candidate_id, session, payload in rows:
+        for candidate_id, session, candidate in rows:
             if (
                 session not in self._selection_probe_exhausted
                 or not self._selection_replay_ready(session)
             ):
                 continue
             refused.append(replace(
-                TypedObservation(**json.loads(payload)),
+                candidate,
                 classification_reason="FUTURES_SELECTION_SEARCH_LIMIT",
             ))
             deleted.append((candidate_id,))
@@ -1959,15 +2649,59 @@ class IncrementalJSONLIngestor:
         self.db.commit()
 
     def _ledger_observations(self, observations: list[TypedObservation]) -> None:
-        rows = [
-            observation.to_dict()
-            for observation in observations
-            if observation.event_id not in self._normalized_seen
-        ]
+        rows = []
+        pending_content: dict[str, str] = {}
+        for observation in observations:
+            row = observation.to_dict()
+            _validate_ingestion_ledger_row("normalized_raw_events", row)
+            if _require_matching_ingestion_identity(
+                "normalized_raw_events", row, self._normalized_content
+            ):
+                continue
+            if observation.event_id in self._normalized_seen:
+                raise ValueError(
+                    "normalized_raw_events identity exists without trusted "
+                    f"content: {observation.event_id}"
+                )
+            content = _ingestion_ledger_content(
+                "normalized_raw_events", row
+            )
+            if observation.event_id in pending_content:
+                if pending_content[observation.event_id] != content:
+                    raise ValueError(
+                        "pending normalized_raw_events event_id reused with "
+                        f"different immutable content: {observation.event_id}"
+                    )
+                continue
+            pending_content[observation.event_id] = content
+            rows.append(row)
         if not rows:
             return
-        self.ledgers["normalized_raw_events"].append_many(rows)
+        ledger = self.ledgers["normalized_raw_events"]
+        boundary = ledger.append_boundary()
+        try:
+            ledger.append_many(rows)
+        except Exception:
+            recovered = set(
+                ledger.reconcile_appended_prefix(
+                    boundary, rows, identity_field="event_id"
+                )
+            )
+            self._normalized_seen.update(recovered)
+            self._normalized_content.update({
+                row["event_id"]: _ingestion_ledger_content(
+                    "normalized_raw_events", row
+                )
+                for row in rows if row["event_id"] in recovered
+            })
+            self._normalized_out_of_order.update(
+                (row["event_id"], bool(row.get("out_of_order")))
+                for row in rows
+                if row["event_id"] in recovered
+            )
+            raise
         self._normalized_seen.update(row["event_id"] for row in rows)
+        self._normalized_content.update(pending_content)
         self._normalized_out_of_order.update(
             (row["event_id"], bool(row.get("out_of_order"))) for row in rows
         )
@@ -2263,19 +2997,20 @@ class IncrementalJSONLIngestor:
         )
         self.checkpoints[rel] = checkpoint
         self._checkpoint_dirty = True
-        checkpoint_event_id = event_id("CHECKPOINT", rel, offset, identity)
-        if checkpoint_event_id not in self._checkpoint_seen:
-            self._checkpoint_pending.append({
-                "event_id": checkpoint_event_id,
-                "session_date": rel.split("/")[1],
-                "effective_timestamp": committed_at,
-                "publication_timestamp": committed_at,
-                "source_receipt_identifiers": {"file": rel, "offset": offset, "identity": identity},
-                "engine_hash": self.c["engine_hash"],
-                "configuration_hash": self.c["configuration_hash"],
-                "raw_run_id": self.c["raw_run_id"],
-                "status": "COMMITTED", "reason": "COMPLETE_LINES_ONLY",
-            })
+        checkpoint_row = self._checkpoint_ledger_row(rel, checkpoint)
+        _validate_ingestion_ledger_row(
+            "raw_file_checkpoints", checkpoint_row
+        )
+        if not _require_matching_ingestion_identity(
+            "raw_file_checkpoints", checkpoint_row,
+            self._checkpoint_content,
+        ):
+            if checkpoint_row["event_id"] in self._checkpoint_seen:
+                raise ValueError(
+                    "raw_file_checkpoints identity exists without trusted "
+                    f"content: {checkpoint_row['event_id']}"
+                )
+            self._checkpoint_pending.append(checkpoint_row)
         return result
 
     def _persist_raw_batch(
@@ -2287,44 +3022,45 @@ class IncrementalJSONLIngestor:
         checkpoint: dict[str, Any],
         prefix_blocks: list[tuple[int, int, str]],
     ) -> None:
+        observation_outbox_rows = []
+        for _, observations in staged:
+            for observation in observations:
+                if (
+                    observation.instrument_class in _OBSERVED_CLASSES
+                    and observation.status == "OBSERVED"
+                ):
+                    payload, digest = _encoded_outbox_payload(observation)
+                    observation_outbox_rows.append((
+                        observation.observation_id, payload, digest,
+                    ))
+        candidate_outbox_rows = []
+        candidates = [
+            observation
+            for _, observations in staged
+            for observation in observations
+            if observation.classification_reason
+            == "FUTURES_SELECTION_PENDING"
+        ]
+        for observation in candidates:
+            payload, digest = _encoded_outbox_payload(observation)
+            candidate_outbox_rows.append((
+                observation.observation_id,
+                observation.session_date,
+                observation.receipt_timestamp,
+                payload,
+                digest,
+            ))
         with self.db:
             self.db.executemany(
-                "insert into observation_outbox(id,payload) values (?,?)",
-                [
-                    (
-                        observation.observation_id,
-                        json.dumps(
-                            observation.to_dict(),
-                            sort_keys=True,
-                            separators=(",", ":"),
-                        ),
-                    )
-                    for _, observations in staged
-                    for observation in observations
-                    if observation.instrument_class in _OBSERVED_CLASSES
-                    and observation.status == "OBSERVED"
-                ],
+                "insert into observation_outbox(id,payload,content_sha256) "
+                "values (?,?,?)",
+                observation_outbox_rows,
             )
-            candidates = [
-                observation
-                for _, observations in staged
-                for observation in observations
-                if observation.classification_reason == "FUTURES_SELECTION_PENDING"
-            ]
             self.db.executemany(
                 "insert into futures_candidate_outbox("
-                "id,session_date,receipt_timestamp,payload) values (?,?,?,?)",
-                [
-                    (
-                        observation.observation_id,
-                        observation.session_date,
-                        observation.receipt_timestamp,
-                        json.dumps(
-                            observation.to_dict(), sort_keys=True, separators=(",", ":"),
-                        ),
-                    )
-                    for observation in candidates
-                ],
+                "id,session_date,receipt_timestamp,payload,content_sha256) "
+                "values (?,?,?,?,?)",
+                candidate_outbox_rows,
             )
             if stream_frontier is not None:
                 self.db.execute(
@@ -2388,14 +3124,13 @@ class IncrementalJSONLIngestor:
             # invert an equal-clock INDEX/FUTURES tie across a chunk boundary.
 
     def _release_selected_candidates(self, *, ready_only: bool = False) -> None:
-        rows = self.db.execute(
-            "select id,session_date,payload from futures_candidate_outbox "
-            "order by session_date,id"
-        ).fetchall()
+        rows = sorted(
+            self._candidate_outbox_rows(), key=lambda row: (row[1], row[0])
+        )
         released: list[TypedObservation] = []
         refused: list[TypedObservation] = []
         deleted: list[tuple[str]] = []
-        for candidate_id, session, payload in rows:
+        for candidate_id, session, candidate in rows:
             selected = self.symbols.selected_futures_for_session(session)
             if not selected:
                 continue
@@ -2405,7 +3140,6 @@ class IncrementalJSONLIngestor:
             # probed authority byte has passed through primary ingestion.
             if ready_only and not self._selection_replay_ready(session):
                 continue
-            candidate = TypedObservation(**json.loads(payload))
             classification = self.symbols.classify(
                 candidate.source_symbol, source_kind="market", session_date=session,
             )
@@ -2438,17 +3172,33 @@ class IncrementalJSONLIngestor:
                     classification_reason=classification.reason,
                 ))
             deleted.append((candidate_id,))
-        self.db.executemany(
-            "insert or ignore into observation_outbox(id,payload) values (?,?)",
-            [
-                (
-                    observation.observation_id,
-                    json.dumps(
-                        observation.to_dict(), sort_keys=True, separators=(",", ":"),
-                    ),
+        release_rows = []
+        for observation in released:
+            payload, digest = _encoded_outbox_payload(observation)
+            existing = self.db.execute(
+                "select payload,content_sha256 from observation_outbox "
+                "where id=?",
+                (observation.observation_id,),
+            ).fetchone()
+            if existing is not None:
+                prior = self._decode_observation_outbox_row(
+                    observation.observation_id, existing[0], existing[1]
                 )
-                for observation in released
-            ],
+                if _ingestion_ledger_content(
+                    "normalized_raw_events", prior.to_dict()
+                ) != _ingestion_ledger_content(
+                    "normalized_raw_events", observation.to_dict()
+                ):
+                    raise ValueError(
+                        "observation_outbox identity reused with different "
+                        f"immutable content: {observation.observation_id}"
+                    )
+                continue
+            release_rows.append((observation.observation_id, payload, digest))
+        self.db.executemany(
+            "insert into observation_outbox(id,payload,content_sha256) "
+            "values (?,?,?)",
+            release_rows,
         )
         self._aggregate_unknown(refused)
         self.db.executemany(
@@ -2806,23 +3556,23 @@ class IncrementalJSONLIngestor:
         *,
         effective_timestamp: str | None = None,
     ) -> None:
-        effective = (
-            parse_timestamp(
+        if effective_timestamp is not None:
+            effective = parse_timestamp(
                 effective_timestamp,
                 field_name="quality effective timestamp",
             ).isoformat()
-            if effective_timestamp is not None
-            else now()
-        )
+            effective_provenance = "EVIDENCE"
+        else:
+            effective = now()
+            effective_provenance = "WALL_CLOCK_FALLBACK"
         publication = now()
         quality_event_id = event_id("QUALITY", reason, key, rel, row, offset)
-        if quality_event_id in self._quality_seen or quality_event_id in self._quality_pending_ids:
-            return
-        self._quality_pending.append({
+        value = {
             "event_id": quality_event_id,
             "session_date": rel.split("/")[1],
             "effective_timestamp": effective,
             "publication_timestamp": publication,
+            "effective_timestamp_provenance": effective_provenance,
             "source_receipt_identifiers": {
                 "file": rel, "source_row": row, "byte_offset": offset,
             },
@@ -2830,26 +3580,156 @@ class IncrementalJSONLIngestor:
             "configuration_hash": self.c["configuration_hash"],
             "raw_run_id": self.c["raw_run_id"], "status": "REFUSED",
             "reason": reason, "detail": detail,
-        })
+        }
+        _validate_ingestion_ledger_row("refusals_data_quality", value)
+        content = _ingestion_ledger_content("refusals_data_quality", value)
+        prior = self._quality_content.get(quality_event_id)
+        if prior is not None:
+            if prior != content:
+                raise ValueError(
+                    "refusals_data_quality ledger event_id reused with "
+                    f"different immutable content: {quality_event_id}"
+                )
+            return
+        pending = self._quality_pending_content.get(quality_event_id)
+        if pending is not None:
+            if pending != content:
+                raise ValueError(
+                    "pending refusals_data_quality event_id reused with "
+                    f"different immutable content: {quality_event_id}"
+                )
+            return
+        if quality_event_id in self._quality_seen:
+            raise ValueError(
+                "refusals_data_quality identity exists without trusted "
+                f"content: {quality_event_id}"
+            )
+        self._quality_pending.append(value)
         self._quality_pending_ids.add(quality_event_id)
+        self._quality_pending_content[quality_event_id] = content
 
     def _flush_quality(self) -> None:
         if not self._quality_pending:
             return
-        self.ledgers["refusals_data_quality"].append_many(self._quality_pending)
+        pending = list(self._quality_pending)
+        for row in pending:
+            _validate_ingestion_ledger_row("refusals_data_quality", row)
+        ledger = self.ledgers["refusals_data_quality"]
+        boundary = ledger.append_boundary()
+        try:
+            ledger.append_many(pending)
+        except Exception:
+            recovered = set(
+                ledger.reconcile_appended_prefix(
+                    boundary, pending, identity_field="event_id"
+                )
+            )
+            self._quality_seen.update(recovered)
+            self._quality_content.update({
+                row["event_id"]: _ingestion_ledger_content(
+                    "refusals_data_quality", row
+                )
+                for row in pending if row["event_id"] in recovered
+            })
+            self._quality_pending = [
+                row for row in self._quality_pending
+                if row["event_id"] not in recovered
+            ]
+            self._quality_pending_ids = {
+                row["event_id"] for row in self._quality_pending
+            }
+            self._quality_pending_content = {
+                row["event_id"]: _ingestion_ledger_content(
+                    "refusals_data_quality", row
+                )
+                for row in self._quality_pending
+            }
+            raise
         self._quality_seen.update(self._quality_pending_ids)
+        self._quality_content.update(self._quality_pending_content)
         self._quality_pending = []
         self._quality_pending_ids = set()
+        self._quality_pending_content = {}
 
     def _flush_checkpoints(self) -> None:
-        rows = [
-            row for row in self._checkpoint_pending
-            if row["event_id"] not in self._checkpoint_seen
-        ]
+        rows = []
+        pending_content: dict[str, str] = {}
+        for row in self._checkpoint_pending:
+            _validate_ingestion_ledger_row("raw_file_checkpoints", row)
+            if _require_matching_ingestion_identity(
+                "raw_file_checkpoints", row, self._checkpoint_content
+            ):
+                continue
+            identity = str(row["event_id"])
+            if identity in self._checkpoint_seen:
+                raise ValueError(
+                    "raw_file_checkpoints identity exists without trusted "
+                    f"content: {identity}"
+                )
+            content = _ingestion_ledger_content(
+                "raw_file_checkpoints", row
+            )
+            if identity in pending_content:
+                if pending_content[identity] != content:
+                    raise ValueError(
+                        "pending raw_file_checkpoints event_id reused with "
+                        f"different immutable content: {identity}"
+                    )
+                continue
+            pending_content[identity] = content
+            rows.append(row)
         if rows:
-            self.ledgers["raw_file_checkpoints"].append_many(rows)
+            ledger = self.ledgers["raw_file_checkpoints"]
+            boundary = ledger.append_boundary()
+            try:
+                ledger.append_many(rows)
+            except Exception:
+                recovered = set(
+                    ledger.reconcile_appended_prefix(
+                        boundary, rows, identity_field="event_id"
+                    )
+                )
+                self._checkpoint_seen.update(recovered)
+                self._checkpoint_content.update({
+                    row["event_id"]: _ingestion_ledger_content(
+                        "raw_file_checkpoints", row
+                    )
+                    for row in rows if row["event_id"] in recovered
+                })
+                self._checkpoint_pending = [
+                    row for row in self._checkpoint_pending
+                    if row["event_id"] not in self._checkpoint_seen
+                ]
+                raise
             self._checkpoint_seen.update(row["event_id"] for row in rows)
+            self._checkpoint_content.update(pending_content)
         self._checkpoint_pending = []
+
+    def _checkpoint_ledger_row(
+        self, rel: str, checkpoint: dict[str, Any],
+    ) -> dict[str, Any]:
+        parts = Path(rel).parts
+        if len(parts) < 2:
+            raise ValueError(f"invalid checkpoint source path: {rel}")
+        offset = int(checkpoint.get("offset", 0))
+        identity = str(checkpoint.get("identity", ""))
+        committed_at = str(checkpoint.get("updated_at", ""))
+        if not identity or not committed_at:
+            raise ValueError(f"incomplete durable checkpoint state: {rel}")
+        return {
+            "event_id": event_id("CHECKPOINT", rel, offset, identity),
+            "session_date": parts[1],
+            "effective_timestamp": committed_at,
+            "publication_timestamp": committed_at,
+            "source_receipt_identifiers": {
+                "file": rel, "offset": offset, "identity": identity,
+            },
+            "engine_hash": self.c["engine_hash"],
+            "configuration_hash": self.c["configuration_hash"],
+            "raw_run_id": self.c["raw_run_id"],
+            "status": "COMMITTED",
+            "reason": "COMPLETE_LINES_ONLY",
+        }
 
     def _refuse(self, reason: str, rel: str, checkpoint: dict[str, Any], stat: Any) -> None:
         self._quality(

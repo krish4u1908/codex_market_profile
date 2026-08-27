@@ -60,10 +60,7 @@ SESSIONS = (
     "2026-08-20",
 )
 
-AUTHORIZED_FOCUSED_FIXTURE_ROOT = Path(
-    "/opt/banknifty/research/sample_fixtures/"
-    "r6e1r0_aug19_0915_1205/collector"
-)
+AUTHORIZED_FOCUSED_FIXTURE_ROOT: Path | None = None
 AUTHORIZED_FOCUSED_MANIFEST_SHA256 = (
     "31077f42ae1bf639f746e5980aba028b1369b8d44ba9a15973b2a517cc8a8382"
 )
@@ -155,6 +152,16 @@ MATERIAL_LEDGER_NAMES = (
     "availability_transitions",
     "stale_recovery_transitions",
 )
+SEMANTIC_CALCULATION_TIMESTAMP_SURFACES = frozenset(
+    {"participation_transitions"}
+)
+# Clean-B independently reconstructs the immutable publication contract. These
+# closure annotations remain part of the latest analytical snapshot, but are
+# not facts known by the divergence-confirmation or lifecycle-entry event.
+BATCH_LEDGER_SNAPSHOT_ONLY_FIELDS = {
+    "divergence_confirmations": frozenset({"episode_end_timestamp"}),
+    "lifecycle_transitions": frozenset({"state_exit_timestamp"}),
+}
 LEDGER_ENVELOPE_FIELDS = RUN_VOLATILE_FIELDS | frozenset(
     {"engine_hash", "configuration_hash"}
 )
@@ -205,6 +212,7 @@ class Schedule:
     restart_events: int = 0
     restart_on_analytical_transition: bool = False
     original_byte_chunks: bool = False
+    analytical_flush_events: int = 0
 
 
 def _runtime_library_roots() -> tuple[Path, ...]:
@@ -431,7 +439,9 @@ SCHEDULES = {
         "analytical_boundary_restarts", (512,), restart_on_analytical_transition=True
     ),
     "hourly_file_rotation": Schedule("hourly_file_rotation", (257,)),
-    "large_chronological_chunks": Schedule("large_chronological_chunks", (8192,)),
+    "large_chronological_chunks": Schedule(
+        "large_chronological_chunks", (8192,), analytical_flush_events=5
+    ),
 }
 
 REQUIRED_SCHEDULES = (
@@ -748,6 +758,7 @@ def _gui_projection(payload: Any) -> dict[str, Any]:
         _SEALED_CHART_STATE,
         {"session_date": date, "availability": detail},
         payload,
+        detail,
         operational=False,
     )
     chart_availability = chart.get("availability", {})
@@ -1113,12 +1124,33 @@ def analytical_ledger_rows(snapshot: Mapping[str, Any]) -> dict[str, list[dict[s
             {
                 key: value
                 for key, value in row.items()
-                if key not in LEDGER_ENVELOPE_FIELDS
+                if key not in (
+                    LEDGER_ENVELOPE_FIELDS
+                    - (
+                        {"calculation_timestamp"}
+                        if name in SEMANTIC_CALCULATION_TIMESTAMP_SURFACES
+                        else set()
+                    )
+                )
             }
             for row in _as_rows(ledgers.get(name, []))
         ]
         for name in MATERIAL_LEDGER_NAMES
     }
+
+
+def named_rows_semantic_hash(
+    rows_by_surface: Mapping[str, Any],
+) -> str:
+    """Hash named analytical rows with their field-specific clock contract."""
+    projected = {
+        str(surface): canonicalize(
+            rows,
+            volatile_fields=_semantic_volatile_fields(str(surface)),
+        )
+        for surface, rows in sorted(rows_by_surface.items())
+    }
+    return _sha256_bytes(_json_bytes(projected))
 
 
 def _ledger_event_hash(prefix: str, *parts: object) -> str:
@@ -1152,13 +1184,30 @@ def _batch_availability_states(value: Mapping[str, Any]) -> dict[str, str]:
     return result
 
 
+def _batch_material_ledger_projection(
+    ledger_name: str, row: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Independently project a clean snapshot row into an immutable event."""
+    value = dict(row)
+    for field in BATCH_LEDGER_SNAPSHOT_ONLY_FIELDS.get(
+        ledger_name, frozenset()
+    ):
+        value.pop(field, None)
+    return value
+
+
 def build_batch_analytical_ledgers(snapshot: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
     """Derive expected append-only publications from independent clean-B rows."""
     expected: dict[str, list[dict[str, Any]]] = {
         name: [] for name in MATERIAL_LEDGER_NAMES
     }
     expected["divergence_confirmations"] = [
-        {**row, "event_id": str(row["episode_id"])}
+        {
+            **_batch_material_ledger_projection(
+                "divergence_confirmations", row
+            ),
+            "event_id": str(row["episode_id"]),
+        }
         for row in _as_rows(snapshot.get("episodes", []))
     ]
     expected["dependency_retriggers"] = [
@@ -1173,7 +1222,10 @@ def build_batch_analytical_ledgers(snapshot: Mapping[str, Any]) -> dict[str, lis
         for row in _as_rows(snapshot.get("dependencies", []))
     ]
     expected["lifecycle_transitions"] = [
-        {**row, "event_id": str(row["record_id"])}
+        {
+            **_batch_material_ledger_projection("lifecycle_transitions", row),
+            "event_id": str(row["record_id"]),
+        }
         for row in _as_rows(snapshot.get("lifecycle", []))
     ]
     inventory = [
@@ -1215,8 +1267,8 @@ def build_batch_analytical_ledgers(snapshot: Mapping[str, Any]) -> dict[str, lis
         raise ValueError("clean-B availability detail is missing")
     for session, detail in details.items():
         effective = str(
-            detail.get("reference_timestamp")
-            or detail.get("evidence_cutoff_timestamp")
+            detail.get("evidence_cutoff_timestamp")
+            or detail.get("reference_timestamp")
             or detail.get("calculation_timestamp")
             or ""
         )
@@ -1227,10 +1279,15 @@ def build_batch_analytical_ledgers(snapshot: Mapping[str, Any]) -> dict[str, lis
                 "previous_state": "NOT_YET_AVAILABLE",
                 "new_state": state,
                 "effective_timestamp": effective,
-                "reason": "MATERIAL_AVAILABILITY_CHANGE",
+                "reason": "SESSION_AVAILABILITY_SEAL",
             }
             identity = _ledger_event_hash(
-                "AVAILABILITY", session, component, effective, state
+                "AVAILABILITY",
+                "SESSION_AVAILABILITY_SEAL",
+                session,
+                component,
+                effective,
+                state,
             )
             expected["availability_transitions"].append(
                 {
@@ -1242,7 +1299,12 @@ def build_batch_analytical_ledgers(snapshot: Mapping[str, Any]) -> dict[str, lis
             )
             if "STALE" in state:
                 stale_identity = _ledger_event_hash(
-                    "STALE", session, component, effective, state
+                    "STALE",
+                    "SESSION_AVAILABILITY_SEAL",
+                    session,
+                    component,
+                    effective,
+                    state,
                 )
                 expected["stale_recovery_transitions"].append(
                     {
@@ -1266,11 +1328,14 @@ def compare_analytical_ledgers(
     for name in MATERIAL_LEDGER_NAMES:
         left_rows = a_ledgers[name]
         right_rows = b_ledgers[name]
-        left = _row_counter(left_rows)
-        right = _row_counter(right_rows)
+        volatile_fields = _semantic_volatile_fields(name)
+        left = _row_counter(left_rows, volatile_fields=volatile_fields)
+        right = _row_counter(right_rows, volatile_fields=volatile_fields)
         a_only = sum((left - right).values())
         b_only = sum((right - left).values())
-        fields = _field_mismatches(left_rows, right_rows)
+        fields = _field_mismatches(
+            left_rows, right_rows, volatile_fields=volatile_fields
+        )
         remainder = a_only + b_only + fields
         rows.append(
             {
@@ -1288,36 +1353,84 @@ def compare_analytical_ledgers(
     return rows
 
 
-def _row_counter(rows: Iterable[Mapping[str, Any]]) -> Counter[str]:
+def _semantic_volatile_fields(surface: str) -> frozenset[str]:
+    """Retain evidence clocks that are semantic only on their owning surface."""
+    if surface in SEMANTIC_CALCULATION_TIMESTAMP_SURFACES:
+        return RUN_VOLATILE_FIELDS - {"calculation_timestamp"}
+    return RUN_VOLATILE_FIELDS
+
+
+def _row_counter(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    volatile_fields: frozenset[str] = RUN_VOLATILE_FIELDS,
+) -> Counter[str]:
     return Counter(
-        json.dumps(canonicalize(dict(row)), sort_keys=True, separators=(",", ":"))
+        json.dumps(
+            canonicalize(dict(row), volatile_fields=volatile_fields),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
         for row in rows
     )
 
 
-def _identity(row: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
+def _identity(
+    row: Mapping[str, Any],
+    *,
+    volatile_fields: frozenset[str] = RUN_VOLATILE_FIELDS,
+) -> tuple[tuple[str, str], ...]:
     selected = tuple(
-        (field, json.dumps(canonicalize(row[field]), sort_keys=True, separators=(",", ":")))
+        (
+            field,
+            json.dumps(
+                canonicalize(
+                    row[field], volatile_fields=volatile_fields
+                ),
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        )
         for field in IDENTITY_FIELDS
         if field in row and row[field] not in (None, "")
     )
-    return selected or (("__row__", json.dumps(canonicalize(dict(row)), sort_keys=True)),)
+    return selected or ((
+        "__row__",
+        json.dumps(
+            canonicalize(dict(row), volatile_fields=volatile_fields),
+            sort_keys=True,
+        ),
+    ),)
 
 
-def _field_mismatches(a_rows: list[dict[str, Any]], b_rows: list[dict[str, Any]]) -> int:
+def _field_mismatches(
+    a_rows: list[dict[str, Any]],
+    b_rows: list[dict[str, Any]],
+    *,
+    volatile_fields: frozenset[str] = RUN_VOLATILE_FIELDS,
+) -> int:
     a_by_id: dict[tuple[tuple[str, str], ...], list[dict[str, Any]]] = {}
     b_by_id: dict[tuple[tuple[str, str], ...], list[dict[str, Any]]] = {}
     for row in a_rows:
-        a_by_id.setdefault(_identity(row), []).append(canonicalize(row))
+        a_by_id.setdefault(
+            _identity(row, volatile_fields=volatile_fields), []
+        ).append(canonicalize(row, volatile_fields=volatile_fields))
     for row in b_rows:
-        b_by_id.setdefault(_identity(row), []).append(canonicalize(row))
+        b_by_id.setdefault(
+            _identity(row, volatile_fields=volatile_fields), []
+        ).append(canonicalize(row, volatile_fields=volatile_fields))
     differences = 0
     for identity in a_by_id.keys() & b_by_id.keys():
         left = sorted(a_by_id[identity], key=lambda row: json.dumps(row, sort_keys=True))
         right = sorted(b_by_id[identity], key=lambda row: json.dumps(row, sort_keys=True))
         for a_row, b_row in zip(left, right, strict=False):
             differences += sum(
-                canonicalize(a_row.get(field)) != canonicalize(b_row.get(field))
+                canonicalize(
+                    a_row.get(field), volatile_fields=volatile_fields
+                )
+                != canonicalize(
+                    b_row.get(field), volatile_fields=volatile_fields
+                )
                 for field in a_row.keys() | b_row.keys()
             )
     return differences
@@ -1337,12 +1450,15 @@ def compare_snapshots(
     for name in names:
         a_rows = a_components.get(name, [])
         b_rows = b_components.get(name, [])
-        left = _row_counter(a_rows)
-        right = _row_counter(b_rows)
+        volatile_fields = _semantic_volatile_fields(name)
+        left = _row_counter(a_rows, volatile_fields=volatile_fields)
+        right = _row_counter(b_rows, volatile_fields=volatile_fields)
         a_only = sum((left - right).values())
         b_only = sum((right - left).values())
         matched = sum((left & right).values())
-        fields = _field_mismatches(a_rows, b_rows)
+        fields = _field_mismatches(
+            a_rows, b_rows, volatile_fields=volatile_fields
+        )
         expected_count = "" if expected is None or name not in expected else expected[name]
         count_gate = expected_count == "" or (
             len(a_rows) == expected_count and len(b_rows) == expected_count
@@ -1767,6 +1883,8 @@ def _validate_focused_fixture_manifest(
 
 def _validate_authorized_focused_fixture(root: Path) -> None:
     """Validate the one explicitly authorized research-hosted raw fixture."""
+    if AUTHORIZED_FOCUSED_FIXTURE_ROOT is None:
+        raise ValueError("research-derived analytical input root is prohibited")
     expected_root = AUTHORIZED_FOCUSED_FIXTURE_ROOT.resolve()
     if root != expected_root:
         raise ValueError("research-derived analytical input root is prohibited")
@@ -2429,6 +2547,11 @@ class _RunContext:
         assert self.ingestor is not None
         return self.ingestor.checkpoints
 
+    @property
+    def quarantined_sources(self) -> Mapping[str, Any]:
+        assert self.ingestor is not None
+        return self.ingestor._quarantined_sources
+
     def analytical_ledger_signature(self) -> tuple[tuple[str, int], ...]:
         assert self.ingestor is not None
         excluded = {
@@ -2462,6 +2585,28 @@ def _append(destination: Path, value: bytes) -> None:
         os.fsync(handle.fileno())
 
 
+def _claim_schedule_roots(staging_root: Path, state_root: Path) -> None:
+    """Exclusively claim fresh roots before a schedule can expose bytes.
+
+    A schedule is an independent equivalence run.  Reusing either root can
+    mix a prior checkpoint with newly staged bytes; concurrent writers can
+    also replace a growing source underneath the production ingestor.  The
+    preflight keeps an already-existing peer root untouched, while the target
+    ``mkdir`` calls provide the race-safe ownership decision.
+    """
+    roots = (("staging", staging_root), ("state", state_root))
+    for kind, root in roots:
+        if os.path.lexists(root):
+            raise ValueError(f"schedule {kind} root must not exist: {root}")
+    for kind, root in roots:
+        try:
+            root.mkdir(parents=True, exist_ok=False)
+        except FileExistsError as error:
+            raise ValueError(
+                f"schedule {kind} root was claimed concurrently: {root}"
+            ) from error
+
+
 def _expose_read_only_context_sources(
     sources: Iterable[SourceFile], staging_root: Path
 ) -> int:
@@ -2491,6 +2636,26 @@ def _drain(context: _RunContext, sources: list[SourceFile], staging_root: Path) 
         current = tuple(
             sorted((key, int(value.get("offset", 0))) for key, value in context.checkpoints.items())
         )
+        quarantined = []
+        for source in sources:
+            relative = str(source.relative)
+            quarantine = context.quarantined_sources.get(relative)
+            if quarantine is None:
+                continue
+            reason = (
+                str(quarantine.get("reason", "UNKNOWN"))
+                if isinstance(quarantine, Mapping)
+                else "UNKNOWN"
+            )
+            quarantined.append((relative, reason))
+        if quarantined:
+            detail = ", ".join(
+                f"{relative}={reason}"
+                for relative, reason in sorted(quarantined)
+            )
+            raise RuntimeError(
+                f"checkpoint drain blocked by quarantined source: {detail}"
+            )
         pending = False
         for source in sources:
             destination = staging_root / source.relative
@@ -2691,8 +2856,9 @@ def run_schedule(
 ) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
     """Execute one schedule exclusively through the production live path."""
     begun = time.monotonic()
-    (staging_root / "raw").mkdir(parents=True, exist_ok=True)
-    (staging_root / "oi").mkdir(parents=True, exist_ok=True)
+    _claim_schedule_roots(staging_root, state_root)
+    (staging_root / "raw").mkdir()
+    (staging_root / "oi").mkdir()
     context_source_count = _expose_read_only_context_sources(
         context_sources, staging_root
     )
@@ -2717,6 +2883,15 @@ def run_schedule(
     poll_count = 0
     split_line_boundary_count = 0
     explicit_empty_poll_count = 0
+    analytical_refresh_flush_count = 0
+    analytical_refresh_nonempty_count = 0
+    analytical_refresh_repeat_session_count = 0
+    analytical_refresh_episode_end_update_count = 0
+    analytical_refresh_lifecycle_exit_update_count = 0
+    analytical_refresh_timestamp_backdating = 0
+    analytical_refresh_duplicate_ids = 0
+    analytical_refresh_future_joins = 0
+    analytical_refresh_tolerance_violations = 0
     original_source_chunk_count = 0
     original_source_files_staged_before_first_poll = 0
     record_increment_count = 0
@@ -2742,8 +2917,12 @@ def run_schedule(
         _fraction_thresholds(total_records, schedule.empty_poll_events)
     )
     restart_thresholds = list(_fraction_thresholds(total_records, schedule.restart_events))
+    analytical_flush_thresholds = list(
+        _fraction_thresholds(total_records, schedule.analytical_flush_events)
+    )
     next_empty_threshold = 0
     next_restart_threshold = 0
+    next_analytical_flush_threshold = 0
 
     def poll_for_schedule(source_paths: Iterable[Path] | None = None) -> int:
         nonlocal poll_count
@@ -2754,11 +2933,11 @@ def run_schedule(
     def poll_visible_causal_prefix(changed_paths: Iterable[Path]) -> int:
         """Poll new bytes plus visible peers still behind their checkpoints.
 
-        Production discovery polls every visible stream.  Schedule fixtures
+        Production discovery polls every visible stream. Schedule fixtures
         pass explicit paths so a one-record increment does not accidentally
         become a broad filesystem rescan, but they must retain any peer whose
         staged bytes could not advance because an unresolved candidate or
-        selection-replay barrier held its primary checkpoint.  Omitting that
+        selection-replay barrier held its primary checkpoint. Omitting that
         peer lets a newly changed OI path advance the watermark ahead of the
         earlier raw backlog and manufactures out-of-order refusals that the
         real discovery poll would not produce.
@@ -2784,6 +2963,112 @@ def run_schedule(
         )
         return result
 
+    def periodic_analytical_flush() -> None:
+        """Exercise the production refresh/finalize path during ingestion."""
+        nonlocal analytical_refresh_flush_count
+        nonlocal analytical_refresh_nonempty_count
+        nonlocal analytical_refresh_repeat_session_count
+        nonlocal analytical_refresh_episode_end_update_count
+        nonlocal analytical_refresh_lifecycle_exit_update_count
+        nonlocal analytical_refresh_timestamp_backdating
+        nonlocal analytical_refresh_duplicate_ids
+        nonlocal analytical_refresh_future_joins
+        nonlocal analytical_refresh_tolerance_violations
+        assert context.orchestrator is not None
+        orchestrator = context.orchestrator
+        # Retain only the two mutable closure annotations under test.  Copying
+        # complete snapshots here would transiently duplicate dense resolution
+        # and participation tables during the full six-session schedule.
+        def closure_annotations() -> dict[str, dict[str, dict[str, Any]]]:
+            result: dict[str, dict[str, dict[str, Any]]] = {}
+            for session, output in orchestrator._outputs.items():
+                result[session] = {
+                    "episodes": {
+                        str(row.get("episode_id")): row.get(
+                            "episode_end_timestamp"
+                        )
+                        for row in _as_rows(output.get("episodes", []))
+                        if row.get("episode_id")
+                    },
+                    "lifecycle": {
+                        str(row.get("record_id")): row.get(
+                            "state_exit_timestamp"
+                        )
+                        for row in _as_rows(output.get("lifecycle", []))
+                        if row.get("record_id")
+                    },
+                }
+            return result
+
+        before_annotations = closure_annotations()
+        repeated_sessions = set(before_annotations) & set(
+            getattr(orchestrator, "_dirty_sessions", set())
+        )
+        pending_sessions = orchestrator.pending_session_dates()
+        refreshed_nonempty = False
+
+        def measure_published_counters() -> None:
+            """Capture every intermediate publication without copying rows."""
+            nonlocal analytical_refresh_timestamp_backdating
+            nonlocal analytical_refresh_duplicate_ids
+            nonlocal analytical_refresh_future_joins
+            nonlocal analytical_refresh_tolerance_violations
+            for published_session in orchestrator.sealed_session_dates():
+                audit = orchestrator.sealed_audit_measurements(
+                    published_session
+                )
+                analytical_refresh_timestamp_backdating = max(
+                    analytical_refresh_timestamp_backdating,
+                    int(audit["timestamp_backdating"]),
+                )
+                analytical_refresh_duplicate_ids = max(
+                    analytical_refresh_duplicate_ids,
+                    int(audit["duplicate_analytical_ids"]),
+                )
+            causality = orchestrator.causality_metrics()
+            analytical_refresh_future_joins = max(
+                analytical_refresh_future_joins,
+                int(causality["future_joins"]),
+            )
+            analytical_refresh_tolerance_violations = max(
+                analytical_refresh_tolerance_violations,
+                int(causality["synchronization_tolerance_violations"]),
+            )
+
+        if pending_sessions:
+            newest = max(pending_sessions)
+            for prior_session in (
+                session for session in pending_sessions if session < newest
+            ):
+                refreshed_nonempty = bool(
+                    orchestrator.finalize_session(prior_session)
+                ) or refreshed_nonempty
+                measure_published_counters()
+        refreshed_nonempty = bool(orchestrator.flush()) or refreshed_nonempty
+        measure_published_counters()
+        after_annotations = closure_annotations()
+        analytical_refresh_flush_count += 1
+        analytical_refresh_nonempty_count += int(refreshed_nonempty)
+        analytical_refresh_repeat_session_count += len(repeated_sessions)
+
+        for session in set(before_annotations) & set(after_annotations):
+            prior_episodes = before_annotations[session]["episodes"]
+            for identity, episode_end in after_annotations[session][
+                "episodes"
+            ].items():
+                if identity in prior_episodes and (
+                    prior_episodes[identity] != episode_end
+                ):
+                    analytical_refresh_episode_end_update_count += 1
+            prior_lifecycle = before_annotations[session]["lifecycle"]
+            for identity, state_exit in after_annotations[session][
+                "lifecycle"
+            ].items():
+                if identity in prior_lifecycle and (
+                    prior_lifecycle[identity] != state_exit
+                ):
+                    analytical_refresh_lifecycle_exit_update_count += 1
+
     try:
         groups = schedule.line_groups
         group_index = 0
@@ -2797,6 +3082,7 @@ def run_schedule(
             nonlocal group_index, pending_bytes, split_line_boundary_count
             nonlocal explicit_empty_poll_count, next_empty_threshold
             nonlocal next_restart_threshold
+            nonlocal next_analytical_flush_threshold
             nonlocal record_increment_count
             nonlocal maximum_record_group_bytes
             nonlocal post_poll_hourly_path_introductions
@@ -2841,6 +3127,14 @@ def run_schedule(
                     post_poll_hourly_path_introductions += 1
             poll_visible_causal_prefix(changed_paths)
             polled_live_paths.update(changed_paths)
+            while (
+                next_analytical_flush_threshold
+                < len(analytical_flush_thresholds)
+                and exposed_records
+                >= analytical_flush_thresholds[next_analytical_flush_threshold]
+            ):
+                periodic_analytical_flush()
+                next_analytical_flush_threshold += 1
             if (
                 schedule.restart_every
                 and exposed_records // schedule.restart_every > checkpoint_restart_count
@@ -3058,6 +3352,31 @@ def run_schedule(
             "analytical_boundary_probe": analytical_boundary_probe,
             "split_line_boundary_count": split_line_boundary_count,
             "explicit_empty_poll_count": explicit_empty_poll_count,
+            "analytical_refresh_flush_count": analytical_refresh_flush_count,
+            "analytical_refresh_nonempty_count": (
+                analytical_refresh_nonempty_count
+            ),
+            "analytical_refresh_repeat_session_count": (
+                analytical_refresh_repeat_session_count
+            ),
+            "analytical_refresh_episode_end_update_count": (
+                analytical_refresh_episode_end_update_count
+            ),
+            "analytical_refresh_lifecycle_exit_update_count": (
+                analytical_refresh_lifecycle_exit_update_count
+            ),
+            "analytical_refresh_timestamp_backdating": (
+                analytical_refresh_timestamp_backdating
+            ),
+            "analytical_refresh_duplicate_analytical_ids": (
+                analytical_refresh_duplicate_ids
+            ),
+            "analytical_refresh_future_joins": (
+                analytical_refresh_future_joins
+            ),
+            "analytical_refresh_synchronization_tolerance_violations": (
+                analytical_refresh_tolerance_violations
+            ),
             "original_source_chunk_count": original_source_chunk_count,
             "original_source_files_staged_before_first_poll": (
                 original_source_files_staged_before_first_poll
@@ -3105,7 +3424,9 @@ def run_schedule(
             "committed_source_integrity": dict(
                 snapshot.get("committed_source_integrity", {})
             ),
-            "semantic_hash": semantic_hash(component_rows(snapshot)),
+            "semantic_hash": named_rows_semantic_hash(
+                component_rows(snapshot)
+            ),
             "elapsed_seconds": time.monotonic() - begun,
             "peak_rss_kib_process": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
         }
@@ -4140,7 +4461,7 @@ def run_clean_canonical_batch(
         "peak_rss_kib_child_processes": resource.getrusage(
             resource.RUSAGE_CHILDREN
         ).ru_maxrss,
-        "semantic_hash": semantic_hash(component_rows(snapshot)),
+        "semantic_hash": named_rows_semantic_hash(component_rows(snapshot)),
     }
     return snapshot, metrics, open_rows
 
@@ -4362,9 +4683,9 @@ def compare_gui_visual_authority(
                 target_rows = target.get(component, [])
                 if component == "availability" and reference_rows:
                     # The frozen R6D payload records the same historical
-                    # material-eligibility surface as R6C2.  A/B GUI payloads
+                    # material-eligibility surface as R6C2. A/B GUI payloads
                     # deliberately expose the newer operational as-of surface,
-                    # which can finish STALE_DATA after the last quote.  Derive
+                    # which can finish STALE_DATA after the last quote. Derive
                     # the like-for-like R6D compatibility rows from each sealed
                     # target independently; never compare the operational rows
                     # to a different reference contract or use B to project A.
@@ -4438,8 +4759,12 @@ def seal_run(run_root: Path, snapshot: Mapping[str, Any], metrics: Mapping[str, 
     seal = {
         **dict(metrics),
         "snapshot_sha256": _sha256_file(snapshot_path),
-        "analytical_semantic_sha256": semantic_hash(component_rows(snapshot)),
-        "analytical_ledgers_sha256": semantic_hash(analytical_ledger_rows(snapshot)),
+        "analytical_semantic_sha256": named_rows_semantic_hash(
+            component_rows(snapshot)
+        ),
+        "analytical_ledgers_sha256": named_rows_semantic_hash(
+            analytical_ledger_rows(snapshot)
+        ),
         "sealed": True,
     }
     (run_root / "seal.json").write_bytes(_json_bytes(seal))
@@ -4601,6 +4926,45 @@ def schedule_exercise_failures(
         byte_target_reached = byte_limit > 0 and maximum_bytes >= int(byte_limit * 0.75)
         if source_records > 1 and not (record_target_reached or byte_target_reached):
             failures.append("LARGE_CHRONOLOGICAL_TARGET_NOT_MEASURED")
+        expected_refreshes = len(
+            _fraction_thresholds(
+                source_records, SCHEDULES[name].analytical_flush_events
+            )
+        )
+        if int(seal.get("analytical_refresh_flush_count", 0) or 0) != expected_refreshes:
+            failures.append("PERIODIC_ANALYTICAL_REFRESH_COUNT_NOT_EXACT")
+        if expected_refreshes and int(
+            seal.get("analytical_refresh_nonempty_count", 0) or 0
+        ) <= 0:
+            failures.append("PERIODIC_ANALYTICAL_REFRESH_NEVER_COMPUTED")
+        if expected_refreshes > 1 and int(
+            seal.get("analytical_refresh_repeat_session_count", 0) or 0
+        ) <= 0:
+            failures.append("PERIODIC_ANALYTICAL_RECOMPUTATION_NOT_EXERCISED")
+        if expected_refreshes > 1 and int(
+            seal.get("analytical_refresh_episode_end_update_count", 0) or 0
+        ) <= 0:
+            failures.append("PERIODIC_EPISODE_EVOLUTION_NOT_EXERCISED")
+        if expected_refreshes > 1 and int(
+            seal.get("analytical_refresh_lifecycle_exit_update_count", 0) or 0
+        ) <= 0:
+            failures.append("PERIODIC_LIFECYCLE_EVOLUTION_NOT_EXERCISED")
+        if int(
+            seal.get("analytical_refresh_timestamp_backdating", 0) or 0
+        ) != 0:
+            failures.append("PERIODIC_TIMESTAMP_BACKDATING_DETECTED")
+        if int(
+            seal.get("analytical_refresh_duplicate_analytical_ids", 0) or 0
+        ) != 0:
+            failures.append("PERIODIC_DUPLICATE_ANALYTICAL_ID_DETECTED")
+        if int(seal.get("analytical_refresh_future_joins", 0) or 0) != 0:
+            failures.append("PERIODIC_FUTURE_JOIN_DETECTED")
+        if int(
+            seal.get(
+                "analytical_refresh_synchronization_tolerance_violations", 0
+            ) or 0
+        ) != 0:
+            failures.append("PERIODIC_SYNCHRONIZATION_TOLERANCE_VIOLATION")
     return failures
 
 
@@ -4850,6 +5214,7 @@ def post_run_source_hash_rows(
 
 
 def main() -> int:
+    global AUTHORIZED_FOCUSED_FIXTURE_ROOT
     harness_begun = time.monotonic()
     repository = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
@@ -4865,18 +5230,15 @@ def main() -> int:
     parser.add_argument(
         "--r6c2-reference-root",
         type=Path,
-        default=Path(
-            "/opt/banknifty/research/vpoc_oi_price_response_v2/"
-            "clean_combined_profiler_r6c2r_full_stack"
-        ),
     )
     parser.add_argument(
         "--r6d-reference-root",
         type=Path,
-        default=Path(
-            "/opt/banknifty/research/vpoc_oi_price_response_v2/"
-            "clean_combined_profiler_r6d_offline_gui"
-        ),
+    )
+    parser.add_argument(
+        "--authorized-focused-fixture-root",
+        type=Path,
+        help="exact manifest-pinned research fixture root, when explicitly used",
     )
     parser.add_argument("--skip-references", action="store_true")
     parser.add_argument("--sessions", default=",".join(SESSIONS))
@@ -4921,10 +5283,23 @@ def main() -> int:
     parser.add_argument("--maximum-feasible-polls", type=int, default=50_000)
     args = parser.parse_args()
 
+    AUTHORIZED_FOCUSED_FIXTURE_ROOT = (
+        args.authorized_focused_fixture_root.resolve()
+        if args.authorized_focused_fixture_root is not None
+        else None
+    )
+
     if args.maximum_feasible_polls <= 0:
         parser.error("--maximum-feasible-polls must be positive")
 
     sessions = _parse_sessions(args.sessions)
+    if not args.skip_references and (
+        args.r6c2_reference_root is None or args.r6d_reference_root is None
+    ):
+        parser.error(
+            "--r6c2-reference-root and --r6d-reference-root are required "
+            "unless --skip-references is used"
+        )
     missing_configs = [
         str(path)
         for path in (args.config, args.stack_config, args.inventory_config)
@@ -5012,7 +5387,10 @@ def main() -> int:
             )
         elif args.projection_root is not None:
             raise ValueError("--projection-root requires --build-raw-projection")
-        elif analytical_data_root == AUTHORIZED_FOCUSED_FIXTURE_ROOT.resolve():
+        elif (
+            AUTHORIZED_FOCUSED_FIXTURE_ROOT is not None
+            and analytical_data_root == AUTHORIZED_FOCUSED_FIXTURE_ROOT.resolve()
+        ):
             # The canonical batch inventory engine correctly refuses every
             # research-root input.  Validate the sole authorized fixture in
             # place, then give A and B the same exact-byte temporary copy under

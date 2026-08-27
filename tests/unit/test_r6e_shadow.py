@@ -21,6 +21,9 @@ def oi(receipt,source='future_depth'):return json.dumps({'received_at':receipt,'
 
 def test_contract_accepts_valid(tmp_path):
  _,_,c=setup(tmp_path);assert c['config']['timezone']=='Asia/Kolkata'
+def test_contract_uses_captured_config_bytes_not_later_path_contents(tmp_path):
+ data=tmp_path/'collector';(data/'raw/2099-01-01').mkdir(parents=True);(data/'oi/2099-01-01').mkdir(parents=True);cfg=tmp_path/'config.json';cfg.write_text(json.dumps(config()));captured=cfg.read_bytes();cfg.write_text('{mutated-after-capture')
+ c=validate_shadow_contract(data,tmp_path/'state',cfg,'127.0.0.1','shadow',authenticated_config_payload=captured);assert c['config']['timezone']=='Asia/Kolkata'
 @pytest.mark.parametrize('bind,mode',[('0.0.0.0','shadow'),('127.0.0.1','live')])
 def test_contract_refuses_public_or_wrong_mode(tmp_path,bind,mode):
  data,state,_=setup(tmp_path);cfg=tmp_path/'config.json'

@@ -1,19 +1,18 @@
 [Unit]
 Description=R6E1R sanitized read-only gateway (user service)
-Documentation=file:///opt/banknifty/repositories/banknifty-market-profiler/deploy/r6e1r/README.md
+Documentation=file://@R6E1R_REPOSITORY_ROOT@/deploy/r6e1r/README.md
 After=r6e1r-shadow.service
-Requires=r6e1r-shadow.service
 StartLimitIntervalSec=5min
 StartLimitBurst=10
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/banknifty/repositories/banknifty-market-profiler
+WorkingDirectory=@R6E1R_REPOSITORY_ROOT@
 UMask=0077
-UnsetEnvironment=SSH_AUTH_SOCK DBUS_SESSION_BUS_ADDRESS
+UnsetEnvironment=SSH_AUTH_SOCK DBUS_SESSION_BUS_ADDRESS LD_PRELOAD LD_AUDIT LD_LIBRARY_PATH LD_DEBUG LD_DEBUG_OUTPUT LD_PROFILE GCONV_PATH GLIBC_TUNABLES LOCPATH NLSPATH PYTHONPATH PYTHONHOME PYTHONINSPECT PYTHONSTARTUP PYTHONBREAKPOINT ENV BASH_ENV TMPDIR TMP TEMP
 KeyringMode=private
-ExecStart=/usr/bin/bwrap --unshare-all --unshare-user --share-net --disable-userns --assert-userns-disabled --die-with-parent --new-session --cap-drop ALL --clearenv --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 --ro-bind /opt/banknifty/repositories/banknifty-market-profiler/deploy/r6e1r /app/deploy/r6e1r --dev /dev --proc /proc --tmpfs /tmp --dir /run --chdir /app /usr/bin/python3 -I -B /app/deploy/r6e1r/read_only_gateway.py --bind 0.0.0.0 --port 8805 --backend http://127.0.0.1:18805 --require-isolation
-ExecStartPost=/usr/bin/bwrap --unshare-all --unshare-user --share-net --disable-userns --assert-userns-disabled --die-with-parent --new-session --cap-drop ALL --clearenv --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 --ro-bind /opt/banknifty/repositories/banknifty-market-profiler/deploy/r6e1r /app/deploy/r6e1r --dev /dev --proc /proc --tmpfs /tmp --dir /run --chdir /app /usr/bin/python3 -I -B /app/deploy/r6e1r/health_readiness_check.py --base-url http://127.0.0.1:8805 --attempts 30 --delay-seconds 1 --timeout-seconds 0.25
+ExecStart=/usr/bin/bwrap --unshare-all --unshare-user --share-net --disable-userns --assert-userns-disabled --die-with-parent --new-session --cap-drop ALL --clearenv --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 --ro-bind @R6E1R_REPOSITORY_ROOT@/deploy/r6e1r /app/deploy/r6e1r --dev /dev --proc /proc --tmpfs /tmp --dir /run --chdir /app /bin/sh -c 'exec 3</app/deploy/r6e1r/read_only_gateway.py && exec /usr/bin/python3 -I -S -B -X pycache_prefix=/dev/null -c "import hashlib,sys;p=open(\"/proc/self/fd/3\",\"rb\").read();None if hashlib.sha256(p).hexdigest()==\"a875953704ff89045bae47604e68fbcbf472efcf7f650d689151d43aec376279\" else sys.exit(1);origin=\"/app/deploy/r6e1r/read_only_gateway.py\";sys.argv=[origin,*sys.argv[1:]];g={\"__name__\":\"__main__\",\"__file__\":origin,\"__package__\":None,\"__cached__\":None};exec(compile(p,origin,\"exec\"),g,g)" --bind 0.0.0.0 --port @R6E1R_GATEWAY_PORT@ --backend http://127.0.0.1:18805 --hidden-path @R6E1R_COLLECTOR_ROOT@ --hidden-path @R6E1R_DEPLOY_ROOT@/state --hidden-path @R6E1R_DEPLOY_ROOT@/config --require-isolation'
+ExecStartPost=/usr/bin/bwrap --unshare-all --unshare-user --share-net --disable-userns --assert-userns-disabled --die-with-parent --new-session --cap-drop ALL --clearenv --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 --ro-bind @R6E1R_REPOSITORY_ROOT@/deploy/r6e1r /app/deploy/r6e1r --dev /dev --proc /proc --tmpfs /tmp --dir /run --chdir /app /bin/sh -c 'exec 3</app/deploy/r6e1r/health_readiness_check.py && exec /usr/bin/python3 -I -S -B -X pycache_prefix=/dev/null -c "import hashlib,sys;p=open(\"/proc/self/fd/3\",\"rb\").read();None if hashlib.sha256(p).hexdigest()==\"42ea7f0312fdca5a542ca99dc4c738d263e0f12f15f0135a02c790bb0b39a67b\" else sys.exit(1);origin=\"/app/deploy/r6e1r/health_readiness_check.py\";sys.argv=[origin,*sys.argv[1:]];g={\"__name__\":\"__main__\",\"__file__\":origin,\"__package__\":None,\"__cached__\":None};exec(compile(p,origin,\"exec\"),g,g)" --base-url http://127.0.0.1:@R6E1R_GATEWAY_PORT@ --attempts 30 --delay-seconds 1 --timeout-seconds 0.25'
 Restart=on-failure
 RestartSec=3s
 TimeoutStartSec=75s
@@ -30,8 +29,8 @@ PrivateTmp=true
 PrivateDevices=true
 ProtectHome=true
 ProtectSystem=strict
-ReadOnlyPaths=/opt/banknifty/repositories/banknifty-market-profiler
-InaccessiblePaths=-/opt/banknifty-collector/data-prod-v4 -/opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow/state -/opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow/config -%t/gnupg
+ReadOnlyPaths=@R6E1R_REPOSITORY_ROOT@
+InaccessiblePaths=-@R6E1R_COLLECTOR_ROOT@ -@R6E1R_DEPLOY_ROOT@/state -@R6E1R_DEPLOY_ROOT@/config -%t/gnupg
 ProtectControlGroups=true
 ProtectKernelModules=true
 ProtectClock=true

@@ -2,73 +2,105 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT TARGETED AND FOCUSED GATES PASS; COMPLETE REGRESSION PENDING**
+Status: **CURRENT FOCUSED INGESTION/ORCHESTRATION SUITES PASSED; LOCAL HOST-BOUND AND COMPLETE HOSTINGER GATES NOT ACCEPTED**
 
-No failing or skipped test may be weakened, deselected, reclassified, or omitted to obtain acceptance.
+No failing or skipped test may be weakened, deselected, reclassified, or omitted to obtain acceptance. Environment-blocked tests are reported as non-passes until they pass in the required Hostinger environment.
 
-## Recorded test history
+## Current-source local evidence
 
-| Invocation | Result | Standing |
-|---|---|---|
-| Repaired backend focused verification | 74 backend/harness plus 18 GUI/API passed | Valid historical targeted evidence |
-| Callback/ingestion durability regression | 69 passed in 2.77s | Valid historical targeted evidence |
-| Live API, shadow API, browser, preserved R6D GUI | 79 passed in 48.82s; zero browser console/page errors | Valid historical integration evidence |
-| Environment-incomplete complete-suite attempt | 261 passed, 8 failed, 20 skipped | Invocation failure retained; not acceptance |
-| Correctly provisioned complete suite | 289 passed, 0 failed, 0 skipped in 62.29s | Passed at that source checkpoint |
-| Focused A/B v8 | Exit 0 | Rejected as final evidence after comparator audit |
-| Focused one-record probe | 668 out-of-order refusals | Repair-triggering diagnostic failure |
-| Repaired-engine current targeted gate | 216/216 passed: 120 callback/runner, 28 equivalence-harness, 68 engine/API/runtime/cross-layer | Current accepted targeted evidence |
-| Historical-availability reference comparator | 29/29 targeted tests; separate preserved-v3 check matched A and B 24/24 rows each to Reference C with zero remainder | Current accepted targeted evidence |
-| R6D-parity engine/GUI/API/browser gate | 135/135 passed at pushed GUI milestone `5efe70e`; three current fixture screenshots visually inspected; no tracked GUI/browser bytes changed afterward | Accepted targeted evidence |
-| Focused all-nine v12 | 21/21 components, 8/8 ledgers, 9/9 schedules, 9/9 invariants, 72/72 checkpoint rows, 2/2 recovery probes | Current accepted focused evidence |
-| Full-six v6 | Exact A/B and both reference surfaces, then 898 ingestion plus 898 analytical out-of-order refusals in one-record schedule | Rejected diagnostic; no acceptance value promoted |
-| Causal-backlog repair | Semantic hourly-peer regression 1/1; equivalence harness 31/31; ingestion/orchestrator/harness 116/116 in 14.31s | Current accepted targeted evidence |
-
-Source, test, GUI, and harness files changed after several results above. Final counts must therefore come from a new current-source run.
-
-## Required adversarial/regression coverage
-
-| Case | Final test/result |
-|---|---|
-| Partial final JSONL line deferral/retry | PASS — targeted suite and focused inside-line schedule |
-| Malformed complete record refusal | PASS — repaired-engine targeted suite |
-| File truncation/replacement/same-inode rewrite | PASS — quarantine/integrity targeted suite |
-| Hourly rotation | PASS — focused v12 schedule |
-| Duplicate replay | PASS — targeted exactly-once suite |
-| Callback exception before acknowledgement | PASS — targeted replayability suite |
-| Restart after ingestion before analytical flush | PASS — targeted suite and focused recovery probes |
-| Restart after each material ledger append | PASS — seven nonempty focused material ledgers exactly once |
-| Out-of-order visibility/candidate barrier | PASS — targeted barrier suite and focused zero refusals |
-| Exact-second and fractional timestamps | PASS — strict-parser targeted fixtures |
-| Naive/future timestamp refusal | PASS — targeted refusal fixtures |
-| Stale Index/Futures suspension | PASS — targeted engine/API fixtures |
-| Missing CE/PE isolation | PASS — targeted engine/API fixtures |
-| Missing fixed horizons with Intraday | PASS — targeted GUI/API and Intraday-only fixture |
-| Current-session fixed-profile exclusion | PASS — targeted fixed-context suite; final six confirmation pending |
-| August 17 rejection | PASS — targeted/preload validation; final six confirmation pending |
-| Toggle persistence | PASS — 135/135 parity suite at unchanged GUI/browser bytes |
-| Independent Index/Futures sorting | PASS — 135/135 parity suite at unchanged GUI/browser bytes |
-| Price/Basis clock alignment | PASS — focused causality matrix and targeted fixtures |
-| No browser-side analytical recomputation | PASS — 135/135 parity suite at unchanged GUI/browser bytes |
-| No secrets/raw records in payloads/logs | PASS — 135/135 parity suite at unchanged GUI/browser bytes |
-| Replay retention and finalized bucket compaction | PASS — repaired-engine targeted suite |
-
-All rows above are accepted targeted/focused evidence. The complete current-source regression rerun remains `PENDING_FINAL_EVIDENCE`.
-
-## Final test summary
-
-| Suite | Passed | Failed | Skipped | Elapsed | Peak RSS | Command/evidence |
+| Suite | Passed | Failed | Errors | Skipped/deselected | Elapsed | Standing |
 |---|---:|---:|---:|---:|---:|---|
-| Callback/runner targeted portion | 120 | 0 | Not separately reported | Recorded within 216/216 gate | Not separately recorded | Exact final command rerun `PENDING_FINAL_EVIDENCE` |
-| Equivalence harness targeted | 31 | 0 | 0 | 10.52 s | Not separately recorded | Current causal-backlog, schedule, reference, and comparator gate |
-| Ingestion/orchestrator/equivalence targeted | 116 | 0 | 0 | 14.31 s (14.60 s wall) | 137,536 KiB | Current repair command recorded in tracked scratchpad |
-| Engine/API/runtime/cross-layer targeted portion | 68 | 0 | Not separately reported | Recorded within 216/216 gate | Not separately recorded | Exact final command rerun `PENDING_FINAL_EVIDENCE` |
-| R6D-parity engine/GUI/API/browser targeted | 135 | 0 | Not separately reported | GUI milestone gate recorded | Not separately recorded | Three tracked fixtures visually inspected; GUI/browser bytes unchanged afterward |
-| Deployment package plus live GUI/API | 98 | 0 | 0 | 19.50 s | 135,972 KiB | Current 34-file package, systemd/bubblewrap, readiness, redaction, API contract |
-| Browser acceptance | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` |
-| Complete repository regression | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` |
-| `git diff --check` | `PENDING_FINAL_EVIDENCE` | — | — | — | — | `PENDING_FINAL_EVIDENCE` |
-| Credential scan | `PENDING_FINAL_EVIDENCE` | — | — | — | — | `PENDING_FINAL_EVIDENCE` |
-| Oversized-file scan | `PENDING_FINAL_EVIDENCE` | — | — | — | — | `PENDING_FINAL_EVIDENCE` |
+| Ingestion suite | 127 | 0 | 0 | 0 | 7.51 s | PASS |
+| Orchestrator suite | 111 | 0 | 0 | 0 | 19.98 s | PASS |
+| Equivalence harness | 32 | 3 | 0 | 0 | 6.64 s | NOT ACCEPTED locally; all three failures require permitted `strace`/`ptrace` |
+| Deployment package, gateway security, and runner | 130 | 2 | 0 | 0 | 42.79 s | NOT ACCEPTED locally; both failures require a user-systemd bus |
+| Pre-final-repair selected functional baseline | 416 | 0 | 0 | 5 deliberately deselected host-only tests | 76.92 s | Historical local baseline; current complete Hostinger rerun required |
+| Full non-browser collection | 545 | 13 | 16 | 20 skipped | 79.30 s | NOT ACCEPTED locally; 29 failures/errors plus 20 skips are environment/reference-bound as inventoried below |
+| Current browser acceptance | 0 | 0 | 0 | Not run | — | UNAVAILABLE locally because Python Playwright/Chromium is absent |
 
-Final aggregate: `PENDING_FINAL_EVIDENCE`.
+The five deliberately deselected tests in the historical 416-test functional
+selection are two user-systemd/bubblewrap tests and three clean-B `strace`
+tests. The current focused runs above execute rather than deselect those cases:
+three are blocked by this container's ptrace policy and two by its missing user
+systemd bus. They remain mandatory Hostinger gates.
+
+The 29 failures/errors in the full non-browser collection are retained exactly
+as test outcomes. The additional 20 skips are also non-passing outcomes and
+remain mandatory on Hostinger.
+
+| Environment dependency | Failures/errors |
+|---|---:|
+| User-systemd bus unavailable | 2 |
+| `ptrace`/`strace` prohibited | 3 |
+| Sealed R6C0 reference absent under `/opt` | 4 |
+| Sealed R6C2R/R6D references absent under `/opt` | 20 |
+| **Total** | **29** |
+
+This inventory explains the local result; it does not convert those failures or errors into passes. Hostinger must rerun them with the sealed references and host facilities available.
+
+Current manifest checks pass for the 38-file engine allowlist and the 47-file
+deployment package. The deployment rerun also caught and corrected a stale
+runtime-config digest embedded in the systemd service before the final package
+reseal. Byte integrity does not substitute for runtime, browser, six-session,
+or deployment acceptance.
+
+The gateway security suite passes 13/13. Its GET and HEAD redirect regressions
+prove an allowlisted backend route cannot make the gateway follow `Location`
+to a second authority; the gateway returns a sanitized 502 and the target sees
+zero requests.
+
+## New durability regressions
+
+- A forged nonempty `checkpoints.json` can no longer bootstrap a missing or
+  empty SQLite checkpoint database to EOF. SQLite is the sole authority once it
+  exists; ambiguous mirror-only recovery fails closed. Trusted checkpoint and
+  normalized-ledger progress is checked per source against SQLite offset, row,
+  and identity coverage, so total deletion, partial multi-source deletion, and
+  same-source rollback are refused. The ingestion suite's 127/127 result
+  includes those cases plus clean bootstrap, forged EOF, legitimate-database
+  mirror rewrite, and absent/empty mirror with missing/empty SQLite cases.
+- The uploaded August 20 sample exposed schedule-dependent publication of a
+  still-provisional terminal dependency group. Regular refresh now leaves the
+  provisional GUI/state live while deferring that group's mutable lifecycle,
+  participation-transition, and episode-scoped cross-layer rows. Finalization
+  publishes the complete canonical snapshot idempotently. The 111/111
+  orchestrator result includes periodic-versus-one-shot, restart, and
+  post-write-failure identity tests.
+
+## Required Hostinger completion gates
+
+| Gate | Current standing |
+|---|---|
+| Full repository regression with sealed `/opt` references | `PENDING_HOSTINGER_EVIDENCE` |
+| All host-only user-systemd/bubblewrap tests | `PENDING_HOSTINGER_EVIDENCE` |
+| All `strace`/clean-B file-open tests | `PENDING_HOSTINGER_EVIDENCE` |
+| Current-source Chromium/browser and geometry tests | `PENDING_HOSTINGER_EVIDENCE` |
+| Focused all-nine incremental schedules | `PENDING_HOSTINGER_EVIDENCE` |
+| Full six-session all-nine equivalence | `PENDING_HOSTINGER_EVIDENCE` |
+| Restart, partial-line, rotation, replay, and transition-boundary host runs | `PENDING_HOSTINGER_EVIDENCE` |
+| Health/readiness and external deployment probes | `PENDING_HOSTINGER_EVIDENCE` |
+
+The selected local tests cover callback durability, ingestion, orchestration, API behavior, GUI projection, restart/replay logic, manifest enforcement, and gateway security. The exact host-dependent and end-to-end cases above remain mandatory and may not be inferred from the local pass.
+
+## Historical evidence
+
+The following results were produced at earlier source checkpoints. They are useful regression history only and are not current acceptance evidence:
+
+- 289 passed, 0 failed, 0 skipped in 62.29 s at a prior correctly provisioned checkpoint.
+- 135/135 R6D-parity engine/GUI/API/browser tests at GUI milestone `5efe70e9685b98556ae1ad9a860912c7bb1513fc`.
+- Focused all-nine v12: 21/21 components, 8/8 ledgers, 9/9 schedules, 9/9 invariant groups, 72/72 checkpoint rows, and 2/2 recovery probes.
+- Earlier 216/216 and 151/151 targeted gates at their respective pre-final-review source states.
+- Full-six v6 produced exact A/B baselines and reference surfaces before the
+  one-record schedule exposed 898 ingestion plus 898 analytical out-of-order
+  refusals. The run was interrupted and rejected; none of it is final evidence.
+- The causal-backlog repair then passed its semantic hourly-peer regression,
+  31/31 harness tests, and 116/116 ingestion/orchestrator/harness tests in
+  14.31 seconds (14.60 seconds wall) at 137,536 KiB peak RSS.
+
+Source, tests, runtime closure, and package bytes changed after those checkpoints. None of those counts closes a current Hostinger gate.
+
+## Final acceptance summary
+
+Local source verification is sufficient for handoff, not release. Final aggregate status is:
+
+`PENDING_HOSTINGER_COMPLETE_REGRESSION_EQUIVALENCE_BROWSER_AND_DEPLOYMENT_EVIDENCE`

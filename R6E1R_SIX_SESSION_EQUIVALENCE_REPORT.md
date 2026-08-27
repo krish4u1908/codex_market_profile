@@ -2,7 +2,7 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **FOCUSED V12 VERIFIED; FINAL SIX-SESSION EVIDENCE PENDING**
+Status: **CURRENT COMMIT HOSTINGER SIX-SESSION EVIDENCE PENDING; V12 HISTORICAL ONLY**
 
 ## Evaluation contract
 
@@ -72,7 +72,10 @@ Incremental A must use the production ingestor callback path, durable checkpoint
 
 Focused v8 is not final evidence even though it reported equality: subsequent review found append-only ledger, GUI/as-of, observed-open, and schedule-exercise gaps.
 
-The replacement focused v12 is accepted for focused scope. It passed 21/21 components, 8/8 ledgers, 9/9 schedules, 9/9 causality/GUI invariants, 72/72 checkpoint rows, 2/2 recovery probes, and 8/8 source hashes, with every difference/refusal/open/source-mutation gate at zero. Its summary SHA-256 is `19b6c15f426b925fa6ec018d65477f4364242d65cfaaa5425423098d3861de15`; this focused result does not populate any six-session final cell above.
+Focused v12 passed its historical commit, but it predates the current
+durable-authority, authenticated-dependency, gateway, and 38-file engine seal.
+Its summary SHA-256 remains diagnostic provenance only and does not populate a
+current focused or six-session result.
 
 A fresh six-session v3 diagnostic sealed exact A/B baselines and frozen counts but was deliberately stopped before schedules after a reference-only availability-surface mismatch. The historical-availability comparator repair at pushed head `89f135064417ba537dc302027442a110477b5d03` passed 29/29 targeted tests; a separate preserved-material check matched incremental A and batch B 24/24 rows each against Reference C with zero remainder. The diagnostic remains rejected; the accepted six-session report must name the new sealed output root, seal hashes, command line, engine source identity, configuration identity, elapsed time, and peak RSS:
 
@@ -81,7 +84,7 @@ Fresh v6 subsequently proved that baseline and both reference surfaces were exac
 - Final output root: `PENDING_FINAL_EVIDENCE`
 - Incremental A seal SHA-256: `PENDING_FINAL_EVIDENCE`
 - Clean B seal SHA-256: `PENDING_FINAL_EVIDENCE`
-- Current pinned engine hash: `980b6af26e9ca5957b97bafb235474e13d268c691f2cbf3797f1d53fff011602`; accepted-run record: `PENDING_FINAL_EVIDENCE`
+- Current pinned engine hash: `021935bc0722b16a16e3af52deb7a7f26ef1aa6b4983aa3442420596bc00725d`; accepted-run record: `PENDING_FINAL_EVIDENCE`
 - Configuration hash: `PENDING_FINAL_EVIDENCE`
 - Command: `PENDING_FINAL_EVIDENCE`
 - Exit status: `PENDING_FINAL_EVIDENCE`

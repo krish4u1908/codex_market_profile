@@ -2,7 +2,11 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT SOURCE/API CONTRACT VERIFIED; LIVE DEPLOYMENT EVIDENCE PENDING**
+Status: **CURRENT SOURCE/PACKAGE SEALED; HOSTINGER LIVE VERIFICATION PENDING**
+
+No R6E1R service has been installed or accepted from this worktree. There is no
+verified external URL and no verification tag. The results below separate local
+source/package evidence from the mandatory Hostinger service evidence.
 
 ## Read-only endpoint inventory
 
@@ -21,63 +25,75 @@ The backend and sanitized gateway expose only GET/HEAD access to:
 - `/api/availability`
 - `/api/audit`
 
-There are no order, trade, write, alert, or callback-mutation endpoints. POST, PUT, PATCH, and DELETE are refused by the gateway. Unknown routes, unknown or duplicate query keys, and unavailable replay dates are refused.
+There are no order, trade, write, alert, or callback-mutation endpoints. POST,
+PUT, PATCH, and DELETE are refused by the gateway. Unknown routes, unknown or
+duplicate query keys, and unavailable replay dates are refused.
 
-## Health contract
+## Health and readiness contract
 
-Health returns HTTP 200 when the process is functioning. Its accepted payload must establish process operation and must not expose raw records, source paths, credentials, or secrets.
+Health returns HTTP 200 only when the process is functioning. Its accepted
+payload must not expose raw records, source paths, credentials, or secrets.
 
-Final backend health payload/status: `PENDING_FINAL_EVIDENCE`
-
-Final gateway health payload/status: `PENDING_FINAL_EVIDENCE`
-
-## Readiness contract
-
-Readiness is stricter than process health. A 503 is benign only when every reason is in the explicit after-hours stale/missing-market allowlist. Every readiness response must still establish:
+Readiness is stricter than process health. A 503 is benign only when every reason
+is in the explicit after-hours stale/missing-market allowlist. Every readiness
+response must still establish:
 
 - checkpoint integrity is valid;
 - runtime engine-source manifest verification is true;
 - future joins equal zero;
-- synchronization tolerance violations equal zero;
+- synchronization-tolerance violations equal zero;
 - timestamp backdating and duplicate analytical IDs are measured, not asserted;
-- missing options or fixed horizons do not make a valid Index/Futures chart unready.
+- missing options or fixed horizons do not make a valid Index/Futures chart
+  unready.
 
-Historical replay readiness is evaluated against the selected sealed replay and remains separate from live/latest wall-clock staleness. A verified-but-absent requested date must return a non-200 unavailable response rather than an empty replay object.
+Historical replay readiness is evaluated against the selected sealed replay and
+remains separate from live/latest wall-clock staleness. A verified-but-absent
+requested date must return a non-200 unavailable response rather than an empty
+replay object.
 
-## Static/package evidence
+## Current sealed package identity
 
-Prepared deployment verification previously recorded:
-
-- user-unit syntax verification passed;
-- exact transient user-systemd bubblewrap `ExecStart` and `ExecStartPost` probes passed;
-- deployment tests recorded 17/17 passed;
-- consolidated operational/API/retention tests recorded 45/45 passed;
-- no service bind or installation action occurred.
-
-Additional code changes occurred afterward. Current-source final results are therefore required:
-
-The 26-file engine allowlist passes with manifest SHA-256 `7c13b44c9ae4fbc9c3317900866ddaf68800abe7b2c4d7a9f4e1749e41abc3b3` and engine hash `980b6af26e9ca5957b97bafb235474e13d268c691f2cbf3797f1d53fff011602`. The final service-template/package gate then passed 98/98 against the 34-file deployment manifest `ebaf193dca7f3cce82974906e05693864db087a60c7f7e3f028a6d1e7dc80ae3`. The R6D-parity engine/GUI/API/browser gate passed 135/135 at pushed GUI milestone `5efe70e9685b98556ae1ad9a860912c7bb1513fc`, after which no tracked GUI/browser bytes changed; the later repaired-engine targeted gate passed 216/216 for the current runtime path. Live process evidence still requires the gated installation.
-
-| Gate | Final result |
+| Item | Current result |
 |---|---|
-| Deployment plus live GUI/API tests | PASS — 98/98 in 19.50 s; 135,972 KiB peak RSS |
-| Live GUI/API unit tests | PASS — included in current 98/98; 135/135 R6D parity at unchanged GUI/browser bytes |
-| Exact systemd verification | PASS — `systemd-analyze --user verify` exit 0 |
-| Bubblewrap runtime self-test | PASS — same-UID collector/state/runtime paths hidden |
-| Credential-redaction failure test | PASS — unsafe origin refused without credential echo |
-| Fatal readiness-503 test | PASS — non-benign 503 and failed integrity fields refused |
+| Engine allowlist | PASS — 38/38 files |
+| Engine manifest/companion SHA-256 | `715a82b48e7bffe68f749f94c29b6d0e098bfe0e55f24d91e00db690e38827b3` |
+| Engine aggregate hash | `021935bc0722b16a16e3af52deb7a7f26ef1aa6b4983aa3442420596bc00725d` |
+| Deployment allowlist | PASS — 47/47 files |
+| Deployment manifest/companion SHA-256 | `7dcd1d15b36f4b84f367153f5842bd02a94da75bff06e5aae1ca7466a91c9af1` |
+| Deployment package aggregate hash | `d68f22217f1dfb75817ebb9b7cb6af0d21306cf1081b7d222c6ecca130978380` |
+| Runtime configuration hash | `5ce1058763ecc47494f9bdf231439117c6a4fb64c2e491d70395b4be0c50b031` |
 
-## Live evidence matrix
+Both checked-in companion checks pass locally. These hashes identify the package
+Hostinger must verify byte-for-byte before testing or installation; they do not
+constitute live-service acceptance.
 
-| Probe | Expected | Actual |
+## Current local evidence
+
+| Gate | Local result | Hostinger acceptance status |
 |---|---|---|
-| Backend `/api/health` | HTTP 200 | `PENDING_FINAL_EVIDENCE` |
-| Gateway `/api/health` | HTTP 200 | `PENDING_FINAL_EVIDENCE` |
-| Backend `/api/readiness` | 200 or explicitly benign after-hours 503 | `PENDING_FINAL_EVIDENCE` |
-| Gateway `/api/readiness` | Same sanitized state | `PENDING_FINAL_EVIDENCE` |
-| `/api/audit` | Measured zero causal violations and verified manifest | `PENDING_FINAL_EVIDENCE` |
-| Six `/api/session?date=...` checks | Nonempty `HISTORICAL_REPLAY` | `PENDING_FINAL_EVIDENCE` |
-| Absent verified replay date | Non-200 unavailable | `PENDING_FINAL_EVIDENCE` |
-| Public interface | Exact selected port only | `PENDING_FINAL_EVIDENCE` |
+| API tests | PASS — 39/39 | Fresh live probes pending |
+| Gateway security tests | PASS — 13/13, including GET/HEAD redirect refusal and hidden-path validation | Namespace and public-surface probes pending |
+| Deployment/runner tests | 130 passed; 2 user-systemd tests unavailable because this environment has no user bus | Exact user-systemd lifecycle pending |
+| Unit syntax verification | PASS locally | Exact Hostinger unit verification pending |
+| Complete non-browser collection | 545 passed, 20 skipped; 13 failures and 16 errors are host-reference/ptrace/user-systemd environment gates | Complete Hostinger regression pending |
+| Browser acceptance | Chromium/Playwright unavailable locally | Mandatory Hostinger browser/geometry run pending |
+| Runtime file-open trace | Ptrace/strace unavailable locally | Mandatory Hostinger strace audit pending |
 
-Exact probe commands are in [R6E1R_DEPLOYMENT_RUNBOOK.md](R6E1R_DEPLOYMENT_RUNBOOK.md).
+## Required Hostinger live evidence
+
+| Probe | Expected | Current evidence |
+|---|---|---|
+| Backend `/api/health` | HTTP 200 | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
+| Gateway `/api/health` | HTTP 200 | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
+| Backend `/api/readiness` | 200 or explicitly benign after-hours 503 | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
+| Gateway `/api/readiness` | Same sanitized state | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
+| `/api/audit` | Measured zero causal violations and verified manifest | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
+| Six `/api/session?date=...` checks | Nonempty `HISTORICAL_REPLAY` | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
+| Absent verified replay date | Non-200 unavailable | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
+| Largest public chart response | Less than the gateway's 8 MiB per-response ceiling | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
+| Backend SIGKILL recovery | Gateway remains active; backend recovers automatically without a manual gateway restart | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
+| Public interface | Only the selected research port is exposed | `PENDING_HOSTINGER_LIVE_EVIDENCE` |
+| External URL | HTTP 200 after all analytical gates pass | `NOT_DEPLOYED` |
+
+The exact acceptance order and probe commands are recorded in
+[R6E1R_DEPLOYMENT_RUNBOOK.md](R6E1R_DEPLOYMENT_RUNBOOK.md).

@@ -208,6 +208,87 @@ def test_canonicalize_drops_only_run_metadata() -> None:
     assert "raw_run_id" not in result
 
 
+def test_participation_calculation_clock_is_not_masked_by_equivalence() -> None:
+    row = {
+        "event_id": "R6B3-TRANSITION-ONE",
+        "transition_id": "R6B3-TRANSITION-ONE",
+        "episode_id": "BDR1-2026-08-20-GREEN-001",
+        "component": "FUTURES",
+        "effective_timestamp": "2026-08-20T10:00:00+05:30",
+        "calculation_timestamp": "2026-08-20T10:00:01+05:30",
+        "new_state": "SUPPORTIVE",
+    }
+    changed = {
+        **row,
+        "calculation_timestamp": "2026-08-20T10:00:02+05:30",
+    }
+    incremental = {
+        "participation_transitions": [row],
+        "analytical_ledgers": {"participation_transitions": [row]},
+    }
+    batch = {
+        "participation_transitions": [changed],
+        "analytical_ledgers": {"participation_transitions": [changed]},
+    }
+
+    component = next(
+        result for result in harness.compare_snapshots(
+            incremental, batch, expected=None
+        )
+        if result["component"] == "participation_transitions"
+    )
+    ledger = next(
+        result for result in harness.compare_analytical_ledgers(
+            incremental, batch
+        )
+        if result["ledger"] == "participation_transitions"
+    )
+    assert component["status"] == "FAIL"
+    assert ledger["status"] == "FAIL"
+    assert harness.named_rows_semantic_hash(
+        harness.component_rows(incremental)
+    ) != harness.named_rows_semantic_hash(harness.component_rows(batch))
+    assert harness.named_rows_semantic_hash(
+        harness.analytical_ledger_rows(incremental)
+    ) != harness.named_rows_semantic_hash(
+        harness.analytical_ledger_rows(batch)
+    )
+
+
+def test_clean_batch_ledgers_project_only_immutable_event_fields() -> None:
+    snapshot = {
+        "episodes": [{
+            "episode_id": "BDR1-2026-08-20-GREEN-001",
+            "evaluation_date": "2026-08-20",
+            "colour": "GREEN",
+            "candidate_start_timestamp": "2026-08-20T10:00:00+05:30",
+            "confirmation_timestamp": "2026-08-20T10:01:00+05:30",
+            "episode_end_timestamp": "2026-08-20T10:05:00+05:30",
+        }],
+        "lifecycle": [{
+            "record_id": "R6B2R-ONE",
+            "episode_id": "BDR1-2026-08-20-GREEN-001",
+            "evaluation_date": "2026-08-20",
+            "state": "DIVERGENCE_DETECTED",
+            "previous_state": "NEUTRAL",
+            "state_entry_timestamp": "2026-08-20T10:01:00+05:30",
+            "state_exit_timestamp": "2026-08-20T10:02:00+05:30",
+        }],
+        "dependencies": [],
+        "inventory": [],
+        "participation_transitions": [],
+        "cross_layer_transitions": [],
+        "availability_detail": {},
+    }
+    ledgers = harness.build_batch_analytical_ledgers(snapshot)
+    confirmation = ledgers["divergence_confirmations"][0]
+    lifecycle = ledgers["lifecycle_transitions"][0]
+    assert "episode_end_timestamp" not in confirmation
+    assert "state_exit_timestamp" not in lifecycle
+    assert confirmation["confirmation_timestamp"].endswith("+05:30")
+    assert lifecycle["state_entry_timestamp"].endswith("+05:30")
+
+
 def test_compare_snapshots_is_order_independent_but_value_exact() -> None:
     rows = [
         {"episode_id": "E1", "colour": "GREEN", "basis": 10.0},
@@ -832,6 +913,15 @@ def test_every_configured_schedule_predicate_is_exact() -> None:
             "record_group_sizes_exercised": [1000],
             "maximum_exposure_bytes": 1_000_000,
             "maximum_record_group_bytes": 900_000,
+            "analytical_refresh_flush_count": 5,
+            "analytical_refresh_nonempty_count": 4,
+            "analytical_refresh_repeat_session_count": 3,
+            "analytical_refresh_episode_end_update_count": 2,
+            "analytical_refresh_lifecycle_exit_update_count": 2,
+            "analytical_refresh_timestamp_backdating": 0,
+            "analytical_refresh_duplicate_analytical_ids": 0,
+            "analytical_refresh_future_joins": 0,
+            "analytical_refresh_synchronization_tolerance_violations": 0,
         },
     }
     for name, seal in passing.items():
@@ -856,8 +946,7 @@ def test_every_configured_schedule_predicate_is_exact() -> None:
         elif name == "hourly_file_rotation":
             broken["hourly_rotation_boundary_count"] = 1
         else:
-            broken["maximum_record_group_bytes"] = 10
-            broken["record_group_sizes_exercised"] = [2]
+            broken["analytical_refresh_flush_count"] = 4
         assert harness.schedule_exercise_failures(name, broken), name
     remainder = {
         **passing["one_record_per_increment"],
@@ -865,6 +954,53 @@ def test_every_configured_schedule_predicate_is_exact() -> None:
     }
     assert "CAUSAL_CHECKPOINT_REMAINDER_AFTER_DRAIN" in (
         harness.schedule_exercise_failures("one_record_per_increment", remainder)
+    )
+
+    large = passing["large_chronological_chunks"]
+    no_episode_evolution = {
+        **large, "analytical_refresh_episode_end_update_count": 0,
+    }
+    assert "PERIODIC_EPISODE_EVOLUTION_NOT_EXERCISED" in (
+        harness.schedule_exercise_failures(
+            "large_chronological_chunks", no_episode_evolution
+        )
+    )
+    no_lifecycle_evolution = {
+        **large, "analytical_refresh_lifecycle_exit_update_count": 0,
+    }
+    assert "PERIODIC_LIFECYCLE_EVOLUTION_NOT_EXERCISED" in (
+        harness.schedule_exercise_failures(
+            "large_chronological_chunks", no_lifecycle_evolution
+        )
+    )
+    missed_large_target = {
+        **large,
+        "record_group_sizes_exercised": [1],
+        "maximum_record_group_bytes": 1,
+    }
+    assert "LARGE_CHRONOLOGICAL_TARGET_NOT_MEASURED" in (
+        harness.schedule_exercise_failures(
+            "large_chronological_chunks", missed_large_target
+        )
+    )
+    transient_causality_failure = {
+        **large,
+        "analytical_refresh_timestamp_backdating": 1,
+        "analytical_refresh_duplicate_analytical_ids": 1,
+        "analytical_refresh_future_joins": 1,
+        "analytical_refresh_synchronization_tolerance_violations": 1,
+    }
+    transient_failures = harness.schedule_exercise_failures(
+        "large_chronological_chunks", transient_causality_failure
+    )
+    assert "PERIODIC_TIMESTAMP_BACKDATING_DETECTED" in transient_failures
+    assert (
+        "PERIODIC_DUPLICATE_ANALYTICAL_ID_DETECTED" in transient_failures
+    )
+    assert "PERIODIC_FUTURE_JOIN_DETECTED" in transient_failures
+    assert (
+        "PERIODIC_SYNCHRONIZATION_TOLERANCE_VIOLATION"
+        in transient_failures
     )
 
 
@@ -1069,6 +1205,68 @@ def test_real_checkpoint_recovery_refuses_truncate_and_replace(tmp_path: Path) -
     ]
     assert all(row["status"] == "PASS" for row in rows)
     assert not any(row["checkpoint_advanced"] for row in rows)
+
+
+def test_schedule_roots_are_exclusively_claimed(tmp_path: Path) -> None:
+    staging = tmp_path / "schedule_collector"
+    state = tmp_path / "schedule_state"
+    harness._claim_schedule_roots(staging, state)
+    assert staging.is_dir()
+    assert state.is_dir()
+
+    sentinel = staging / "existing-evidence"
+    sentinel.write_text("preserve")
+    with pytest.raises(ValueError, match="schedule staging root must not exist"):
+        harness._claim_schedule_roots(staging, tmp_path / "unused_state")
+    assert sentinel.read_text() == "preserve"
+    with pytest.raises(ValueError, match="schedule staging root must not exist"):
+        harness.run_schedule(
+            schedule=harness.Schedule("root_collision", (1,)),
+            sources=[],
+            staging_root=staging,
+            state_root=tmp_path / "unused_run_state",
+            config_path=tmp_path / "not_read.json",
+            sessions=(),
+        )
+    assert sentinel.read_text() == "preserve"
+
+    existing_state = tmp_path / "existing_state"
+    existing_state.mkdir()
+    fresh_staging = tmp_path / "fresh_collector"
+    with pytest.raises(ValueError, match="schedule state root must not exist"):
+        harness._claim_schedule_roots(fresh_staging, existing_state)
+    assert not fresh_staging.exists()
+
+
+def test_drain_reports_exact_quarantined_source(tmp_path: Path) -> None:
+    relative = Path("raw/2026-08-20/events_09.jsonl")
+    staging = tmp_path / "collector"
+    destination = staging / relative
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(b"{}\n")
+    source = harness.SourceFile(
+        source=tmp_path / "authority.jsonl",
+        relative=relative,
+        size=3,
+        complete_rows=1,
+        ends_with_newline=True,
+    )
+
+    class QuarantinedContext:
+        checkpoints = {str(relative): {"offset": 0}}
+        quarantined_sources = {
+            str(relative): {"reason": "FILE_REPLACED"}
+        }
+
+        def poll(self, source_paths=None):
+            return 0
+
+    with pytest.raises(RuntimeError) as captured:
+        harness._drain(QuarantinedContext(), [source], staging)
+    assert str(captured.value) == (
+        "checkpoint drain blocked by quarantined source: "
+        "raw/2026-08-20/events_09.jsonl=FILE_REPLACED"
+    )
 
 
 def test_b_uses_independent_repository_canonical_batch_processors(tmp_path: Path) -> None:
@@ -1348,6 +1546,10 @@ def test_clean_b_terminal_null_receipt_advances_cutoff_not_valid_freshness(
     assert ledgers["availability_transitions"]
     assert all(
         row["effective_timestamp"] == terminal.isoformat()
+        for row in ledgers["availability_transitions"]
+    )
+    assert all(
+        row["reason"] == "SESSION_AVAILABILITY_SEAL"
         for row in ledgers["availability_transitions"]
     )
     gui = harness._gui_projection(snapshot["gui_payload"][session])
@@ -1647,7 +1849,7 @@ def test_real_live_path_chunk_split_and_restart_equivalence(tmp_path: Path) -> N
         source for source in all_sources if source.relative not in live_relatives
     ]
 
-    chunked, chunked_accounting, _ = harness.run_schedule(
+    chunked, chunked_accounting, chunked_metrics = harness.run_schedule(
         schedule=harness.SCHEDULES["large_chronological_chunks"],
         sources=sources,
         staging_root=tmp_path / "chunked_collector",
@@ -1731,6 +1933,8 @@ def test_real_live_path_chunk_split_and_restart_equivalence(tmp_path: Path) -> N
             )
         )
     )
+    assert chunked_metrics["analytical_refresh_flush_count"] == 5
+    assert chunked_metrics["analytical_refresh_nonempty_count"] == 1
     assert chunked["session_snapshots"][sessions[0]]["session_date"] == sessions[0]
     assert boundary_metrics["unexpected_staged_sessions"] == []
     assert boundary_metrics["dirty_sessions_after_seal"] == []
@@ -1786,9 +1990,9 @@ def test_checkpoint_lagging_hourly_peer_is_repolled_before_later_receipt(
     """A visible partial prefix cannot be omitted when a later hour changes.
 
     The blank rows model a byte-exact raw projection: they preserve physical
-    source coordinates but are not schedule records.  With a 512-byte read
+    source coordinates but are not schedule records. With a 512-byte read
     bound, the second Index record remains beyond the durable raw checkpoint
-    after its one-record increment.  Polling only the newly introduced OI hour
+    after its one-record increment. Polling only the newly introduced OI hour
     would publish 09:15:00.600 before that visible 09:15:00.500 Index row.
     """
     session = "2026-08-20"

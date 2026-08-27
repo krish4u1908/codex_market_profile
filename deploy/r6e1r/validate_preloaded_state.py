@@ -68,7 +68,6 @@ REUSE_VALIDATION_KEYS = frozenset({
     "dynamic_contract_sessions_verified",
 })
 AUGUST_17_POLICY = "PRESENT_FOR_CANONICAL_REJECTION_NEVER_FORCED_ACCEPTED"
-AUTHORITATIVE_SOURCE_ROOT = "/opt/banknifty-collector/data-prod-v4"
 FROZEN_OUTPUT_COUNTS = {
     "inventory": 255,
     "episodes": 65,
@@ -682,12 +681,32 @@ def validate_raw_projection_reuse_evidence(
         refuse("RAW_PROJECTION_REUSE_VALIDATION_FAILED")
 
 
+def require_expected_authoritative_source_root(value: str) -> str:
+    """Require one explicit, normalized absolute source-root identity."""
+    if not isinstance(value, str) or not value or "\\" in value:
+        refuse("EXPECTED_AUTHORITATIVE_SOURCE_ROOT_INVALID")
+    root = Path(value)
+    if (
+        not root.is_absolute()
+        or root.anchor != "/"
+        or root == Path(root.anchor)
+        or value != root.as_posix()
+        or any(part in {"", ".", ".."} for part in root.parts[1:])
+    ):
+        refuse("EXPECTED_AUTHORITATIVE_SOURCE_ROOT_INVALID")
+    return value
+
+
 def validate_equivalence_evidence(
     summary_path: Path,
     projection_path: Path,
     expected_sessions: Sequence[str],
+    expected_authoritative_source_root: str,
 ) -> tuple[str, str, int, dict[str, Any]]:
     """Require the fresh, full six-session PASS and its August 17 policy."""
+    expected_source_root = require_expected_authoritative_source_root(
+        expected_authoritative_source_root,
+    )
     summary = load_json_object(summary_path, "EQUIVALENCE_SUMMARY_INVALID")
     expected = list(expected_sessions)
     if (
@@ -790,7 +809,7 @@ def validate_equivalence_evidence(
     if (
         projection.get("schema") != "R6E1R_BYTE_EXACT_RAW_RECORD_PROJECTION_V1"
         or projection.get("classification") != CLASSIFICATION
-        or projection.get("authoritative_source_root") != AUTHORITATIVE_SOURCE_ROOT
+        or projection.get("authoritative_source_root") != expected_source_root
         or projection.get("evaluation_sessions") != expected
         or not isinstance(causal_sessions, list)
         or "2026-08-17" not in causal_sessions
@@ -1117,6 +1136,7 @@ def validate(args: argparse.Namespace) -> dict[str, Any]:
             Path(args.equivalence_summary),
             Path(args.raw_projection_manifest),
             args.expected_session,
+            args.expected_authoritative_source_root,
         )
     )
     state_manifest_sha, state_tree_sha, bound_state_file_count = (
@@ -1210,6 +1230,7 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("--expected-configuration-hash", required=True)
     value.add_argument("--equivalence-summary", required=True)
     value.add_argument("--raw-projection-manifest", required=True)
+    value.add_argument("--expected-authoritative-source-root", required=True)
     value.add_argument("--state-manifest", required=True)
     return value
 

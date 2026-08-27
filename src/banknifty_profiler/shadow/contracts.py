@@ -23,21 +23,33 @@ ENGINE_SOURCE_MANIFEST_SHA256_PATH = (
 # Relative paths also make every startup source open reviewable/allowlisted.
 ENGINE_SOURCE_ALLOWLIST = (
     "scripts/run_r6e_shadow.py",
+    "src/banknifty_profiler/__init__.py",
+    "src/banknifty_profiler/context/__init__.py",
     "src/banknifty_profiler/context/availability.py",
+    "src/banknifty_profiler/cross_layer/__init__.py",
     "src/banknifty_profiler/cross_layer/state.py",
+    "src/banknifty_profiler/divergence/__init__.py",
     "src/banknifty_profiler/divergence/dependency.py",
     "src/banknifty_profiler/divergence/detector.py",
+    "src/banknifty_profiler/gui/__init__.py",
     "src/banknifty_profiler/gui/adapter.py",
     "src/banknifty_profiler/gui/static/live.js",
     "src/banknifty_profiler/gui/static/live_page.template",
     "src/banknifty_profiler/gui/static/style.css",
+    "src/banknifty_profiler/inventory/__init__.py",
     "src/banknifty_profiler/inventory/engine.py",
+    "src/banknifty_profiler/lifecycle/__init__.py",
+    "src/banknifty_profiler/lifecycle/engine.py",
     "src/banknifty_profiler/lifecycle/raw_engine.py",
+    "src/banknifty_profiler/participation/__init__.py",
     "src/banknifty_profiler/participation/raw_engine.py",
     "src/banknifty_profiler/participation/views.py",
+    "src/banknifty_profiler/raw_io/__init__.py",
     "src/banknifty_profiler/raw_io/reader.py",
+    "src/banknifty_profiler/runtime/__init__.py",
     "src/banknifty_profiler/runtime/configuration.py",
     "src/banknifty_profiler/runtime/timestamps.py",
+    "src/banknifty_profiler/shadow/__init__.py",
     "src/banknifty_profiler/shadow/api.py",
     "src/banknifty_profiler/shadow/contracts.py",
     "src/banknifty_profiler/shadow/ingest.py",
@@ -56,6 +68,13 @@ def _source_path(repo: Path, relative: str) -> Path:
     if item.is_absolute() or ".." in item.parts:
         raise ValueError(f"unsafe engine source allowlist path: {relative!r}")
     resolved_repo = repo.resolve()
+    cursor = resolved_repo
+    for part in item.parts:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise ValueError(
+                f"allowlisted engine source symlink refused: {relative}"
+            )
     path = (resolved_repo / item).resolve()
     if resolved_repo not in path.parents or not path.is_file():
         raise ValueError(f"allowlisted engine source missing: {relative}")
@@ -159,6 +178,8 @@ def validate_shadow_contract(
     config_path: Path,
     bind: str,
     mode: str,
+    *,
+    authenticated_config_payload: bytes | None = None,
 ) -> dict:
     data = data_root.resolve()
     state = state_root.resolve()
@@ -182,7 +203,15 @@ def validate_shadow_contract(
         raise ValueError("state root must be outside source tree")
     if not config_file.is_file():
         raise ValueError("configuration missing")
-    raw_config = json.loads(config_file.read_text())
+    if authenticated_config_payload is None:
+        raw_config = json.loads(config_file.read_text())
+    else:
+        try:
+            raw_config = json.loads(authenticated_config_payload)
+        except (TypeError, json.JSONDecodeError) as error:
+            raise ValueError("authenticated runtime configuration is invalid") from error
+        if not isinstance(raw_config, dict):
+            raise ValueError("authenticated runtime configuration is invalid")
     raw_config.setdefault("index_symbol", CANONICAL_INDEX_SYMBOL)
     raw_config.setdefault(
         "futures_selection_mode", "SESSION_NEAREST_UNEXPIRED_HIGHEST_OI"

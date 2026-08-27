@@ -7,13 +7,16 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 import runpy
 import threading
+from types import MappingProxyType
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import pytest
 
+import banknifty_profiler.shadow.api as api_module
 from banknifty_profiler.gui.adapter import PRODUCT_CLASSIFICATION, SESSIONS
 from banknifty_profiler.shadow.api import create_server
+from banknifty_profiler.shadow.ledger import AppendOnlyLedger
 from banknifty_profiler.shadow.contracts import (
     CLASSIFICATION,
     engine_hash,
@@ -254,6 +257,44 @@ def snapshot(date="2026-08-19", state=None):
             "reason_code": "MATERIAL_STRIKE_STATE_CHANGE",
         },
     ]
+    cross_layer_transitions = [
+        {
+            "transition_id": "XL-INVENTORY-1",
+            "evaluation_date": date,
+            "effective_timestamp": f"{date}T10:00:00+05:30",
+            "component": "INVENTORY",
+            "state_key": "ID:FUT_POS_OI_VPOC",
+            "previous_state": "NOT_YET_AVAILABLE",
+            "new_state": "AVAILABLE:57060",
+            "reason_code": "CONTROL_AVAILABLE_OR_WINNER_CHANGED",
+            "episode_id": "",
+            "horizon": "ID",
+            "family": "FUT_POS_OI_VPOC",
+            "constituent_effective_timestamps": (
+                f'{{"control_effective_timestamp":"{date}T10:00:00+05:30"}}'
+            ),
+            "source_record_id": "inventory:1",
+            "source_file": "/opt/private/raw.jsonl",
+        },
+        {
+            "transition_id": "XL-DIVERGENCE-1",
+            "evaluation_date": date,
+            "effective_timestamp": f"{date}T10:00:01+05:30",
+            "component": "DIVERGENCE",
+            "state_key": "BDR1-TEST",
+            "previous_state": "CANDIDATE",
+            "new_state": "GREEN_CONFIRMED",
+            "reason_code": "FROZEN_DIVERGENCE_CONFIRMED",
+            "episode_id": "BDR1-TEST",
+            "horizon": "",
+            "family": "",
+            "constituent_effective_timestamps": (
+                f'{{"confirmation_timestamp":"{date}T10:00:01+05:30"}}'
+            ),
+            "source_record_id": "episode:1",
+            "raw_source_references": "secret-token /opt/private/raw.jsonl:101",
+        },
+    ]
     gui = {
         "date": date, "classification": PRODUCT_CLASSIFICATION, "availability": layer_state,
         "price": price, "projection_hash": "a" * 64,
@@ -264,13 +305,15 @@ def snapshot(date="2026-08-19", state=None):
         "lifecycle": lifecycle, "resolution": resolution,
         "participation_dense": participation,
         "participation_transitions": participation_transitions,
-        "participation_summaries": [], "cross_layer_transitions": [],
+        "participation_summaries": [],
+        "cross_layer_transitions": cross_layer_transitions,
         "counts": {
             "price": 2,
             "inventory": len(inventory),
             "dependencies": len(dependencies),
             "participation_dense": len(participation),
             "participation_transitions": len(participation_transitions),
+            "cross_layer_transitions": len(cross_layer_transitions),
         },
     }
 
@@ -321,11 +364,21 @@ class Orchestrator:
 
 
 class Ingestor:
+    _static_root = Path("src/banknifty_profiler/gui/static")
+    _static_inventory = []
+    for _static_name in ("live.js", "live_page.template", "style.css"):
+        _static_payload = (_static_root / _static_name).read_bytes()
+        _static_inventory.append({
+            "path": f"src/banknifty_profiler/gui/static/{_static_name}",
+            "size": len(_static_payload),
+            "sha256": hashlib.sha256(_static_payload).hexdigest(),
+        })
     c = {
         "config": {"classification": PRODUCT_CLASSIFICATION},
         "engine_hash": "b" * 64,
         "configuration_hash": "c" * 64,
         "engine_source_verified": True,
+        "engine_source_inventory": _static_inventory,
         "runtime_source_open_audit": {"prohibited_open_count": 0},
     }
     metrics = {"polls": 10, "bytes": 2000}
@@ -467,6 +520,36 @@ def test_chart_projects_canonical_dependency_and_complete_participation(server):
     assert "raw_source_references" not in json.dumps(payload)
 
 
+def test_transitions_endpoint_projects_allowlisted_cross_layer_tail(server):
+    payload = json.loads(request(server, "/api/transitions?limit=1")[2])
+    assert payload["session_date"] == "2026-08-19"
+    assert payload["count"] == 2
+    assert payload["returned_count"] == 1
+    assert payload["truncated"] is True
+    assert payload["rows"] == [{
+        "transition_id": "XL-DIVERGENCE-1",
+        "evaluation_date": "2026-08-19",
+        "effective_timestamp": "2026-08-19T10:00:01+05:30",
+        "component": "DIVERGENCE",
+        "state_key": "BDR1-TEST",
+        "previous_state": "CANDIDATE",
+        "new_state": "GREEN_CONFIRMED",
+        "reason_code": "FROZEN_DIVERGENCE_CONFIRMED",
+        "episode_id": "BDR1-TEST",
+        "horizon": "",
+        "family": "",
+    }]
+    assert payload["participation_count"] == 4
+    assert len(payload["participation_rows"]) == 1
+    assert payload["participation_rows"][0]["transition_id"] == "PT-PE-1"
+    encoded = json.dumps(payload)
+    for prohibited in (
+        "constituent_effective_timestamps", "source_record_id",
+        "raw_source_references", "/opt/private", "secret-token",
+    ):
+        assert prohibited not in encoded
+
+
 def test_api_preserves_crossed_canonical_clocks_without_repairing_them():
     value = State(crossed_clock_snapshot())
     service = create_server(value, "127.0.0.1", 0)
@@ -585,6 +668,38 @@ def test_static_live_gui_and_head_are_available(server):
     assert status == 200 and body == b""
 
 
+def test_static_assets_are_immutable_after_server_start(tmp_path, monkeypatch):
+    source_root = Path("src/banknifty_profiler/gui/static")
+    for name in ("live_page.template", "live.js", "style.css"):
+        (tmp_path / name).write_bytes((source_root / name).read_bytes())
+    monkeypatch.setattr(api_module, "STATIC_ROOT", tmp_path)
+    expected = (tmp_path / "live.js").read_bytes()
+    service = api_module.create_server(State(), "127.0.0.1", 0)
+    thread = threading.Thread(target=service.serve_forever)
+    thread.start()
+    base = f"http://127.0.0.1:{service.server_address[1]}"
+    try:
+        (tmp_path / "live.js").write_bytes(b"MUTATED_UNVERIFIED_BROWSER_CODE")
+        status, _, body = request(base, "/assets/live.js")
+        assert status == 200
+        assert body == expected
+        assert b"MUTATED_UNVERIFIED_BROWSER_CODE" not in body
+    finally:
+        service.shutdown(); thread.join(); service.server_close()
+
+
+def test_static_mutation_between_contract_and_server_start_is_refused(
+    tmp_path, monkeypatch,
+):
+    source_root = Path("src/banknifty_profiler/gui/static")
+    for name in ("live_page.template", "live.js", "style.css"):
+        (tmp_path / name).write_bytes((source_root / name).read_bytes())
+    monkeypatch.setattr(api_module, "STATIC_ROOT", tmp_path)
+    (tmp_path / "live.js").write_bytes(b"MUTATED_BEFORE_SERVER_START")
+    with pytest.raises(ValueError, match="static asset identity mismatch"):
+        api_module.create_server(State(), "127.0.0.1", 0)
+
+
 @pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE"])
 def test_mutating_methods_are_refused(server, method):
     status, _, body = request(server, "/api/status", method)
@@ -648,6 +763,393 @@ def test_repeated_api_reads_never_trigger_analytical_flush():
                 assert request(base, path)[0] == 200
         assert runtime.orchestrator.reads > 0
         assert runtime.orchestrator.flushes == 0
+    finally:
+        service.shutdown(); thread.join(); service.server_close()
+
+
+def test_bounded_api_prefers_sealed_view_and_projects_only_requested_tail():
+    class TailObservedRows(list):
+        def __init__(self, rows):
+            super().__init__(rows)
+            self.iterations = 0
+            self.slices = []
+
+        def __iter__(self):
+            self.iterations += 1
+            raise AssertionError("bounded endpoint iterated the complete dense artifact")
+
+        def __getitem__(self, key):
+            if isinstance(key, slice):
+                self.slices.append(key)
+            return super().__getitem__(key)
+
+    runtime = State()
+    published = dict(runtime.value)
+    dense = TailObservedRows(runtime.value["participation_dense"])
+    assert len(dense) > 1
+    published["participation_dense"] = dense
+
+    class SealedViewOrchestrator(Orchestrator):
+        def __init__(self, latest):
+            super().__init__(latest)
+            self.view_reads = 0
+            self.snapshot_reads = 0
+
+        def sealed_read_view(self, date=None):
+            self.view_reads += 1
+            value = self.outputs.get(date, published) if date else published
+            return MappingProxyType(value)
+
+        def snapshot(self, date=None, *, flush_dirty=True):
+            self.snapshot_reads += 1
+            raise AssertionError("public API requested a full copied snapshot")
+
+    runtime.value = published
+    runtime.orchestrator = SealedViewOrchestrator(published)
+    service = create_server(runtime, "127.0.0.1", 0)
+    thread = threading.Thread(target=service.serve_forever)
+    thread.start()
+    base = f"http://127.0.0.1:{service.server_address[1]}"
+    try:
+        payload = json.loads(request(base, "/api/participation?limit=1")[2])
+        assert payload["count"] == len(dense)
+        assert payload["returned_count"] == 1
+        assert len(payload["rows"]) == 1
+        assert runtime.orchestrator.view_reads == 1
+        assert runtime.orchestrator.snapshot_reads == 0
+        assert dense.iterations == 0
+        assert dense.slices == [slice(-1, None, None)]
+    finally:
+        service.shutdown(); thread.join(); service.server_close()
+
+
+def test_live_api_captures_snapshot_and_availability_from_one_generation():
+    older = snapshot("2026-08-19", availability())
+    newer = snapshot(
+        "2026-08-20", availability(index="STALE_OR_MISSING"),
+    )
+
+    class CompositeOrchestrator(Orchestrator):
+        def __init__(self):
+            super().__init__(newer)
+            self.composite_reads = 0
+
+        def sealed_operational_read_view(self):
+            self.composite_reads += 1
+            return (
+                MappingProxyType(older),
+                MappingProxyType(older["availability"]),
+            )
+
+        def sealed_read_view(self, date=None):
+            raise AssertionError("live API split the composite read generation")
+
+    runtime = State(newer)
+    runtime.orchestrator = CompositeOrchestrator()
+    runtime.availability = lambda: (_ for _ in ()).throw(
+        AssertionError("live API independently read operational availability")
+    )
+    service = create_server(runtime, "127.0.0.1", 0)
+    thread = threading.Thread(target=service.serve_forever)
+    thread.start()
+    base = f"http://127.0.0.1:{service.server_address[1]}"
+    try:
+        payload = json.loads(request(base, "/api/chart")[2])
+        assert payload["session_date"] == "2026-08-19"
+        assert payload["availability"]["index_state"] == "AVAILABLE"
+        assert payload["availability"]["futures_state"] == "AVAILABLE"
+        assert runtime.orchestrator.composite_reads == 1
+    finally:
+        service.shutdown(); thread.join(); service.server_close()
+
+
+def test_chart_uses_sealed_material_resolution_without_dense_rescan():
+    class DenseResolution(list):
+        def __init__(self, rows):
+            super().__init__(rows)
+            self.iterations = 0
+
+        def __iter__(self):
+            self.iterations += 1
+            raise AssertionError("chart iterated the dense resolution ledger")
+
+    runtime = State()
+    published = dict(runtime.value)
+    dense = DenseResolution(runtime.value["resolution"] * 100)
+    published["resolution"] = dense
+    gui = dict(runtime.value["gui_payload"])
+    gui["resolution_mechanisms"] = {
+        "fields": [
+            "episode_id", "timestamp", "availability_timestamp",
+            "resolution_mechanism_native",
+            "resolution_mechanism_compatibility",
+        ],
+        "rows": [[
+            "BDR1-TEST", "2026-08-19T10:00:02+05:30",
+            "2026-08-19T10:00:02+05:30", "FUTURES_LED_CONVERGENCE",
+            "BASIS_CONVERGENCE",
+        ]],
+    }
+    published["gui_payload"] = gui
+
+    class MaterialViewOrchestrator(Orchestrator):
+        def sealed_read_view(self, date=None):
+            return MappingProxyType(published)
+
+    runtime.value = published
+    runtime.orchestrator = MaterialViewOrchestrator(published)
+    service = create_server(runtime, "127.0.0.1", 0)
+    thread = threading.Thread(target=service.serve_forever)
+    thread.start()
+    base = f"http://127.0.0.1:{service.server_address[1]}"
+    try:
+        payload = json.loads(request(base, "/api/chart")[2])
+        assert payload["counts"]["resolution_mechanisms"] == 1
+        assert payload["resolution_mechanisms"]["rows"][0][0] == "BDR1-TEST"
+        assert dense.iterations == 0
+    finally:
+        service.shutdown(); thread.join(); service.server_close()
+
+
+def test_audit_and_readiness_use_runtime_wide_sealed_causality():
+    runtime = State()
+    published = dict(runtime.value)
+    published["public_causality_counters"] = {
+        "valid_basis_pairs": 7,
+        "future_joins": 0,
+        "synchronization_tolerance_violations": 0,
+    }
+
+    class SealedCausalityOrchestrator(Orchestrator):
+        def sealed_operational_generation(self):
+            return (
+                MappingProxyType(published),
+                MappingProxyType(published["availability"]),
+                MappingProxyType({
+                    "valid_basis_pairs": 11,
+                    "future_joins": 2,
+                    "synchronization_tolerance_violations": 3,
+                }),
+            )
+
+        def causality_metrics(self):
+            raise AssertionError("API split the sealed operational generation")
+
+    runtime.value = published
+    runtime.orchestrator = SealedCausalityOrchestrator(published)
+    service = create_server(runtime, "127.0.0.1", 0)
+    thread = threading.Thread(target=service.serve_forever)
+    thread.start()
+    base = f"http://127.0.0.1:{service.server_address[1]}"
+    try:
+        audit = json.loads(request(base, "/api/audit")[2])
+        assert audit["future_joins"] == 2
+        assert audit["synchronization_tolerance_violations"] == 3
+        status, _, body = request(base, "/api/readiness")
+        readiness = json.loads(body)
+        assert status == 503
+        assert readiness["ready"] is False
+        assert "FUTURE_JOIN_DETECTED" in readiness["reasons"]
+        assert "SYNCHRONIZATION_TOLERANCE_VIOLATION" in readiness["reasons"]
+    finally:
+        service.shutdown(); thread.join(); service.server_close()
+
+
+def test_audit_double_collects_one_stable_production_ledger_vector():
+    class GenerationalLedger:
+        def __init__(self, snapshots):
+            self.snapshots = snapshots
+            self.calls = 0
+
+        def audit_snapshot(self):
+            value = self.snapshots[min(self.calls, len(self.snapshots) - 1)]
+            self.calls += 1
+            return value
+
+    def audit_value(generation, count):
+        return {
+            "row_count": count,
+            "duplicate_ids": 0,
+            "timestamp_backdating": 0,
+            "tail": [],
+            "generation": (
+                True, 1, generation, count, generation, generation,
+                hashlib.sha256(str(generation).encode()).hexdigest(),
+            ),
+        }
+
+    first = GenerationalLedger([
+        audit_value(1, 1), audit_value(2, 2),
+        audit_value(2, 2), audit_value(2, 2),
+    ])
+    second = GenerationalLedger([audit_value(10, 1)] * 4)
+    runtime = State()
+    runtime.ingestor.ledgers = {
+        "normalized_raw_events": first,
+        "raw_file_checkpoints": second,
+    }
+    runtime.ingestor._normalized_seen = {"A", "B"}
+    runtime.ingestor._checkpoint_seen = {"C"}
+    service = create_server(runtime, "127.0.0.1", 0)
+    thread = threading.Thread(target=service.serve_forever)
+    thread.start()
+    base = f"http://127.0.0.1:{service.server_address[1]}"
+    try:
+        audit = json.loads(request(base, "/api/audit")[2])
+        assert audit["measured_ledger_rows"] == 3
+        assert audit["duplicate_analytical_ids"] == 0
+        assert first.calls == second.calls == 4
+    finally:
+        service.shutdown(); thread.join(); service.server_close()
+
+
+def test_audit_fails_closed_on_producer_identity_index_mismatch(tmp_path):
+    ledger = AppendOnlyLedger(tmp_path / "normalized.jsonl")
+    ledger.append({"event_id": "A"})
+    ledger.append({"event_id": "A"})
+    runtime = State()
+    runtime.ingestor.ledgers = {"normalized_raw_events": ledger}
+    runtime.ingestor._normalized_seen = {"A"}
+    service = create_server(runtime, "127.0.0.1", 0)
+    thread = threading.Thread(target=service.serve_forever)
+    thread.start()
+    base = f"http://127.0.0.1:{service.server_address[1]}"
+    try:
+        status, _, body = request(base, "/api/audit")
+        assert status == 500
+        assert json.loads(body) == {"error": "INTERNAL_STATE_UNAVAILABLE"}
+    finally:
+        service.shutdown(); thread.join(); service.server_close()
+
+
+def test_audit_limit_and_repeated_concurrent_reads_use_incremental_sealed_cache():
+    class NoDenseIteration(list):
+        def __init__(self, rows):
+            super().__init__(rows)
+            self.iterations = 0
+
+        def __iter__(self):
+            self.iterations += 1
+            raise AssertionError("audit request iterated dense analytical rows")
+
+    class IncrementalAuditLedger:
+        def __init__(self):
+            self.values = [self.row(1), self.row(2)]
+            self.scan_sizes = []
+            self.rows_calls = 0
+
+        @staticmethod
+        def row(ordinal):
+            instant = f"2026-08-19T10:00:0{ordinal}+05:30"
+            return {
+                "event_id": f"QUALITY-{ordinal}",
+                "session_date": "2026-08-19",
+                "effective_timestamp": instant,
+                "publication_timestamp": instant,
+                "status": "REFUSED",
+                "reason": f"REASON-{ordinal}",
+            }
+
+        def scan_from(self, boundary, consume):
+            start = 0 if boundary is None else boundary
+            pending = self.values[start:]
+            self.scan_sizes.append(len(pending))
+            for row in pending:
+                consume(row)
+            return len(self.values)
+
+        def rows(self):
+            self.rows_calls += 1
+            raise AssertionError("audit endpoint loaded the complete ledger")
+
+    runtime = State()
+    published = dict(runtime.value)
+    dense = NoDenseIteration(runtime.value["participation_dense"])
+    published["participation_dense"] = dense
+    published["public_audit_counters"] = {
+        "timestamp_backdating": 0,
+        "duplicate_analytical_ids": 0,
+        "measured_snapshot_rows": 987,
+    }
+
+    class SealedAuditOrchestrator(Orchestrator):
+        def sealed_read_view(self, date=None):
+            return MappingProxyType(published)
+
+        def snapshot(self, date=None, *, flush_dirty=True):
+            raise AssertionError("audit endpoint requested a full snapshot")
+
+    ledger = IncrementalAuditLedger()
+    runtime.value = published
+    runtime.orchestrator = SealedAuditOrchestrator(published)
+    runtime.ingestor.ledgers = {"refusals_data_quality": ledger}
+    service = create_server(runtime, "127.0.0.1", 0)
+    thread = threading.Thread(target=service.serve_forever)
+    thread.start()
+    base = f"http://127.0.0.1:{service.server_address[1]}"
+    try:
+        first = json.loads(request(base, "/api/audit?limit=1")[2])
+        second = json.loads(request(base, "/api/audit?limit=1")[2])
+        assert first["refusal_count"] == second["refusal_count"] == 2
+        assert first["refusals"][0]["event_id"] == "QUALITY-2"
+        assert first["measured_ledger_rows"] == 2
+        assert first["measured_snapshot_rows"] == 987
+
+        ledger.values.append(ledger.row(3))
+        responses = []
+
+        def read_audit():
+            responses.append(
+                json.loads(request(base, "/api/audit?limit=1")[2])
+            )
+
+        readers = [threading.Thread(target=read_audit) for _ in range(6)]
+        for reader in readers:
+            reader.start()
+        for reader in readers:
+            reader.join()
+        assert len(responses) == 6
+        assert all(value["refusal_count"] == 3 for value in responses)
+        assert all(
+            value["refusals"][0]["event_id"] == "QUALITY-3"
+            for value in responses
+        )
+        assert all(value["measured_ledger_rows"] == 3 for value in responses)
+        assert ledger.rows_calls == 0
+        assert ledger.scan_sizes[0:2] == [2, 0]
+        assert sum(ledger.scan_sizes) == 3
+        assert dense.iterations == 0
+    finally:
+        service.shutdown(); thread.join(); service.server_close()
+
+
+def test_audit_fails_closed_on_naive_publication_clock():
+    class InvalidClockLedger:
+        def __init__(self):
+            self.scanned = False
+
+        def scan_from(self, boundary, consume):
+            if not self.scanned:
+                consume({
+                    "event_id": "QUALITY-INVALID-CLOCK",
+                    "effective_timestamp": "2026-08-19T10:00:00+05:30",
+                    "publication_timestamp": "2026-08-19T10:00:01",
+                })
+                self.scanned = True
+            return 1
+
+    runtime = State()
+    runtime.ingestor.ledgers = {
+        "refusals_data_quality": InvalidClockLedger(),
+    }
+    service = create_server(runtime, "127.0.0.1", 0)
+    thread = threading.Thread(target=service.serve_forever)
+    thread.start()
+    base = f"http://127.0.0.1:{service.server_address[1]}"
+    try:
+        status, _, body = request(base, "/api/audit?limit=1")
+        assert status == 500
+        assert json.loads(body) == {"error": "INTERNAL_STATE_UNAVAILABLE"}
     finally:
         service.shutdown(); thread.join(); service.server_close()
 
@@ -720,7 +1222,11 @@ def test_service_templates_keep_backend_local_and_ports_isolated():
     gateway = (root / "r6e1r-readonly-gateway.service").read_text()
     combined = backend + gateway
     assert "--bind 127.0.0.1 --port 18805" in backend
-    assert "--port 8805 --backend http://127.0.0.1:18805" in gateway
+    assert (
+        "--port @R6E1R_GATEWAY_PORT@ --backend http://127.0.0.1:18805"
+        in gateway
+    )
+    assert "/opt/" not in backend + gateway
     assert "8803" not in combined and "8804" not in combined
     assert ".env" not in combined
     assert not any(

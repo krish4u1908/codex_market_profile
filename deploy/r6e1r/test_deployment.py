@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import runpy
 import sqlite3
 import subprocess
@@ -20,6 +21,7 @@ EXPECTED_REPLAY_SESSIONS = (
     "2026-08-11", "2026-08-12", "2026-08-13",
     "2026-08-18", "2026-08-19", "2026-08-20",
 )
+EXPECTED_AUTHORITATIVE_SOURCE_ROOT = "/test-fixtures/authoritative-source"
 REQUIRED_IDENTITY_LEDGERS = (
     "availability_transitions.jsonl",
     "cross_layer_transitions.jsonl",
@@ -70,7 +72,8 @@ def _bubblewrap_prefix() -> list[str]:
         "--ro-bind", "/lib", "/lib", "--ro-bind", "/lib64", "/lib64",
         "--ro-bind", str(ROOT), "/app/deploy/r6e1r", "--dev", "/dev",
         "--proc", "/proc", "--tmpfs", "/tmp", "--dir", "/run",
-        "--chdir", "/app", "/usr/bin/python3", "-I", "-B",
+        "--chdir", "/app", "/usr/bin/python3", "-I", "-S", "-B", "-X",
+        "pycache_prefix=/dev/null",
     ]
 
 
@@ -86,9 +89,9 @@ def _run_in_gateway_systemd_boundary(command: list[str]) -> subprocess.Completed
         "OOMPolicy=stop", "NoNewPrivileges=true", "PrivateTmp=true",
         "PrivateDevices=true", "ProtectHome=true", "ProtectSystem=strict",
         "ReadOnlyPaths=" + str(ROOT.parents[1]),
-        "InaccessiblePaths=-/opt/banknifty-collector/data-prod-v4",
-        "InaccessiblePaths=-/opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow/state",
-        "InaccessiblePaths=-/opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_live_shadow/config",
+        "InaccessiblePaths=-" + str(ROOT / "_masked_collector"),
+        "InaccessiblePaths=-" + str(ROOT / "_masked_state"),
+        "InaccessiblePaths=-" + str(ROOT / "_masked_config"),
         f"InaccessiblePaths=-/run/user/{os.getuid()}/gnupg",
         "ProtectControlGroups=true", "ProtectKernelModules=true",
         "ProtectClock=true", "RestrictSUIDSGID=true",
@@ -108,9 +111,58 @@ def _run_in_gateway_systemd_boundary(command: list[str]) -> subprocess.Completed
     )
 
 
-def test_user_units_are_isolated_and_resource_bounded() -> None:
-    backend = (ROOT / "r6e1r-shadow.service").read_text()
-    gateway = (ROOT / "r6e1r-readonly-gateway.service").read_text()
+def _render_test_units(tmp_path: Path, *, gateway_port: int = 8805) -> tuple[
+    str, str, Path, Path, Path
+]:
+    repository = Path("/srv/r6e1r-test/repository")
+    collector = Path("/srv/r6e1r-test/collector")
+    deployment = Path("/srv/r6e1r-test/deployment")
+    output = tmp_path / "user-units"
+    output.mkdir()
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "render_service_units.py"),
+            "--repository-root", str(repository),
+            "--collector-root", str(collector),
+            "--deploy-root", str(deployment),
+            "--python", sys.executable,
+            "--gateway-port", str(gateway_port),
+            "--output-dir", str(output),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    summary = json.loads(completed.stdout)
+    assert summary["schema"] == "R6E1R_RENDERED_USER_UNITS_V1"
+    assert summary["ok"] is True
+    assert completed.stderr == ""
+    return (
+        (output / "r6e1r-shadow.service").read_text(),
+        (output / "r6e1r-readonly-gateway.service").read_text(),
+        repository,
+        collector,
+        deployment,
+    )
+
+
+def test_user_units_are_isolated_and_resource_bounded(tmp_path: Path) -> None:
+    template_backend = (ROOT / "r6e1r-shadow.service").read_text()
+    template_gateway = (ROOT / "r6e1r-readonly-gateway.service").read_text()
+    token_pattern = re.compile(r"@[A-Z0-9_]+@")
+    assert set(token_pattern.findall(template_backend)) == {
+        "@R6E1R_REPOSITORY_ROOT@", "@R6E1R_COLLECTOR_ROOT@",
+        "@R6E1R_DEPLOY_ROOT@", "@R6E1R_PYTHON@",
+    }
+    assert set(token_pattern.findall(template_gateway)) == {
+        "@R6E1R_REPOSITORY_ROOT@", "@R6E1R_COLLECTOR_ROOT@",
+        "@R6E1R_DEPLOY_ROOT@", "@R6E1R_GATEWAY_PORT@",
+    }
+    assert "/opt/" not in template_backend + template_gateway
+    backend, gateway, repository, collector, deployment = _render_test_units(
+        tmp_path
+    )
     combined = backend + gateway
 
     assert "User=" not in combined and "Group=" not in combined
@@ -118,7 +170,11 @@ def test_user_units_are_isolated_and_resource_bounded() -> None:
     assert "WantedBy=default.target" in gateway
     assert "multi-user.target" not in combined
     assert "/var/lib/" not in combined and "/etc/banknifty" not in combined
-    assert "PYTHONPATH=/opt/banknifty/repositories/banknifty-market-profiler/src" in backend
+    assert "PYTHONPATH=" not in backend
+    assert "PYTHONPYCACHEPREFIX=" not in backend
+    assert f"{sys.executable} -I -S -B -u -X pycache_prefix=/dev/null" in backend
+    assert f"{sys.executable} -I -S -B -X pycache_prefix=/dev/null" in backend
+    assert "-I -S -B -X pycache_prefix=/dev/null" in gateway
     assert "--bind 127.0.0.1 --port 18805" in backend
     assert "--bind 0.0.0.0 --port 8805 --backend http://127.0.0.1:18805" in gateway
     assert "8803" not in combined and "8804" not in combined
@@ -131,12 +187,75 @@ def test_user_units_are_isolated_and_resource_bounded() -> None:
         "ProtectKernelModules=true",
     ):
         assert directive in backend and directive in gateway
+    for variable in (
+        "LD_PRELOAD", "LD_AUDIT", "LD_LIBRARY_PATH", "LD_DEBUG",
+        "LD_DEBUG_OUTPUT", "LD_PROFILE", "PYTHONPATH", "PYTHONHOME",
+        "PYTHONINSPECT", "PYTHONSTARTUP", "PYTHONBREAKPOINT", "ENV",
+        "BASH_ENV", "GCONV_PATH", "GLIBC_TUNABLES", "LOCPATH", "NLSPATH",
+        "TMPDIR", "TMP", "TEMP",
+    ):
+        assert variable in next(
+            line for line in backend.splitlines()
+            if line.startswith("UnsetEnvironment=")
+        )
+        assert variable in next(
+            line for line in gateway.splitlines()
+            if line.startswith("UnsetEnvironment=")
+        )
     assert "network.target" not in combined
+    assert "After=r6e1r-shadow.service" in gateway
+    assert "Requires=r6e1r-shadow.service" not in gateway
     assert "ExecStart=/usr/bin/bwrap" in gateway
     assert "ExecStartPost=/usr/bin/bwrap" in gateway
+    installed_root = str(repository)
+    for unit, relative in (
+        (backend, "scripts/run_r6e_shadow.py"),
+        (backend, "deploy/r6e1r/health_readiness_check.py"),
+        (gateway, "deploy/r6e1r/read_only_gateway.py"),
+        (gateway, "deploy/r6e1r/health_readiness_check.py"),
+    ):
+        digest = hashlib.sha256(
+            (ROOT.parent.parent / relative).read_bytes()
+        ).hexdigest()
+        assert digest in unit
+        assert 'open(\\"/proc/self/fd/3\\",\\"rb\\").read()' in unit
+        assert "hashlib.sha256" in unit
+        assert "exec(compile(" in unit
+    for descriptor, relative in (
+        ("4", "deploy/r6e1r/r6e1r-runtime-config.json.example"),
+        ("5", "deploy/r6e1r/r6e1r-activation.json.example"),
+    ):
+        digest = hashlib.sha256(
+            (ROOT.parent.parent / relative).read_bytes()
+        ).hexdigest()
+        assert digest in backend
+        assert (
+            f'open(\\"/proc/self/fd/{descriptor}\\",\\"rb\\").read()'
+            in backend
+        )
+    assert "ExecStart=/bin/sh -c '" in backend
+    assert f"&& exec {sys.executable}" in backend
+    assert " -c \"import hashlib,sys;" in backend
+    assert "--repository-root " in backend
+    assert "_R6E1R_AUTHENTICATED_CONFIG_PAYLOAD" in backend
+    assert "_R6E1R_AUTHENTICATED_ACTIVATION_PAYLOAD" in backend
+    assert "ExecStartPost=/bin/sh -c 'exec 3<" in backend
+    assert "$" not in next(
+        line for line in backend.splitlines() if line.startswith("ExecStart=")
+    )
     assert "--unshare-all --unshare-user --share-net" in gateway
     assert "--disable-userns --assert-userns-disabled" in gateway
     assert "--clearenv" in gateway and "--require-isolation" in gateway
+    gateway_start = next(
+        line for line in gateway.splitlines() if line.startswith("ExecStart=")
+    )
+    for hidden_path in (
+        str(collector),
+        f"{deployment}/state",
+        f"{deployment}/config",
+    ):
+        assert f"--hidden-path {hidden_path}" in gateway_start
+    assert gateway_start.count("--hidden-path ") == 3
     assert "RestrictNamespaces=~net" in gateway
     assert "InaccessiblePaths=" in gateway
     # These systemd-created namespaces prevent rootless bwrap from mounting its
@@ -147,13 +266,19 @@ def test_user_units_are_isolated_and_resource_bounded() -> None:
         "ProtectHostname=true",
     ):
         assert incompatible in backend and incompatible not in gateway
-    prefix = " ".join(_bubblewrap_prefix())
-    assert f"ExecStart={prefix} /app/deploy/r6e1r/read_only_gateway.py" in gateway
-    assert f"ExecStartPost={prefix} /app/deploy/r6e1r/health_readiness_check.py" in gateway
+    installed_deploy_root = f"{installed_root}/deploy/r6e1r"
+    isolation_prefix = " ".join(
+        installed_deploy_root if value == str(ROOT) else value
+        for value in _bubblewrap_prefix()[:-6]
+    )
+    assert f"ExecStart={isolation_prefix} /bin/sh -c 'exec 3<" in gateway
+    assert f"ExecStartPost={isolation_prefix} /bin/sh -c 'exec 3<" in gateway
+    assert gateway.count("/proc/self/fd/3") == 2
+    assert "/usr/bin/sha256sum" not in combined
     for hidden in (
-        "/opt/banknifty-collector/data-prod-v4",
-        "r6e1r_final_live_shadow/state",
-        "r6e1r_final_live_shadow/config",
+        str(collector),
+        f"{deployment}/state",
+        f"{deployment}/config",
         "%t/gnupg",
     ):
         assert hidden in gateway
@@ -171,6 +296,62 @@ def test_user_units_are_isolated_and_resource_bounded() -> None:
     assert "--health-only" not in gateway
 
 
+def test_unit_renderer_refuses_unsafe_paths_ports_and_symlink_output(
+    tmp_path: Path,
+) -> None:
+    module = runpy.run_path(str(ROOT / "render_service_units.py"))
+    parser = module["parser"]()
+    output = tmp_path / "units"
+    output.mkdir()
+    common = [
+        "--repository-root", "/srv/r6e1r-test/repository",
+        "--collector-root", "/srv/r6e1r-test/collector",
+        "--deploy-root", "/srv/r6e1r-test/deployment",
+        "--python", sys.executable,
+        "--output-dir", str(output),
+    ]
+    unsafe = parser.parse_args([
+        *common, "--repository-root", "/unsafe path/repository",
+    ])
+    with pytest.raises(ValueError):
+        module["_replacements"](unsafe)
+    wrong_port = parser.parse_args([*common, "--gateway-port", "8804"])
+    with pytest.raises(ValueError):
+        module["_replacements"](wrong_port)
+    link = tmp_path / "unit-link"
+    link.symlink_to(output, target_is_directory=True)
+    replacements = module["_replacements"](parser.parse_args(common))
+    with pytest.raises(ValueError):
+        module["render_units"](ROOT, link, replacements)
+
+
+def test_runtime_cache_prefix_cannot_execute_stale_repository_bytecode(
+    tmp_path: Path,
+) -> None:
+    module = tmp_path / "cache_probe.py"
+    module.write_text("VALUE = 'SOURCE_A'\n")
+    subprocess.run(
+        [sys.executable, "-m", "py_compile", str(module)],
+        check=True,
+    )
+    original = module.stat()
+    module.write_text("VALUE = 'SOURCE_B'\n")
+    os.utime(module, ns=(original.st_atime_ns, original.st_mtime_ns))
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(tmp_path)
+    completed = subprocess.run(
+        [
+            sys.executable, "-B", "-X", "pycache_prefix=/dev/null",
+            "-c", "import cache_probe; print(cache_probe.VALUE)",
+        ],
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.stdout.strip() == "SOURCE_B"
+
+
 def test_preload_runbook_requires_verified_atomic_same_filesystem_staging() -> None:
     readme = (ROOT / "README.md").read_text()
     assert 'mktemp -d "$DEPLOY_ROOT/.state.preload.XXXXXX"' in readme
@@ -179,10 +360,14 @@ def test_preload_runbook_requires_verified_atomic_same_filesystem_staging() -> N
     assert '(cd "$STATE_STAGE" && sha256sum -c -)' in readme
     assert '(cd "$VERIFIED_STATE" && sha256sum -c -)' in readme
     assert "validate_preloaded_state.py" in readme
+    isolated_python = '"$R6E1R_PYTHON" -I -S -B -X pycache_prefix=/dev/null'
+    assert f"{isolated_python} deploy/r6e1r/validate_preloaded_state.py" in readme
+    assert f"{isolated_python} deploy/r6e1r/health_readiness_check.py" in readme
     assert "raw_projection_manifest.json" in readme
     assert "equivalence_summary.json" in readme
     assert "--equivalence-summary" in readme
     assert "--raw-projection-manifest" in readme
+    assert '--expected-authoritative-source-root "$R6E1R_COLLECTOR_ROOT"' in readme
     assert "--state-manifest" in readme
     assert "jq -r '.files[]" in readme and "sha256sum -c -" in readme
     assert "find . -type f" not in readme
@@ -190,6 +375,9 @@ def test_preload_runbook_requires_verified_atomic_same_filesystem_staging() -> N
     assert 'test ! -e "$DEPLOY_ROOT/state"' in readme
     assert 'mv -T -- "$STATE_STAGE" "$DEPLOY_ROOT/state"' in readme
     assert 'cp -a -- "$VERIFIED_STATE/." "$DEPLOY_ROOT/state/"' not in readme
+    assert readme.count("render_service_units.py") >= 2
+    assert '--gateway-port "$R6E1R_GATEWAY_PORT"' in readme
+    assert "install -m 0644 deploy/r6e1r/r6e1r-shadow.service" not in readme
 
 
 def test_harness_seals_exact_state_tree_and_verifies_sources_before_finalize(
@@ -596,7 +784,7 @@ def _valid_preload_fixture(
     projection.write_text(json.dumps({
         "schema": "R6E1R_BYTE_EXACT_RAW_RECORD_PROJECTION_V1",
         "classification": CLASSIFICATION,
-        "authoritative_source_root": "/opt/banknifty-collector/data-prod-v4",
+        "authoritative_source_root": EXPECTED_AUTHORITATIVE_SOURCE_ROOT,
         "evaluation_sessions": list(EXPECTED_REPLAY_SESSIONS),
         "causal_source_sessions": [
             "2026-08-10", *EXPECTED_REPLAY_SESSIONS[:3],
@@ -724,7 +912,12 @@ def test_preloaded_state_validator_accepts_exact_reused_projection_evidence(
     module = runpy.run_path(str(ROOT / "validate_preloaded_state.py"))
     summary_sha, projection_sha, source_count, state_seal = module[
         "validate_equivalence_evidence"
-    ](summary_path, projection_path, EXPECTED_REPLAY_SESSIONS)
+    ](
+        summary_path,
+        projection_path,
+        EXPECTED_REPLAY_SESSIONS,
+        projection["authoritative_source_root"],
+    )
     assert summary_sha == hashlib.sha256(summary_path.read_bytes()).hexdigest()
     assert projection_sha == hashlib.sha256(
         projection_path.read_bytes()
@@ -881,7 +1074,10 @@ def _run_validator(
     return _run_existing_validator(fixture)
 
 
-def _run_existing_validator(fixture) -> subprocess.CompletedProcess[str]:
+def _run_existing_validator(
+    fixture, *,
+    expected_authoritative_source_root: str = EXPECTED_AUTHORITATIVE_SOURCE_ROOT,
+) -> subprocess.CompletedProcess[str]:
     (
         state, engine, engine_hash, config, config_hash, summary, projection,
         state_manifest,
@@ -890,7 +1086,8 @@ def _run_existing_validator(fixture) -> subprocess.CompletedProcess[str]:
         (json.dumps(json.loads(config.read_text()), sort_keys=True, separators=(",", ":")) + "\n").encode()
     ).hexdigest()
     command = [
-        sys.executable, "-I", "-B", str(ROOT / "validate_preloaded_state.py"),
+        sys.executable, "-I", "-S", "-B", "-X", "pycache_prefix=/dev/null",
+        str(ROOT / "validate_preloaded_state.py"),
         "--state-root", str(state),
     ]
     for session in EXPECTED_REPLAY_SESSIONS:
@@ -904,6 +1101,8 @@ def _run_existing_validator(fixture) -> subprocess.CompletedProcess[str]:
         "--expected-configuration-hash", configuration_hash,
         "--equivalence-summary", str(summary),
         "--raw-projection-manifest", str(projection),
+        "--expected-authoritative-source-root",
+        expected_authoritative_source_root,
         "--state-manifest", str(state_manifest),
     ))
     return subprocess.run(command, check=False, capture_output=True, text=True)
@@ -954,6 +1153,8 @@ def test_preloaded_state_validator_accepts_exact_finalized_state(tmp_path: Path)
         "--expected-configuration-hash", configuration_hash,
         "--equivalence-summary", str(summary),
         "--raw-projection-manifest", str(projection),
+        "--expected-authoritative-source-root",
+        EXPECTED_AUTHORITATIVE_SOURCE_ROOT,
         "--state-manifest", str(state_manifest),
     ))
     value = module["validate"](module["parser"]().parse_args(arguments))
@@ -987,6 +1188,19 @@ def test_preloaded_state_validator_accepts_exact_finalized_state(tmp_path: Path)
         "basis": 12,
         "valid_basis": 12,
     }
+
+
+@pytest.mark.parametrize(
+    "value",
+    ("", "relative/source", "/", "/test/../source", "//test/source", r"C:\\source"),
+)
+def test_preloaded_state_validator_refuses_invalid_expected_source_root(
+    value: str,
+) -> None:
+    module = runpy.run_path(str(ROOT / "validate_preloaded_state.py"))
+    with pytest.raises(module["ValidationError"]) as refusal:
+        module["require_expected_authoritative_source_root"](value)
+    assert refusal.value.code == "EXPECTED_AUTHORITATIVE_SOURCE_ROOT_INVALID"
 
 
 def test_analytical_output_recount_refuses_count_and_basis_tamper() -> None:
@@ -1237,7 +1451,8 @@ def test_preloaded_state_validator_refuses_unsafe_state(
         _write_bound_state_manifest(state, state_manifest, summary)
 
     command = [
-        sys.executable, "-I", "-B", str(ROOT / "validate_preloaded_state.py"),
+        sys.executable, "-I", "-S", "-B", "-X", "pycache_prefix=/dev/null",
+        str(ROOT / "validate_preloaded_state.py"),
         "--state-root", str(state),
     ]
     for session in EXPECTED_REPLAY_SESSIONS:
@@ -1251,6 +1466,8 @@ def test_preloaded_state_validator_refuses_unsafe_state(
         "--expected-configuration-hash", configuration_hash,
         "--equivalence-summary", str(summary),
         "--raw-projection-manifest", str(projection),
+        "--expected-authoritative-source-root",
+        EXPECTED_AUTHORITATIVE_SOURCE_ROOT,
         "--state-manifest", str(state_manifest),
     ))
     result = subprocess.run(command, check=False, capture_output=True, text=True)
@@ -1293,7 +1510,8 @@ def test_preloaded_state_validator_refuses_wrong_supplied_hashes(
     }
     expected[wrong_argument] = "0" * 64
     command = [
-        sys.executable, "-I", "-B", str(ROOT / "validate_preloaded_state.py"),
+        sys.executable, "-I", "-S", "-B", "-X", "pycache_prefix=/dev/null",
+        str(ROOT / "validate_preloaded_state.py"),
         "--state-root", str(state),
     ]
     for session in EXPECTED_REPLAY_SESSIONS:
@@ -1307,6 +1525,8 @@ def test_preloaded_state_validator_refuses_wrong_supplied_hashes(
         "--expected-configuration-hash", expected["configuration_identity"],
         "--equivalence-summary", str(summary),
         "--raw-projection-manifest", str(projection),
+        "--expected-authoritative-source-root",
+        EXPECTED_AUTHORITATIVE_SOURCE_ROOT,
         "--state-manifest", str(state_manifest),
     ))
     result = subprocess.run(command, check=False, capture_output=True, text=True)
@@ -1326,6 +1546,7 @@ def test_preloaded_state_validator_refuses_wrong_supplied_hashes(
         ("projection_summary", "RAW_PROJECTION_SUMMARY_GATE_FAILED"),
         ("projection_hash", "RAW_PROJECTION_MANIFEST_HASH_MISMATCH"),
         ("projection_policy", "RAW_PROJECTION_POLICY_GATE_FAILED"),
+        ("authoritative_source_root", "RAW_PROJECTION_POLICY_GATE_FAILED"),
         ("august_contract", "AUGUST_17_REJECTION_POLICY_UNVERIFIED"),
         ("source_evidence", "RAW_PROJECTION_SOURCE_MUTATION_EVIDENCE_FAILED"),
     ),
@@ -1374,6 +1595,9 @@ def test_preloaded_state_validator_refuses_unverified_equivalence_evidence(
     elif mutation == "projection_policy":
         projection["causal_source_sessions"].remove("2026-08-17")
         update_projection_hash = True
+    elif mutation == "authoritative_source_root":
+        projection["authoritative_source_root"] = "/test-fixtures/different-source"
+        update_projection_hash = True
     elif mutation == "august_contract":
         projection["contract_selection"]["2026-08-17"][
             "selection_authority"
@@ -1390,7 +1614,8 @@ def test_preloaded_state_validator_refuses_unverified_equivalence_evidence(
     summary_path.write_text(json.dumps(summary))
 
     command = [
-        sys.executable, "-I", "-B", str(ROOT / "validate_preloaded_state.py"),
+        sys.executable, "-I", "-S", "-B", "-X", "pycache_prefix=/dev/null",
+        str(ROOT / "validate_preloaded_state.py"),
         "--state-root", str(state),
     ]
     for session in EXPECTED_REPLAY_SESSIONS:
@@ -1404,6 +1629,8 @@ def test_preloaded_state_validator_refuses_unverified_equivalence_evidence(
         "--expected-configuration-hash", configuration_hash,
         "--equivalence-summary", str(summary_path),
         "--raw-projection-manifest", str(projection_path),
+        "--expected-authoritative-source-root",
+        EXPECTED_AUTHORITATIVE_SOURCE_ROOT,
         "--state-manifest", str(state_manifest),
     ))
     result = subprocess.run(command, check=False, capture_output=True, text=True)
@@ -1425,6 +1652,7 @@ def test_deployment_package_manifest_is_exact_and_hash_verified() -> None:
     package = json.loads(package_path.read_text())
     deployment_only = {
         "deploy/r6e1r/README.md",
+        "deploy/r6e1r/render_service_units.py",
         "deploy/r6e1r/r6e1r-activation.json.example",
         "deploy/r6e1r/r6e1r-readonly-gateway.service",
         "deploy/r6e1r/r6e1r-runtime-config.json.example",
@@ -1447,7 +1675,7 @@ def test_deployment_package_manifest_is_exact_and_hash_verified() -> None:
         (json.dumps(runtime_config, sort_keys=True, separators=(",", ":")) + "\n").encode()
     ).hexdigest()
     assert package["allowlist"] == expected
-    assert package["file_count"] == len(expected) == len(package["files"])
+    assert package["file_count"] == len(expected) == len(package["files"]) == 47
     assert [row["path"] for row in package["files"]] == expected
     for row in package["files"]:
         path = repo / row["path"]
@@ -1467,6 +1695,56 @@ def test_deployment_package_manifest_is_exact_and_hash_verified() -> None:
     assert companion == [
         package_sha, "manifests/r6e1r_deployment_package_manifest.json",
     ]
+
+
+def test_live_runtime_import_and_static_closure_is_fully_allowlisted() -> None:
+    repo = ROOT.parents[1]
+    source_root = (repo / "src").resolve()
+    probe = """
+import json, pathlib, sys
+from banknifty_profiler.shadow import api, contracts, ingest, orchestrator, state
+root = pathlib.Path(sys.argv[1]).resolve()
+paths = set()
+for module in tuple(sys.modules.values()):
+    value = getattr(module, '__file__', None)
+    if not value:
+        continue
+    try:
+        path = pathlib.Path(value).resolve()
+    except OSError:
+        continue
+    if root in path.parents and path.suffix == '.py':
+        paths.add(str(path.relative_to(root.parent)))
+print(json.dumps(sorted(paths)))
+"""
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(source_root)
+    completed = subprocess.run(
+        [
+            sys.executable, "-B", "-X", "pycache_prefix=/dev/null",
+            "-c", probe, str(source_root),
+        ],
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    loaded = set(json.loads(completed.stdout))
+    manifest = json.loads(
+        (repo / "manifests/r6e1r_engine_source_manifest.json").read_text()
+    )
+    allowlist = set(manifest["allowlist"])
+    assert manifest["file_count"] == len(allowlist) == 38
+    assert loaded <= allowlist
+    assert {
+        "scripts/run_r6e_shadow.py",
+        "deploy/r6e1r/health_readiness_check.py",
+        "deploy/r6e1r/read_only_gateway.py",
+        "src/banknifty_profiler/gui/static/live.js",
+        "src/banknifty_profiler/gui/static/live_page.template",
+        "src/banknifty_profiler/gui/static/style.css",
+        "src/banknifty_profiler/lifecycle/engine.py",
+    } <= allowlist
 
 
 class _ProbeHandler(BaseHTTPRequestHandler):
@@ -1555,10 +1833,15 @@ def test_health_helper_rejects_non_benign_503(
 def test_gateway_bubblewrap_self_test_hides_same_uid_runtime() -> None:
     result = _run_in_gateway_systemd_boundary([
         "/app/deploy/r6e1r/read_only_gateway.py",
-        "--backend", "http://127.0.0.1:18805", "--isolation-self-test",
+        "--backend", "http://127.0.0.1:18805",
+        "--isolation-self-test",
+        "--hidden-path", "/collector",
+        "--hidden-path", "/analytical-state",
+        "--hidden-path", "/runtime-config",
     ])
     value = json.loads(result.stdout)
     assert value["collector_state_config_hidden"] is True
+    assert value["hidden_path_count"] == 3
     assert value["user_runtime_hidden"] is True
     assert value["process_namespace_private"] is True
     assert value["visible_pid_count"] <= 2

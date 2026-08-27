@@ -2,18 +2,20 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **FOCUSED V12 VERIFIED; FINAL SIX-SESSION EVIDENCE PENDING**
+Status: **CURRENT COMMIT FOCUSED/FULL-SIX HOSTINGER EVIDENCE PENDING**
 
 Incremental A and clean chronological B must consume the same selected raw bytes from independent state roots. Comparison is an exact canonical multiset/identity comparison; floating tolerance, count-only equivalence, and inherited R6C2R output are insufficient.
 
-## Accepted focused evidence
+## Historical focused evidence
 
-The accepted August 19 focused v12 run passed all 21 component comparisons and all eight append-only ledger comparisons. It reported zero A-only rows, B-only rows, field mismatches, unexplained remainders, identity/content differences, and schedule-dependent semantic differences across all nine schedules. This establishes the focused callback/comparator path; it does not populate the six-session final-result column below.
+August 19 focused v12 passed its historical source identity. It predates the
+current repair and therefore establishes diagnostic comparator provenance only;
+it does not populate any current-commit or six-session result below.
 
 - Component matrix SHA-256: `7f66920bf67df12767b2b93e5115cd357bc6f12df37c35e799a62ae6b0e8c742`
 - Ledger matrix SHA-256: `8d2c8706637a15ba12d230307e09ec1138ab134f4dc02ee624f25bc82fa22da6`
 - Equivalence summary SHA-256: `19b6c15f426b925fa6ec018d65477f4364242d65cfaaa5425423098d3861de15`
-- Evidence root: `/opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_evidence/focused_nine_final_v12`
+- Evidence root: `<HOST_HISTORICAL_EVIDENCE_ROOT>` (not published)
 
 The historical-availability reference comparator added at pushed commit `89f135064417ba537dc302027442a110477b5d03` passed 29/29 targeted harness tests. A separate check over preserved v3 material matched incremental A and batch B 24/24 rows each against Reference C with zero remainder. Final Reference-C status remains pending the fresh six-session run.
 

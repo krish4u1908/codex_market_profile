@@ -1,19 +1,25 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import hashlib
 import json
 import os
 from pathlib import Path
+import sqlite3
 from zoneinfo import ZoneInfo
 
 import pytest
 
+import banknifty_profiler.shadow.ledger as ledger_module
 from banknifty_profiler.runtime.timestamps import parse_timestamp
 from banknifty_profiler.shadow.contracts import validate_shadow_contract
 from banknifty_profiler.shadow.contracts import engine_hash, engine_source_inventory
+from banknifty_profiler.shadow.api import _AuditReadCache
 from banknifty_profiler.shadow.ingest import IncrementalJSONLIngestor
+from banknifty_profiler.shadow.ledger import AppendOnlyLedger
 from banknifty_profiler.shadow.observation import TypedObservation
 from banknifty_profiler.shadow.orchestrator import LiveAnalyticalOrchestrator
+from banknifty_profiler.shadow.state import ShadowState
 from banknifty_profiler.shadow.symbols import (
     CANONICAL_INDEX_SYMBOL,
     InstrumentClass,
@@ -52,6 +58,27 @@ def _contract(tmp_path):
     return data, contract
 
 
+def _direct_contract(tmp_path):
+    """Build an unsealed unit contract for durable-state corruption tests."""
+    data = tmp_path / "collector"
+    (data / "raw/2099-01-01").mkdir(parents=True)
+    (data / "oi/2099-01-01").mkdir(parents=True)
+    return data, {
+        "data_root": data,
+        "state_root": tmp_path / "state",
+        "raw_run_id": "R6E1R-DIRECT-TEST",
+        "engine_hash": "ENGINE",
+        "configuration_hash": "CONFIG",
+        "config": {
+            "max_read_bytes_per_file_per_poll": 1_048_576,
+            "max_buffer_bytes_per_file": 1_048_576,
+            "selected_futures_by_session": {
+                "2099-01-01": "NSE:BANKNIFTY26AUGFUT"
+            },
+        },
+    }
+
+
 def _market(receipt: str, symbol: str, price: float, volume: int) -> str:
     return json.dumps({
         "received_at": receipt,
@@ -65,6 +92,317 @@ def _market(receipt: str, symbol: str, price: float, volume: int) -> str:
             "access_token": "must-not-project",
         },
     })
+
+
+def _seed_checkpoint_authority(ingestor, data: Path, source: Path) -> None:
+    """Give synthetic ledger-only tests the authority production persists first."""
+    source.parent.mkdir(parents=True, exist_ok=True)
+    if not source.is_file() or source.stat().st_size == 0:
+        source.write_bytes(b"\n")
+    stat = source.stat()
+    payload = source.read_bytes()
+    relative = str(source.relative_to(data))
+    with ingestor.db:
+        ingestor.db.execute(
+            "insert into file_checkpoint("
+            "source_file,offset,row_number,identity,size_at_commit,updated_at,"
+            "frontier,prefix_fingerprint,mtime_ns_at_commit) "
+            "values (?,?,?,?,?,?,?,?,?)",
+            (
+                relative,
+                len(payload),
+                payload.count(b"\n"),
+                f"{stat.st_dev}:{stat.st_ino}",
+                len(payload),
+                _timestamp(-0.5),
+                None,
+                hashlib.sha256(payload).hexdigest(),
+                stat.st_mtime_ns,
+            ),
+        )
+
+
+@pytest.mark.parametrize("database_mode", ("missing", "empty"))
+def test_nonempty_checkpoint_mirror_cannot_create_sqlite_authority(
+    tmp_path, database_mode,
+):
+    data, runtime = _direct_contract(tmp_path)
+    receipt = _timestamp(-0.1)
+    source = data / "raw/2099-01-01/events_09.jsonl"
+    source.write_text(
+        _market(receipt, CANONICAL_INDEX_SYMBOL, 57_100, 100) + "\n"
+    )
+    source_stat = source.stat()
+    relative = str(source.relative_to(data))
+    state = runtime["state_root"]
+    state.mkdir()
+    (state / "checkpoints.json").write_text(json.dumps({
+        relative: {
+            "offset": source_stat.st_size,
+            "row": 1,
+            "identity": f"{source_stat.st_dev}:{source_stat.st_ino}",
+            "size_at_commit": source_stat.st_size,
+            "updated_at": receipt,
+            "prefix_fingerprint": "",
+            "mtime_ns_at_commit": source_stat.st_mtime_ns,
+        },
+    }))
+    if database_mode == "empty":
+        sqlite3.connect(state / "dedup.sqlite3").close()
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "prior ingestion evidence lacks durable SQLite authority; "
+            "clean rebuild required"
+        ),
+    ):
+        IncrementalJSONLIngestor(runtime)
+
+    assert not (state / "ledgers/raw_file_checkpoints.jsonl").exists()
+    assert not (state / "ledgers/normalized_raw_events.jsonl").exists()
+
+
+@pytest.mark.parametrize("mirror_mode", ("absent", "empty"))
+@pytest.mark.parametrize("database_mode", ("missing", "empty"))
+def test_durable_checkpoint_ledger_requires_sqlite_authority_without_mirror(
+    tmp_path, mirror_mode, database_mode,
+):
+    data, runtime = _direct_contract(tmp_path)
+    receipt = _timestamp(-0.1)
+    source = data / "raw/2099-01-01/events_09.jsonl"
+    source.write_text(
+        _market(receipt, CANONICAL_INDEX_SYMBOL, 57_100, 100) + "\n"
+    )
+
+    bootstrap = IncrementalJSONLIngestor(runtime)
+    assert len(bootstrap.poll(source_paths=[source])) == 1
+    bootstrap.close()
+
+    state = runtime["state_root"]
+    checkpoint_ledger = state / "ledgers/raw_file_checkpoints.jsonl"
+    normalized_ledger = state / "ledgers/normalized_raw_events.jsonl"
+    checkpoint_before = checkpoint_ledger.read_bytes()
+    normalized_before = normalized_ledger.read_bytes()
+    (state / "dedup.sqlite3").unlink()
+    if database_mode == "empty":
+        sqlite3.connect(state / "dedup.sqlite3").close()
+    (state / "checkpoints.json").unlink()
+    if mirror_mode == "empty":
+        (state / "checkpoints.json").write_text("{}\n")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "prior ingestion evidence lacks durable SQLite authority; "
+            "clean rebuild required"
+        ),
+    ):
+        IncrementalJSONLIngestor(runtime)
+
+    assert checkpoint_ledger.read_bytes() == checkpoint_before
+    assert normalized_ledger.read_bytes() == normalized_before
+
+
+def test_clean_new_state_builds_sqlite_authority_from_raw_bytes(tmp_path):
+    data, runtime = _direct_contract(tmp_path)
+    receipt = _timestamp(-0.1)
+    source = data / "raw/2099-01-01/events_09.jsonl"
+    source.write_text(
+        _market(receipt, CANONICAL_INDEX_SYMBOL, 57_100, 100) + "\n"
+    )
+
+    ingestor = IncrementalJSONLIngestor(runtime)
+    rows = ingestor.poll()
+
+    assert len(rows) == 1
+    assert rows[0].instrument_class == InstrumentClass.INDEX.value
+    assert len(ingestor.ledgers["normalized_raw_events"].rows()) == 1
+    assert len(ingestor.ledgers["raw_file_checkpoints"].rows()) == 1
+    assert ingestor.checkpoint_health()["valid"] is True
+    ingestor.close()
+
+
+def test_normalized_ledger_cannot_hide_deleted_sqlite_checkpoint_authority(
+    tmp_path,
+):
+    data, runtime = _direct_contract(tmp_path)
+    source = data / "raw/2099-01-01/events_09.jsonl"
+    source.write_text(
+        _market(
+            _timestamp(-0.1), CANONICAL_INDEX_SYMBOL, 57_100, 100,
+        ) + "\n"
+    )
+    bootstrap = IncrementalJSONLIngestor(runtime)
+    assert len(bootstrap.poll(source_paths=[source])) == 1
+    bootstrap.close()
+
+    state = runtime["state_root"]
+    normalized = state / "ledgers/normalized_raw_events.jsonl"
+    normalized_before = normalized.read_bytes()
+    with sqlite3.connect(state / "dedup.sqlite3") as database:
+        database.execute("delete from file_checkpoint")
+    (state / "checkpoints.json").unlink()
+    (state / "ledgers/raw_file_checkpoints.jsonl").unlink()
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "prior ingestion evidence lacks durable SQLite authority; "
+            "clean rebuild required"
+        ),
+    ):
+        IncrementalJSONLIngestor(runtime)
+
+    assert normalized.read_bytes() == normalized_before
+
+
+def test_trusted_sources_cannot_hide_partial_sqlite_checkpoint_rollback(
+    tmp_path,
+):
+    data, runtime = _direct_contract(tmp_path)
+    first = data / "raw/2099-01-01/events_09.jsonl"
+    second = data / "raw/2099-01-01/events_10.jsonl"
+    first.write_text(
+        _market(
+            _timestamp(-0.2), CANONICAL_INDEX_SYMBOL, 57_100, 100,
+        ) + "\n"
+    )
+    second.write_text(
+        _market(
+            _timestamp(-0.1), CANONICAL_INDEX_SYMBOL, 57_200, 200,
+        ) + "\n"
+    )
+    bootstrap = IncrementalJSONLIngestor(runtime)
+    assert len(bootstrap.poll(source_paths=[first, second])) == 2
+    bootstrap.close()
+
+    state = runtime["state_root"]
+    mirror_before = (state / "checkpoints.json").read_bytes()
+    checkpoint_ledger = state / "ledgers/raw_file_checkpoints.jsonl"
+    checkpoint_before = checkpoint_ledger.read_bytes()
+    normalized_ledger = state / "ledgers/normalized_raw_events.jsonl"
+    normalized_before = normalized_ledger.read_bytes()
+    first_relative = str(first.relative_to(data))
+    with sqlite3.connect(state / "dedup.sqlite3") as database:
+        database.execute(
+            "delete from file_checkpoint where source_file=?",
+            (first_relative,),
+        )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "prior ingestion evidence lacks durable SQLite authority; "
+            "clean rebuild required"
+        ),
+    ):
+        IncrementalJSONLIngestor(runtime)
+
+    assert (state / "checkpoints.json").read_bytes() == mirror_before
+    assert checkpoint_ledger.read_bytes() == checkpoint_before
+    assert normalized_ledger.read_bytes() == normalized_before
+
+
+def test_trusted_rows_cannot_hide_same_source_checkpoint_rollback(tmp_path):
+    data, runtime = _direct_contract(tmp_path)
+    source = data / "raw/2099-01-01/events_09.jsonl"
+    first_line = _market(
+        _timestamp(-0.2), CANONICAL_INDEX_SYMBOL, 57_100, 100,
+    ) + "\n"
+    second_line = _market(
+        _timestamp(-0.1), CANONICAL_INDEX_SYMBOL, 57_200, 200,
+    ) + "\n"
+    source.write_text(first_line)
+    ingestor = IncrementalJSONLIngestor(runtime)
+    assert len(ingestor.poll(source_paths=[source])) == 1
+    relative = str(source.relative_to(data))
+    first_checkpoint = ingestor.db.execute(
+        "select offset,row_number,identity,size_at_commit,updated_at,frontier,"
+        "prefix_fingerprint,mtime_ns_at_commit from file_checkpoint "
+        "where source_file=?",
+        (relative,),
+    ).fetchone()
+    assert first_checkpoint is not None
+    with source.open("a") as handle:
+        handle.write(second_line)
+    assert len(ingestor.poll(source_paths=[source])) == 1
+    ingestor.close()
+
+    state = runtime["state_root"]
+    mirror_before = (state / "checkpoints.json").read_bytes()
+    with sqlite3.connect(state / "dedup.sqlite3") as database:
+        database.execute(
+            "update file_checkpoint set offset=?,row_number=?,identity=?,"
+            "size_at_commit=?,updated_at=?,frontier=?,prefix_fingerprint=?,"
+            "mtime_ns_at_commit=? where source_file=?",
+            (*first_checkpoint, relative),
+        )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "prior ingestion evidence lacks durable SQLite authority; "
+            "clean rebuild required"
+        ),
+    ):
+        IncrementalJSONLIngestor(runtime)
+
+    assert (state / "checkpoints.json").read_bytes() == mirror_before
+
+
+def test_sqlite_authority_ignores_and_rewrites_forged_extra_mirror_row(
+    tmp_path,
+):
+    data, runtime = _direct_contract(tmp_path)
+    first_receipt = _timestamp(-0.2)
+    first_source = data / "raw/2099-01-01/events_09.jsonl"
+    first_source.write_text(
+        _market(first_receipt, CANONICAL_INDEX_SYMBOL, 57_100, 100) + "\n"
+    )
+    bootstrap = IncrementalJSONLIngestor(runtime)
+    assert len(bootstrap.poll(source_paths=[first_source])) == 1
+    bootstrap.close()
+
+    state = runtime["state_root"]
+    authoritative = json.loads((state / "checkpoints.json").read_text())
+    second_receipt = _timestamp(-0.1)
+    second_source = data / "raw/2099-01-01/events_10.jsonl"
+    second_source.write_text(
+        _market(second_receipt, CANONICAL_INDEX_SYMBOL, 57_200, 200) + "\n"
+    )
+    second_stat = second_source.stat()
+    second_relative = str(second_source.relative_to(data))
+    forged_mirror = dict(authoritative)
+    forged_mirror[second_relative] = {
+        "offset": second_stat.st_size,
+        "row": 1,
+        "identity": f"{second_stat.st_dev}:{second_stat.st_ino}",
+        "size_at_commit": second_stat.st_size,
+        "updated_at": second_receipt,
+        "prefix_fingerprint": hashlib.sha256(
+            second_source.read_bytes()
+        ).hexdigest(),
+        "mtime_ns_at_commit": second_stat.st_mtime_ns,
+    }
+    (state / "checkpoints.json").write_text(json.dumps(forged_mirror))
+
+    recovered = IncrementalJSONLIngestor(runtime)
+
+    assert recovered.checkpoints == authoritative
+    assert json.loads(recovered.checkpoint_path.read_text()) == authoritative
+    rows = recovered.poll(source_paths=[second_source])
+    assert len(rows) == 1
+    assert rows[0].source_file == second_relative
+    assert rows[0].instrument_class == InstrumentClass.INDEX.value
+    assert recovered.db.execute(
+        "select count(*) from file_checkpoint"
+    ).fetchone()[0] == 2
+    assert set(json.loads(recovered.checkpoint_path.read_text())) == {
+        *authoritative,
+        second_relative,
+    }
+    recovered.close()
 
 
 def test_registry_requires_exact_index_and_refuses_unsafe_suffix():
@@ -81,6 +419,454 @@ def test_registry_requires_exact_index_and_refuses_unsafe_suffix():
     assert classify_symbol(
         "NSE:BANKNIFTY26AUG57100CE", strike=57_200, option_type="CE", expiry="2026-08-25"
     ).instrument_class is InstrumentClass.UNKNOWN_SYMBOL
+
+
+@pytest.mark.parametrize(
+    "ledger_name",
+    (
+        "normalized_raw_events",
+        "raw_file_checkpoints",
+        "refusals_data_quality",
+    ),
+)
+def test_ingestion_startup_refuses_schema_empty_unique_event(
+    tmp_path, ledger_name,
+):
+    _data, runtime = _direct_contract(tmp_path)
+    ledger = AppendOnlyLedger(
+        runtime["state_root"] / "ledgers" / f"{ledger_name}.jsonl"
+    )
+    ledger.append({"event_id": "MALFORMED-BUT-UNIQUE"})
+
+    with pytest.raises(ValueError, match=f"{ledger_name} ledger row 1"):
+        IncrementalJSONLIngestor(runtime)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    (
+        ("index_from_oi", "invalid Index identity"),
+        ("wrong_index_symbol", "invalid Index identity"),
+        ("futures_from_oi", "invalid Futures identity"),
+        ("option_shape", "invalid option identity"),
+        ("filtered_candidate", "invalid status"),
+    ),
+)
+def test_normalized_startup_refuses_class_inconsistent_identity(
+    tmp_path, mutation, message,
+):
+    data, runtime = _direct_contract(tmp_path)
+    ingestor = IncrementalJSONLIngestor(runtime)
+    receipt = _timestamp(-1)
+    row = ingestor._normalize_record(
+        data / "raw/2099-01-01/events_09.jsonl",
+        json.loads(_market(
+            receipt, CANONICAL_INDEX_SYMBOL, 57_100, 100,
+        )),
+        rel="raw/2099-01-01/events_09.jsonl",
+        row_number=1,
+        byte_offset=0,
+        raw_record_id=f"RAW-{mutation}",
+    )[0].to_dict()
+
+    if mutation == "index_from_oi":
+        row["source_stream"] = "oi"
+        row["source_file"] = "oi/2099-01-01/oi_09.jsonl"
+    elif mutation == "wrong_index_symbol":
+        row["canonical_symbol"] = "NSE:BANKNIFTY-INDEX"
+        row["source_symbol"] = "NSE:BANKNIFTY-INDEX"
+    elif mutation == "futures_from_oi":
+        row["instrument_class"] = "FUTURES"
+        row["canonical_symbol"] = "NSE:BANKNIFTY26AUGFUT"
+        row["source_symbol"] = "NSE:BANKNIFTY26AUGFUT"
+        row["source_stream"] = "oi"
+        row["source_file"] = "oi/2099-01-01/oi_09.jsonl"
+    elif mutation == "option_shape":
+        row["instrument_class"] = "CE"
+        row["canonical_symbol"] = "NSE:BANKNIFTY26AUG57100CE"
+        row["source_symbol"] = "NSE:BANKNIFTY26AUG57100CE"
+        row["source_stream"] = "oi"
+        row["source_file"] = "oi/2099-01-01/oi_09.jsonl"
+        row["option_type"] = None
+        row["strike"] = None
+        row["expiry"] = None
+        row["expiry_date"] = None
+    else:
+        row["instrument_class"] = "UNKNOWN_SYMBOL"
+        row["canonical_symbol"] = None
+        row["source_symbol"] = "NSE:BANKNIFTY26AUGFUT"
+        row["status"] = "FILTERED"
+        row["classification_reason"] = "FUTURES_SELECTION_PENDING"
+    row["source_receipt_identifiers"]["file"] = row["source_file"]
+    row["source_receipt_identifiers"]["source_stream"] = row[
+        "source_stream"
+    ]
+    ingestor.ledgers["normalized_raw_events"].append(row)
+    ingestor.close()
+
+    with pytest.raises(ValueError, match=message):
+        IncrementalJSONLIngestor(runtime)
+
+
+@pytest.mark.parametrize("provenance", (None, "UNKNOWN"))
+def test_refusal_startup_requires_exact_timestamp_provenance(
+    tmp_path, provenance,
+):
+    _data, runtime = _direct_contract(tmp_path)
+    ingestor = IncrementalJSONLIngestor(runtime)
+    ingestor._quality(
+        "MALFORMED_JSONL",
+        "raw/2099-01-01/events_09.jsonl",
+        1,
+        0,
+        f"RAW-PROVENANCE-{provenance}",
+        detail="bad payload",
+    )
+    row = dict(ingestor._quality_pending[0])
+    if provenance is None:
+        row.pop("effective_timestamp_provenance")
+    else:
+        row["effective_timestamp_provenance"] = provenance
+    ingestor.ledgers["refusals_data_quality"].append(row)
+    ingestor._quality_pending = []
+    ingestor._quality_pending_ids = set()
+    ingestor._quality_pending_content = {}
+    ingestor.close()
+
+    with pytest.raises(
+        ValueError, match="invalid effective_timestamp_provenance"
+    ):
+        IncrementalJSONLIngestor(runtime)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (("file", None), ("byte_offset", True), ("source_row", -1)),
+)
+def test_ingestion_refusal_startup_requires_source_coordinates(
+    tmp_path, field, value,
+):
+    _data, runtime = _direct_contract(tmp_path)
+    ingestor = IncrementalJSONLIngestor(runtime)
+    ingestor._quality(
+        "MALFORMED_JSONL",
+        "raw/2099-01-01/events_09.jsonl",
+        1,
+        0,
+        f"RAW-COORDINATES-{field}",
+        detail="bad payload",
+    )
+    row = dict(ingestor._quality_pending[0])
+    if value is None:
+        row["source_receipt_identifiers"].pop(field)
+    else:
+        row["source_receipt_identifiers"][field] = value
+    ingestor.ledgers["refusals_data_quality"].append(row)
+    ingestor._quality_pending = []
+    ingestor._quality_pending_ids = set()
+    ingestor._quality_pending_content = {}
+    ingestor.close()
+
+    with pytest.raises(ValueError, match=f"identifiers.{field}"):
+        IncrementalJSONLIngestor(runtime)
+
+
+@pytest.mark.parametrize(
+    ("corruption", "message"),
+    (
+        ("sqlite_key", "mismatched payload identity"),
+        ("payload", "payload digest mismatch"),
+    ),
+)
+def test_observation_outbox_startup_authenticates_key_and_payload(
+    tmp_path, corruption, message,
+):
+    data, runtime = _direct_contract(tmp_path)
+    ingestor = IncrementalJSONLIngestor(runtime)
+    receipt = _timestamp(-1)
+    observation = ingestor._normalize_record(
+        data / "raw/2099-01-01/events_09.jsonl",
+        json.loads(_market(
+            receipt, CANONICAL_INDEX_SYMBOL, 57_100, 100,
+        )),
+        rel="raw/2099-01-01/events_09.jsonl",
+        row_number=1,
+        byte_offset=0,
+        raw_record_id="RAW-OUTBOX-AUTHORITY",
+    )[0]
+    row = observation.to_dict()
+    payload = json.dumps(row, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(payload.encode()).hexdigest()
+    sqlite_key = (
+        "OBS-MISMATCHED-SQLITE-KEY"
+        if corruption == "sqlite_key" else observation.observation_id
+    )
+    ingestor.db.execute(
+        "insert into observation_outbox(id,payload,content_sha256) "
+        "values (?,?,?)",
+        (sqlite_key, payload, digest),
+    )
+    if corruption == "payload":
+        row["price"] = 1.0
+        ingestor.db.execute(
+            "update observation_outbox set payload=? where id=?",
+            (
+                json.dumps(row, sort_keys=True, separators=(",", ":")),
+                sqlite_key,
+            ),
+        )
+    ingestor.db.commit()
+    ingestor.close()
+
+    with pytest.raises(ValueError, match=message):
+        IncrementalJSONLIngestor(runtime)
+
+
+@pytest.mark.parametrize(
+    ("table", "schema", "values", "message"),
+    (
+        (
+            "observation_outbox",
+            "id text primary key,payload text not null",
+            ("OBS-LEGACY", "{}"),
+            "legacy observation_outbox.*clean rebuild required",
+        ),
+        (
+            "futures_candidate_outbox",
+            (
+                "id text primary key,session_date text not null,"
+                "receipt_timestamp text,payload text not null"
+            ),
+            ("OBS-LEGACY", "2099-01-01", None, "{}"),
+            "legacy futures_candidate_outbox.*clean rebuild required",
+        ),
+    ),
+)
+def test_nonempty_legacy_outbox_requires_clean_rebuild(
+    tmp_path, table, schema, values, message,
+):
+    _data, runtime = _direct_contract(tmp_path)
+    runtime["state_root"].mkdir(parents=True, exist_ok=True)
+    database = sqlite3.connect(runtime["state_root"] / "dedup.sqlite3")
+    database.execute(f"create table {table}({schema})")
+    placeholders = ",".join("?" for _value in values)
+    database.execute(
+        f"insert into {table} values ({placeholders})", values
+    )
+    database.commit()
+    database.close()
+
+    with pytest.raises(ValueError, match=message):
+        IncrementalJSONLIngestor(runtime)
+
+
+@pytest.mark.parametrize(
+    ("column", "value", "message"),
+    (
+        ("id", "OBS-MISMATCHED-CANDIDATE", "mismatched payload identity"),
+        ("session_date", "2099-01-02", "mismatched session_date column"),
+        (
+            "receipt_timestamp",
+            "2099-01-01T09:15:00+05:30",
+            "mismatched receipt_timestamp column",
+        ),
+    ),
+)
+def test_futures_candidate_outbox_startup_authenticates_columns(
+    tmp_path, column, value, message,
+):
+    data, runtime = _direct_contract(tmp_path)
+    runtime["config"]["selected_futures_by_session"] = {}
+    ingestor = IncrementalJSONLIngestor(runtime)
+    receipt = _timestamp(-1)
+    candidate = ingestor._normalize_record(
+        data / "raw/2099-01-01/events_09.jsonl",
+        json.loads(_market(
+            receipt, "NSE:BANKNIFTY26AUGFUT", 57_120, 100,
+        )),
+        rel="raw/2099-01-01/events_09.jsonl",
+        row_number=1,
+        byte_offset=0,
+        raw_record_id="RAW-CANDIDATE-AUTHORITY",
+    )[0]
+    assert candidate.classification_reason == "FUTURES_SELECTION_PENDING"
+    payload = json.dumps(
+        candidate.to_dict(), sort_keys=True, separators=(",", ":")
+    )
+    values = {
+        "id": candidate.observation_id,
+        "session_date": candidate.session_date,
+        "receipt_timestamp": candidate.receipt_timestamp,
+    }
+    values[column] = value
+    ingestor.db.execute(
+        "insert into futures_candidate_outbox("
+        "id,session_date,receipt_timestamp,payload,content_sha256) "
+        "values (?,?,?,?,?)",
+        (
+            values["id"], values["session_date"],
+            values["receipt_timestamp"], payload,
+            hashlib.sha256(payload.encode()).hexdigest(),
+        ),
+    )
+    ingestor.db.commit()
+    ingestor.close()
+
+    with pytest.raises(ValueError, match=message):
+        IncrementalJSONLIngestor(runtime)
+
+
+@pytest.mark.parametrize("changed", ("price", "receipt"))
+def test_normalized_same_id_changed_content_is_not_hidden_by_seen_set(
+    tmp_path, changed,
+):
+    data, runtime = _direct_contract(tmp_path)
+    ingestor = IncrementalJSONLIngestor(runtime)
+    receipt = _timestamp(-1)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    canonical = ingestor._normalize_record(
+        path,
+        json.loads(_market(receipt, CANONICAL_INDEX_SYMBOL, 57_100, 100)),
+        rel="raw/2099-01-01/events_09.jsonl",
+        row_number=1,
+        byte_offset=0,
+        raw_record_id="RAW-CONTENT-AUTHORITY",
+    )[0]
+    _seed_checkpoint_authority(ingestor, data, path)
+    malicious = canonical.to_dict()
+    if changed == "price":
+        malicious["price"] = 1.0
+    elif changed == "receipt":
+        malicious["receipt_timestamp"] = _timestamp(-2)
+        malicious["effective_timestamp"] = malicious["receipt_timestamp"]
+    ingestor.ledgers["normalized_raw_events"].append(malicious)
+    ingestor.close()
+
+    restarted = IncrementalJSONLIngestor(runtime)
+    with pytest.raises(ValueError, match="different immutable content"):
+        restarted._ledger_observations([canonical])
+    assert restarted.ledgers["normalized_raw_events"].rows() == [malicious]
+    restarted.close()
+
+
+def test_normalized_startup_recomputes_and_refuses_tampered_order_flag(
+    tmp_path,
+):
+    data, runtime = _direct_contract(tmp_path)
+    ingestor = IncrementalJSONLIngestor(runtime)
+    receipt = _timestamp(-1)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    canonical = ingestor._normalize_record(
+        path,
+        json.loads(_market(receipt, CANONICAL_INDEX_SYMBOL, 57_100, 100)),
+        rel="raw/2099-01-01/events_09.jsonl",
+        row_number=1,
+        byte_offset=0,
+        raw_record_id="RAW-ORDER-AUTHORITY",
+    )[0]
+    _seed_checkpoint_authority(ingestor, data, path)
+    tampered = canonical.to_dict()
+    tampered["out_of_order"] = True
+    ingestor.ledgers["normalized_raw_events"].append(tampered)
+    ingestor.close()
+
+    with pytest.raises(ValueError, match="invalid derived out_of_order"):
+        IncrementalJSONLIngestor(runtime)
+
+
+def test_normalized_same_evidence_allows_new_transport_raw_run_id(tmp_path):
+    data, runtime = _direct_contract(tmp_path)
+    ingestor = IncrementalJSONLIngestor(runtime)
+    receipt = _timestamp(-1)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    canonical = ingestor._normalize_record(
+        path,
+        json.loads(_market(receipt, CANONICAL_INDEX_SYMBOL, 57_100, 100)),
+        rel="raw/2099-01-01/events_09.jsonl",
+        row_number=1,
+        byte_offset=0,
+        raw_record_id="RAW-RUN-TRANSPORT",
+    )[0]
+    _seed_checkpoint_authority(ingestor, data, path)
+    ingestor.ledgers["normalized_raw_events"].append(canonical.to_dict())
+    ingestor.close()
+
+    restarted = IncrementalJSONLIngestor(runtime)
+    replay = TypedObservation(**{
+        **canonical.to_dict(), "raw_run_id": "DIFFERENT-TRANSPORT-RUN",
+    })
+    restarted._ledger_observations([replay])
+    assert restarted.ledgers["normalized_raw_events"].rows() == [
+        canonical.to_dict()
+    ]
+    restarted.close()
+
+
+def test_sqlite_checkpoint_candidate_authenticates_same_id_ledger_row(tmp_path):
+    _data, runtime = _direct_contract(tmp_path)
+    ingestor = IncrementalJSONLIngestor(runtime)
+    rel = "raw/2099-01-01/events_09.jsonl"
+    checkpoint = {
+        "offset": 128,
+        "row": 2,
+        "identity": "1:2",
+        "size_at_commit": 128,
+        "updated_at": _timestamp(-1),
+        "prefix_fingerprint": "a" * 64,
+        "mtime_ns_at_commit": 123,
+    }
+    expected = ingestor._checkpoint_ledger_row(rel, checkpoint)
+    malicious = json.loads(json.dumps(expected))
+    # Preserve the source/offset authority prerequisite so this specifically
+    # exercises immutable-content authentication for an existing event ID.
+    malicious["engine_hash"] = "DIFFERENT-ENGINE"
+    ingestor.ledgers["raw_file_checkpoints"].append(malicious)
+    with ingestor.db:
+        ingestor.db.execute(
+            "insert into file_checkpoint("
+            "source_file,offset,row_number,identity,size_at_commit,updated_at,"
+            "frontier,prefix_fingerprint,mtime_ns_at_commit) "
+            "values (?,?,?,?,?,?,?,?,?)",
+            (
+                rel,
+                checkpoint["offset"],
+                checkpoint["row"],
+                checkpoint["identity"],
+                checkpoint["size_at_commit"],
+                checkpoint["updated_at"],
+                None,
+                checkpoint["prefix_fingerprint"],
+                checkpoint["mtime_ns_at_commit"],
+            ),
+        )
+    ingestor.checkpoint_path.write_text(json.dumps({rel: checkpoint}))
+    ingestor.close()
+
+    with pytest.raises(ValueError, match="different immutable content"):
+        IncrementalJSONLIngestor(runtime)
+
+
+def test_refusal_same_id_changed_detail_is_not_hidden_by_seen_set(tmp_path):
+    _data, runtime = _direct_contract(tmp_path)
+    ingestor = IncrementalJSONLIngestor(runtime)
+    args = (
+        "MALFORMED_JSONL", "raw/2099-01-01/events_09.jsonl", 1, 0,
+        "RAW-ONE",
+    )
+    ingestor._quality(*args, detail="canonical detail")
+    canonical = dict(ingestor._quality_pending[0])
+    malicious = dict(canonical)
+    malicious["detail"] = "altered detail"
+    ingestor.ledgers["refusals_data_quality"].append(malicious)
+    ingestor._quality_pending = []
+    ingestor._quality_pending_ids = set()
+    ingestor._quality_pending_content = {}
+    ingestor.close()
+
+    restarted = IncrementalJSONLIngestor(runtime)
+    with pytest.raises(ValueError, match="different immutable content"):
+        restarted._quality(*args, detail="canonical detail")
+    restarted.close()
 
 
 def test_market_envelope_is_lossless_and_files_merge_by_receipt(tmp_path):
@@ -107,6 +893,45 @@ def test_market_envelope_is_lossless_and_files_merge_by_receipt(tmp_path):
     assert "access_token" not in rows[1].canonical_payload
     assert "secret" not in rows[1].canonical_payload
     assert rows[0]["observation_id"] == rows[0].event_id
+    ingestor.close()
+
+
+def test_shared_refusal_identity_index_covers_both_live_producers(tmp_path):
+    _data, runtime = _contract(tmp_path)
+    ingestor = IncrementalJSONLIngestor(runtime)
+    orchestrator = LiveAnalyticalOrchestrator(runtime, ingestor.ledgers)
+    state = ShadowState(ingestor, {}, orchestrator)
+    cache = _AuditReadCache()
+
+    orchestrator._quality(
+        {
+            "observation_id": "ANALYTICAL-REFUSAL",
+            "session_date": "2099-01-01",
+            "receipt_timestamp": "2099-01-01T09:15:00+05:30",
+            "source_file": "raw/2099-01-01/events_09.jsonl",
+            "source_row_number": 1,
+        },
+        "ORCHESTRATOR_OBSERVATION_REFUSED",
+        "synthetic refusal",
+    )
+    first = cache.read(state, state.analytical_snapshot(), 10)
+    assert first["refusal_count"] == 1
+    assert first["duplicate_analytical_ids"] == 0
+
+    ingestor._quality(
+        "MALFORMED_RECORD",
+        "raw/2099-01-01/events_09.jsonl",
+        2,
+        100,
+        "RAW-REFUSAL",
+        "synthetic refusal",
+    )
+    ingestor._flush_quality()
+    second = cache.read(state, state.analytical_snapshot(), 10)
+    assert second["refusal_count"] == 2
+    assert second["duplicate_analytical_ids"] == 0
+    assert orchestrator.trusted_quality_identity_count() == 2
+    assert len(ingestor._quality_seen) == 2
     ingestor.close()
 
 
@@ -880,6 +1705,715 @@ def test_normalized_writes_are_batched_and_checkpoint_prevents_reread(tmp_path):
     assert ingestor.poll() == []
     assert ingestor.metrics["bytes"] == bytes_after_first
     ingestor.close()
+
+
+@pytest.mark.parametrize("durable_prefix", (0, 1, 3))
+@pytest.mark.parametrize("restart", (False, True))
+def test_normalized_ambiguous_batch_append_reconciles_physical_prefix_once(
+    tmp_path, monkeypatch, durable_prefix, restart,
+):
+    data, contract = _contract(tmp_path)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    base = datetime.now(IST) - timedelta(seconds=1)
+    path.write_text("".join(
+        _market(
+            (base + timedelta(milliseconds=ordinal)).isoformat(
+                timespec="microseconds"
+            ),
+            CANONICAL_INDEX_SYMBOL,
+            57_100 + ordinal,
+            ordinal,
+        ) + "\n"
+        for ordinal in range(3)
+    ))
+    received = []
+    ingestor = IncrementalJSONLIngestor(contract, received.append)
+    ledger = ingestor.ledgers["normalized_raw_events"]
+    original = ledger.append_many
+    attempts = []
+
+    def durable_prefix_then_fail(rows):
+        batch = list(rows)
+        attempts.append(batch)
+        if durable_prefix:
+            original(batch[:durable_prefix])
+        raise RuntimeError("synthetic normalized ambiguous append")
+
+    monkeypatch.setattr(ledger, "append_many", durable_prefix_then_fail)
+    with pytest.raises(RuntimeError, match="normalized ambiguous append"):
+        ingestor.poll(source_paths=[path])
+    expected_ids = [row["event_id"] for row in attempts[0]]
+    assert received == []
+    assert ingestor.db.execute(
+        "select count(*) from observation_outbox"
+    ).fetchone()[0] == 3
+    assert [
+        row["event_id"] for row in ledger.rows()
+    ] == expected_ids[:durable_prefix]
+    assert set(expected_ids[:durable_prefix]) <= ingestor._normalized_seen
+    assert set(expected_ids[:durable_prefix]) <= set(
+        ingestor._normalized_out_of_order
+    )
+
+    if restart:
+        ingestor.db.close()  # Abrupt process death; never clean-ACK the outbox.
+        recovered = IncrementalJSONLIngestor(contract, received.append)
+    else:
+        monkeypatch.setattr(ledger, "append_many", original)
+        recovered = ingestor
+    replay = recovered.poll(source_paths=[path])
+    assert [row.observation_id for row in replay] == expected_ids
+    assert [row.observation_id for row in received] == expected_ids
+    physical_ids = [
+        row["event_id"]
+        for row in recovered.ledgers["normalized_raw_events"].rows()
+    ]
+    assert physical_ids == expected_ids
+    assert len(physical_ids) == len(set(physical_ids)) == 3
+    assert recovered.db.execute(
+        "select count(*) from observation_outbox"
+    ).fetchone()[0] == 0
+    recovered.close()
+
+    final = IncrementalJSONLIngestor(contract, received.append)
+    assert final.poll(source_paths=[path]) == []
+    assert [
+        row["event_id"]
+        for row in final.ledgers["normalized_raw_events"].rows()
+    ] == expected_ids
+    assert [row.observation_id for row in received] == expected_ids
+    final.close()
+
+
+@pytest.mark.parametrize("durable_prefix", (0, 1, 2))
+@pytest.mark.parametrize("restart", (False, True))
+def test_refusal_ambiguous_batch_append_retains_only_unwritten_rows(
+    tmp_path, monkeypatch, durable_prefix, restart,
+):
+    data, contract = _contract(tmp_path)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    path.write_bytes(b'{"received_at":\n[]\n')
+    ingestor = IncrementalJSONLIngestor(contract)
+    ledger = ingestor.ledgers["refusals_data_quality"]
+    original = ledger.append_many
+    attempts = []
+
+    def durable_prefix_then_fail(rows):
+        batch = list(rows)
+        attempts.append(batch)
+        assert len(batch) == 2
+        if durable_prefix:
+            original(batch[:durable_prefix])
+        raise RuntimeError("synthetic refusal ambiguous append")
+
+    monkeypatch.setattr(ledger, "append_many", durable_prefix_then_fail)
+    with pytest.raises(RuntimeError, match="refusal ambiguous append"):
+        ingestor.poll(source_paths=[path])
+    expected_ids = [row["event_id"] for row in attempts[0]]
+    assert [row["event_id"] for row in ledger.rows()] == expected_ids[:durable_prefix]
+    assert [
+        row["event_id"] for row in ingestor._quality_pending
+    ] == expected_ids[durable_prefix:]
+    assert ingestor._quality_pending_ids == set(expected_ids[durable_prefix:])
+    assert set(expected_ids[:durable_prefix]) <= ingestor._quality_seen
+    assert str(path.relative_to(data)) not in ingestor.checkpoints
+
+    if restart:
+        ingestor.db.close()  # Lose only the non-durable in-memory refusal tail.
+        recovered = IncrementalJSONLIngestor(contract)
+    else:
+        monkeypatch.setattr(ledger, "append_many", original)
+        recovered = ingestor
+    assert recovered.poll(source_paths=[path]) == []
+    physical = recovered.ledgers["refusals_data_quality"].rows()
+    physical_ids = [row["event_id"] for row in physical]
+    assert physical_ids == expected_ids
+    assert len(physical_ids) == len(set(physical_ids)) == 2
+    assert [row["reason"] for row in physical] == [
+        "MALFORMED_JSONL", "INVALID_JSONL_RECORD",
+    ]
+    assert recovered._quality_pending == []
+    assert recovered._quality_pending_ids == set()
+    assert recovered.checkpoints[str(path.relative_to(data))]["offset"] == (
+        path.stat().st_size
+    )
+    recovered.close()
+
+    final = IncrementalJSONLIngestor(contract)
+    assert final.poll(source_paths=[path]) == []
+    assert [
+        row["event_id"]
+        for row in final.ledgers["refusals_data_quality"].rows()
+    ] == expected_ids
+    final.close()
+
+
+@pytest.mark.parametrize("durable_prefix", (0, 1, 2))
+@pytest.mark.parametrize("restart", (False, True))
+def test_checkpoint_ambiguous_batch_append_replays_without_physical_duplicate(
+    tmp_path, monkeypatch, durable_prefix, restart,
+):
+    data, contract = _contract(tmp_path)
+    base = datetime.now(IST) - timedelta(seconds=1)
+    paths = [
+        data / "raw/2099-01-01/events_09.jsonl",
+        data / "raw/2099-01-01/events_10.jsonl",
+    ]
+    for ordinal, path in enumerate(paths):
+        path.write_text(
+            _market(
+                (base + timedelta(milliseconds=ordinal)).isoformat(
+                    timespec="microseconds"
+                ),
+                CANONICAL_INDEX_SYMBOL,
+                57_100 + ordinal,
+                ordinal,
+            ) + "\n"
+        )
+    received = []
+    ingestor = IncrementalJSONLIngestor(contract, received.append)
+    ledger = ingestor.ledgers["raw_file_checkpoints"]
+    original = ledger.append_many
+    attempts = []
+
+    def durable_prefix_then_fail(rows):
+        batch = list(rows)
+        attempts.append(batch)
+        assert len(batch) == 2
+        if durable_prefix:
+            original(batch[:durable_prefix])
+        raise RuntimeError("synthetic checkpoint ambiguous append")
+
+    monkeypatch.setattr(ledger, "append_many", durable_prefix_then_fail)
+    with pytest.raises(RuntimeError, match="checkpoint ambiguous append"):
+        ingestor.poll(source_paths=paths)
+    expected_checkpoint_ids = [row["event_id"] for row in attempts[0]]
+    assert received == []
+    assert [
+        row["event_id"] for row in ledger.rows()
+    ] == expected_checkpoint_ids[:durable_prefix]
+    assert [
+        row["event_id"] for row in ingestor._checkpoint_pending
+    ] == expected_checkpoint_ids[durable_prefix:]
+    assert set(expected_checkpoint_ids[:durable_prefix]) <= ingestor._checkpoint_seen
+    assert ingestor.db.execute(
+        "select count(*) from observation_outbox"
+    ).fetchone()[0] == 2
+
+    if restart:
+        ingestor.db.close()
+        recovered = IncrementalJSONLIngestor(contract, received.append)
+    else:
+        monkeypatch.setattr(ledger, "append_many", original)
+        recovered = ingestor
+    replay = recovered.poll(source_paths=paths)
+    assert len(replay) == 2
+    assert len(received) == 2
+    physical_ids = [
+        row["event_id"]
+        for row in recovered.ledgers["raw_file_checkpoints"].rows()
+    ]
+    assert physical_ids == expected_checkpoint_ids
+    assert len(physical_ids) == len(set(physical_ids)) == 2
+    assert recovered.db.execute(
+        "select count(*) from observation_outbox"
+    ).fetchone()[0] == 0
+    recovered.close()
+
+    final = IncrementalJSONLIngestor(contract, received.append)
+    assert final.poll(source_paths=paths) == []
+    assert [
+        row["event_id"]
+        for row in final.ledgers["raw_file_checkpoints"].rows()
+    ] == expected_checkpoint_ids
+    assert len(received) == 2
+    final.close()
+
+
+def test_fully_durable_checkpoint_append_repairs_json_mirror_on_restart(
+    tmp_path, monkeypatch,
+):
+    data, contract = _contract(tmp_path)
+    path = data / "raw/2099-01-01/events_09.jsonl"
+    path.write_text(
+        _market(
+            _timestamp(-0.1), CANONICAL_INDEX_SYMBOL, 57_100, 100,
+        ) + "\n"
+    )
+    received = []
+    failed = IncrementalJSONLIngestor(contract, received.append)
+    ledger = failed.ledgers["raw_file_checkpoints"]
+    original = ledger.append_many
+
+    def durable_append_then_fail(rows):
+        batch = list(rows)
+        original(batch)
+        raise RuntimeError("synthetic fully durable checkpoint append")
+
+    monkeypatch.setattr(ledger, "append_many", durable_append_then_fail)
+    with pytest.raises(RuntimeError, match="fully durable checkpoint append"):
+        failed.poll(source_paths=[path])
+    physical = ledger.rows()
+    assert len(physical) == 1
+    assert not failed.checkpoint_path.exists()
+    sqlite_checkpoint = dict(failed.checkpoints)
+    failed.db.close()  # Abrupt restart before the JSON mirror replacement.
+
+    recovered = IncrementalJSONLIngestor(contract, received.append)
+    assert recovered._checkpoint_pending == []
+    assert json.loads(recovered.checkpoint_path.read_text()) == sqlite_checkpoint
+    assert recovered.checkpoints == sqlite_checkpoint
+    assert recovered.ledgers["raw_file_checkpoints"].rows() == physical
+    assert len(recovered.poll(source_paths=[path])) == 1
+    assert len(received) == 1
+    assert recovered.ledgers["raw_file_checkpoints"].rows() == physical
+    recovered.close()
+
+    final = IncrementalJSONLIngestor(contract, received.append)
+    assert final.poll(source_paths=[path]) == []
+    assert final.ledgers["raw_file_checkpoints"].rows() == physical
+    final.close()
+
+
+@pytest.mark.parametrize(
+    "ledger_name",
+    ("normalized_raw_events", "refusals_data_quality", "raw_file_checkpoints"),
+)
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    (
+        ('{"status":"MISSING"}\n', "has no event_id"),
+        ('{"event_id":"PARTIAL"}', "partial line"),
+        ('{"event_id":\n', "corrupt line"),
+    ),
+)
+def test_ingestion_startup_rejects_corrupt_or_nonunique_ledger_identity(
+    tmp_path, ledger_name, payload, message,
+):
+    _, contract = _contract(tmp_path)
+    path = contract["state_root"] / "ledgers" / f"{ledger_name}.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(payload)
+    with pytest.raises(ValueError, match=message):
+        IncrementalJSONLIngestor(contract)
+
+
+@pytest.mark.parametrize(
+    "ledger_name",
+    ("normalized_raw_events", "refusals_data_quality", "raw_file_checkpoints"),
+)
+def test_ingestion_startup_rejects_duplicate_schema_valid_ledger_identity(
+    tmp_path, ledger_name,
+):
+    data, contract = _contract(tmp_path)
+    source = data / "raw/2099-01-01/events_09.jsonl"
+    if ledger_name == "refusals_data_quality":
+        source.write_text('{"malformed":\n')
+    else:
+        source.write_text(
+            _market(
+                _timestamp(), CANONICAL_INDEX_SYMBOL, 57_100, 100,
+            )
+            + "\n"
+        )
+    ingestor = IncrementalJSONLIngestor(contract)
+    ingestor.poll(source_paths=[source])
+    row = ingestor.ledgers[ledger_name].rows()[0]
+    ingestor.close()
+
+    path = contract["state_root"] / "ledgers" / f"{ledger_name}.jsonl"
+    encoded = json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n"
+    path.write_text(encoded + encoded)
+
+    with pytest.raises(ValueError, match="duplicate .* ledger event_id"):
+        IncrementalJSONLIngestor(contract)
+
+
+def test_bounded_tail_reconciliation_refuses_partial_or_mismatched_bytes(tmp_path):
+    partial = AppendOnlyLedger(tmp_path / "partial.jsonl")
+    partial.append({"event_id": "BASE"})
+    partial_boundary = partial.append_boundary()
+    with partial.path.open("ab") as handle:
+        handle.write(b'{"event_id":"EXPECTED"')
+        handle.flush()
+        os.fsync(handle.fileno())
+    with pytest.raises(ValueError, match="partial or mismatched appended line"):
+        partial.reconcile_appended_prefix(
+            partial_boundary,
+            [{"event_id": "EXPECTED"}],
+            identity_field="event_id",
+        )
+    assert partial._append_quarantine_path.is_file()
+    with pytest.raises(ValueError, match="is quarantined"):
+        AppendOnlyLedger(partial.path).rows()
+
+    mismatched = AppendOnlyLedger(tmp_path / "mismatched.jsonl")
+    mismatched.append({"event_id": "BASE"})
+    mismatched_boundary = mismatched.append_boundary()
+    mismatched.append({"event_id": "UNEXPECT"})
+    with pytest.raises(ValueError, match="differs from attempted rows"):
+        mismatched.reconcile_appended_prefix(
+            mismatched_boundary,
+            [{"event_id": "EXPECTED"}],
+            identity_field="event_id",
+        )
+    assert mismatched._append_quarantine_path.is_file()
+    with pytest.raises(ValueError, match="is quarantined"):
+        AppendOnlyLedger(mismatched.path).rows()
+
+
+def test_persisted_ledger_intent_recovers_exact_tail_and_quarantines_extra_tail(
+    tmp_path, monkeypatch,
+):
+    recover_path = tmp_path / "recover.jsonl"
+    recover = AppendOnlyLedger(recover_path)
+    original_clear = recover._clear_persisted_append_intent_locked
+
+    def fail_after_durable_append():
+        raise OSError("synthetic intent-clear interruption")
+
+    monkeypatch.setattr(
+        recover, "_clear_persisted_append_intent_locked",
+        fail_after_durable_append,
+    )
+    with pytest.raises(OSError, match="intent-clear interruption"):
+        recover.append({"event_id": "EXPECTED"})
+    assert recover._append_intent_path.is_file()
+
+    restarted = AppendOnlyLedger(recover_path)
+    assert restarted.rows() == [{"event_id": "EXPECTED"}]
+    assert not restarted._append_intent_path.exists()
+    assert not restarted._append_quarantine_path.exists()
+
+    quarantine_path = tmp_path / "quarantine.jsonl"
+    quarantine = AppendOnlyLedger(quarantine_path)
+    quarantine.append({"event_id": "BASE"})
+    boundary = quarantine.append_boundary()
+    rows, encoded = quarantine._prepare_rows(
+        [{"event_id": "DECLARED"}], context="test intent"
+    )
+    with quarantine._lock:
+        quarantine._write_persisted_append_intent_locked(
+            boundary, rows, encoded
+        )
+    unrelated = (
+        json.dumps(
+            {"event_id": "UNRELATED"},
+            sort_keys=True,
+            separators=(",", ":"),
+        ) + "\n"
+    ).encode()
+    with quarantine.path.open("ab") as handle:
+        handle.write(encoded[0] + unrelated)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+    with pytest.raises(ValueError, match="recovery is quarantined"):
+        AppendOnlyLedger(quarantine_path).rows()
+    assert quarantine._append_quarantine_path.is_file()
+    with pytest.raises(ValueError, match="is quarantined"):
+        AppendOnlyLedger(quarantine_path).rows()
+
+
+def test_direct_retry_cannot_duplicate_a_recovered_committed_intent(
+    tmp_path, monkeypatch,
+):
+    path = tmp_path / "retry.jsonl"
+    first = AppendOnlyLedger(path)
+
+    def fail_after_durable_append():
+        raise OSError("synthetic intent-clear interruption")
+
+    monkeypatch.setattr(
+        first, "_clear_persisted_append_intent_locked",
+        fail_after_durable_append,
+    )
+    with pytest.raises(OSError, match="intent-clear interruption"):
+        first.append({"event_id": "ONLY-ONCE"})
+
+    restarted = AppendOnlyLedger(path)
+    with pytest.raises(ValueError, match="caller reconciliation is required"):
+        restarted.append({"event_id": "ONLY-ONCE"})
+    assert path.read_text().count("ONLY-ONCE") == 1
+    assert restarted._append_intent_path.is_file()
+
+    # Startup identity priming explicitly consumes the recovered append.
+    assert restarted.rows() == [{"event_id": "ONLY-ONCE"}]
+    assert not restarted._append_intent_path.exists()
+
+
+def test_retained_append_requires_exact_caller_ack_before_next_append(tmp_path):
+    ledger = AppendOnlyLedger(tmp_path / "retained.jsonl")
+    receipt = ledger.append_many_retained([{"event_id": "FIRST"}])
+    assert receipt is not None
+    assert receipt.declared_identities == ("FIRST",)
+    assert receipt.committed_identities == ("FIRST",)
+    assert ledger._append_intent_path.is_file()
+
+    with pytest.raises(ValueError, match="ACK identities differ"):
+        ledger.acknowledge_retained_append(
+            receipt, accepted_identities=(),
+        )
+    with pytest.raises(ValueError, match="caller reconciliation is required"):
+        ledger.append({"event_id": "SECOND"})
+    assert ledger.path.read_text().count("FIRST") == 1
+
+    ledger.acknowledge_retained_append(
+        receipt, accepted_identities=("FIRST",),
+    )
+    assert not ledger._append_intent_path.exists()
+    ledger.append({"event_id": "SECOND"})
+    assert [row["event_id"] for row in ledger.rows()] == ["FIRST", "SECOND"]
+
+
+def test_retained_append_ack_failure_is_restart_visible_and_idempotent(
+    tmp_path, monkeypatch,
+):
+    path = tmp_path / "retained-restart.jsonl"
+    ledger = AppendOnlyLedger(path)
+    receipt = ledger.append_many_retained([{"event_id": "ONLY"}])
+    assert receipt is not None
+
+    def fail_before_ack_clear():
+        raise OSError("synthetic retained ACK interruption")
+
+    monkeypatch.setattr(
+        ledger, "_clear_persisted_append_intent_locked",
+        fail_before_ack_clear,
+    )
+    with pytest.raises(OSError, match="retained ACK interruption"):
+        ledger.acknowledge_retained_append(
+            receipt, accepted_identities=("ONLY",),
+        )
+    assert ledger._append_intent_path.is_file()
+
+    restarted = AppendOnlyLedger(path)
+    rows, recovered = restarted.rows_with_retained_append()
+    assert rows == [{"event_id": "ONLY"}]
+    assert recovered is not None
+    assert recovered.committed_identities == ("ONLY",)
+    restarted.acknowledge_retained_append(
+        recovered, accepted_identities=("ONLY",),
+    )
+    assert not restarted._append_intent_path.exists()
+    restarted.append({"event_id": "NEXT"})
+    assert [row["event_id"] for row in restarted.rows()] == ["ONLY", "NEXT"]
+
+
+def test_retained_reconciliation_accepts_only_complete_prefix_then_retries(
+    tmp_path,
+):
+    ledger = AppendOnlyLedger(tmp_path / "retained-prefix.jsonl")
+    boundary = ledger.append_boundary()
+    values, encoded = ledger._prepare_rows(
+        [{"event_id": "FIRST"}, {"event_id": "SECOND"}],
+        context="retained prefix test",
+    )
+    with ledger._lock:
+        ledger._write_persisted_append_intent_locked(
+            boundary, values, encoded,
+        )
+    with ledger.path.open("ab") as handle:
+        handle.write(encoded[0])
+        handle.flush()
+        os.fsync(handle.fileno())
+
+    receipt = ledger.reconcile_retained_append(
+        boundary, values, identity_field="event_id",
+    )
+    assert receipt.declared_identities == ("FIRST", "SECOND")
+    assert receipt.committed_identities == ("FIRST",)
+    assert ledger._append_intent_path.is_file()
+    ledger.acknowledge_retained_append(
+        receipt, accepted_identities=("FIRST",),
+    )
+    ledger.append({"event_id": "SECOND"})
+    assert [row["event_id"] for row in ledger.rows()] == ["FIRST", "SECOND"]
+
+
+def test_stale_retained_receipt_cannot_ack_a_later_transaction(tmp_path):
+    ledger = AppendOnlyLedger(tmp_path / "stale-receipt.jsonl")
+    first = ledger.append_many_retained([{"event_id": "FIRST"}])
+    assert first is not None
+    ledger.acknowledge_retained_append(
+        first, accepted_identities=("FIRST",),
+    )
+    second = ledger.append_many_retained([{"event_id": "SECOND"}])
+    assert second is not None
+
+    with pytest.raises(ValueError, match="stale or mismatched"):
+        ledger.acknowledge_retained_append(
+            first, accepted_identities=("FIRST",),
+        )
+    assert ledger._append_intent_path.is_file()
+    ledger.acknowledge_retained_append(
+        second, accepted_identities=("SECOND",),
+    )
+    assert [row["event_id"] for row in ledger.rows()] == ["FIRST", "SECOND"]
+
+
+def test_reconciliation_intent_survives_quarantine_marker_failure_and_restart(
+    tmp_path, monkeypatch,
+):
+    ledger = AppendOnlyLedger(tmp_path / "boundary-gap.jsonl")
+    ledger.append({"event_id": "BASE"})
+    boundary = ledger.append_boundary()
+    ledger.append({"event_id": "UNRELATED"})
+
+    original_atomic_json = ledger_module.atomic_json
+
+    def fail_only_quarantine(path, value):
+        if path.name.endswith(".append_quarantine.json"):
+            raise OSError("synthetic quarantine marker failure")
+        return original_atomic_json(path, value)
+
+    monkeypatch.setattr(ledger_module, "atomic_json", fail_only_quarantine)
+    with pytest.raises(ValueError, match="unexpected concurrent tail"):
+        ledger.reconcile_appended_prefix(
+            boundary,
+            [{"event_id": "EXPECTED"}],
+            identity_field="event_id",
+        )
+    assert ledger._append_intent_path.is_file()
+    assert not ledger._append_quarantine_path.exists()
+
+    monkeypatch.setattr(ledger_module, "atomic_json", original_atomic_json)
+    with pytest.raises(ValueError, match="recovery is quarantined"):
+        AppendOnlyLedger(ledger.path).rows()
+    assert ledger._append_quarantine_path.is_file()
+
+
+def test_incremental_ledger_scan_streams_only_new_complete_rows(tmp_path):
+    ledger = AppendOnlyLedger(tmp_path / "audit.jsonl")
+    ledger.append_many([{"event_id": "A"}, {"event_id": "B"}])
+    first = []
+    boundary = ledger.scan_from(None, first.append)
+    assert first == [{"event_id": "A"}, {"event_id": "B"}]
+
+    unchanged = []
+    assert ledger.scan_from(boundary, unchanged.append) == boundary
+    assert unchanged == []
+
+    ledger.append({"event_id": "C"})
+    appended = []
+    advanced = ledger.scan_from(boundary, appended.append)
+    assert appended == [{"event_id": "C"}]
+    assert advanced.size > boundary.size
+
+    with ledger.path.open("ab") as handle:
+        handle.write(b'{"event_id":"PARTIAL"')
+        handle.flush()
+        os.fsync(handle.fileno())
+    with pytest.raises(ValueError, match="partial line"):
+        ledger.scan_from(advanced, lambda _row: None)
+
+
+def test_incremental_ledger_scan_rejects_same_size_prefix_rewrite(tmp_path):
+    ledger = AppendOnlyLedger(tmp_path / "audit.jsonl")
+    ledger.append({"event_id": "ORIGINAL"})
+    boundary = ledger.scan_from(None, lambda _row: None)
+    original = ledger.path.read_bytes()
+    modified = original.replace(b"ORIGINAL", b"MUTATED!", 1)
+    assert len(modified) == len(original)
+    with ledger.path.open("r+b") as handle:
+        handle.write(modified)
+        handle.flush()
+        os.fsync(handle.fileno())
+    with pytest.raises(ValueError, match="prefix changed"):
+        ledger.scan_from(boundary, lambda _row: None)
+
+
+def test_production_ledger_audit_is_bounded_and_rejects_external_mutation(
+    tmp_path,
+):
+    ledger = AppendOnlyLedger(tmp_path / "audit.jsonl")
+    rows = [
+        {
+            "event_id": f"QUALITY-{ordinal:04d}",
+            "effective_timestamp": "2026-08-20T09:15:00+05:30",
+            "publication_timestamp": "2026-08-20T09:15:01+05:30",
+            "reason": "ORIGINAL",
+        }
+        for ordinal in range(520)
+    ]
+    ledger.append_many(rows)
+    audit = ledger.audit_snapshot()
+    assert audit["row_count"] == 520
+    assert audit["duplicate_ids"] == 0
+    assert audit["timestamp_backdating"] == 0
+    assert len(audit["tail"]) == 500
+    assert audit["tail"][0]["event_id"] == "QUALITY-0020"
+    assert not hasattr(ledger._audit, "seen_ids")
+
+    original = ledger.path.read_bytes()
+    modified = original.replace(b"ORIGINAL", b"MUTATED!", 1)
+    assert len(modified) == len(original)
+    with ledger.path.open("r+b") as handle:
+        handle.write(modified)
+        handle.flush()
+        os.fsync(handle.fileno())
+    with pytest.raises(ValueError, match="changed after trusted access"):
+        ledger.audit_snapshot()
+    with pytest.raises(ValueError, match="changed after trusted access"):
+        ledger.rows()
+
+
+def test_ledger_refuses_blank_lines_and_invalid_present_audit_clocks(tmp_path):
+    blank = AppendOnlyLedger(tmp_path / "blank.jsonl")
+    blank.path.write_bytes(b'{"event_id":"A"}\n\n')
+    with pytest.raises(ValueError, match="blank line"):
+        blank.rows()
+
+    invalid = AppendOnlyLedger(tmp_path / "invalid-clock.jsonl")
+    with pytest.raises(ValueError, match="publication timestamp"):
+        invalid.append({
+            "event_id": "BAD-CLOCK",
+            "publication_timestamp": "2026-08-20T09:15:01",
+        })
+    assert not invalid.path.exists()
+
+
+def test_ledger_append_refuses_external_tail_before_audit_advancement(
+    tmp_path, monkeypatch,
+):
+    ledger = AppendOnlyLedger(tmp_path / "concurrent.jsonl")
+    boundary = ledger.append_boundary()
+    original_fsync = os.fsync
+    injected = False
+
+    def fsync_then_external_append(descriptor):
+        nonlocal injected
+        original_fsync(descriptor)
+        try:
+            synchronized = Path(
+                os.readlink(f"/proc/self/fd/{descriptor}")
+            ).resolve()
+        except OSError:
+            return
+        if injected or synchronized != ledger.path.resolve():
+            return
+        injected = True
+        with ledger.path.open("ab") as external:
+            external.write(b'{"event_id":"EXTERNAL"}\n')
+            external.flush()
+            original_fsync(external.fileno())
+
+    monkeypatch.setattr(os, "fsync", fsync_then_external_append)
+    attempted = {"event_id": "OWN"}
+    with pytest.raises(ValueError, match="unexpected concurrent tail"):
+        ledger.append(attempted)
+    monkeypatch.setattr(os, "fsync", original_fsync)
+
+    assert ledger._append_intent_path.is_file()
+    with pytest.raises(ValueError, match="recovery is quarantined"):
+        AppendOnlyLedger(ledger.path).rows()
+    assert ledger._append_quarantine_path.is_file()
+    with pytest.raises(ValueError, match="is quarantined"):
+        ledger.reconcile_appended_prefix(
+            boundary, [attempted], identity_field="event_id"
+        )
+    with pytest.raises(ValueError, match="is quarantined"):
+        ledger.audit_snapshot()
 
 
 def test_unknown_reconciliation_aggregates_cash_and_noncanonical_option_source(tmp_path):
