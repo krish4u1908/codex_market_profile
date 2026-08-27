@@ -2,7 +2,19 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **FULL-SIX-V2 RUNNING FROM C42E703 — RESULT PENDING; PRIOR RUNS REJECTED**
+Status: **NOT STARTED — CURRENT-HEAD FOCUSED GATE FAILED**
+
+## Current-head stop record
+
+Verification commit `19c5489f9845f1325da1e1f6e3d9118b95bd959b`
+passed the complete 636-test regression and sealed-package checks, but the
+fresh focused all-nine prerequisite failed
+`large_chronological_chunks` with
+`PERIODIC_EPISODE_EVOLUTION_NOT_EXERCISED`. The focused terminal semantic
+state matched and the baseline component, ledger, causality, runtime-open, and
+source-integrity matrices were otherwise exact, but one required schedule is
+still a failure. Therefore no current-head full-six run was started and none
+of the frozen-count or equality cells below is promoted.
 
 Current pushed repair commit: `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`.
 

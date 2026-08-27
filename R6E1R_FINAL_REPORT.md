@@ -2,7 +2,33 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **COMPLETE REGRESSION 636/636 — FRESH EQUIVALENCE RUNNING — DEPLOYMENT NOT STARTED**
+Status: **FOCUSED CURRENT-HEAD GATE FAILED — FULL SIX AND DEPLOYMENT NOT STARTED**
+
+## Authorized-host verification update — commit `19c5489f`
+
+The isolated detached verification of
+`19c5489f9845f1325da1e1f6e3d9118b95bd959b` passed the exact 38-file
+engine seal, exact 47-file deployment seal, credential scan, reachable-blob
+size scan, `git diff --check`, and the complete repository regression
+(636 passed, zero failed/skipped). The three runtime-open/strace tests and two
+user-systemd/bubblewrap tests also passed in a separate 5/5 host run.
+
+The fresh focused August 19 all-nine run failed one mandatory schedule after
+3,401.855 seconds. Eight schedules passed. `large_chronological_chunks`
+produced the same terminal semantic hash as canonical A, but failed the
+append-only ledger/exercise gate with
+`PERIODIC_EPISODE_EVOLUTION_NOT_EXERCISED`: two differences and ledger hash
+`9f72c051becc98e50e7f85a3b7024463ccf9020019309258ddb023bc742753f3`
+instead of
+`27466e2caaa730b7a4999be7f6b413f418e3fcd45ff5fd3b34a214350d7613a1`.
+All 21 analytical components, all eight ledgers in baseline A/B, and all nine
+causality/display invariants otherwise matched exactly. Future joins,
+backdating, duplicate analytical IDs, analytical refusals, checkpoint
+failures, prohibited or unmeasured opens, and source mutations were zero.
+
+Per the authorized failure policy, the full six-session run, deployment,
+service installation, and verification tag were not started. This is current
+failure evidence, not analytical acceptance.
 
 This report is a controlled handoff. `PENDING_FINAL_EVIDENCE` means the value
 must come from a newly completed run on the authorized `/opt/banknifty` host

@@ -1,5 +1,12 @@
 # R6E1R-FINAL Open Issues
 
+- Current-head host verification at `19c5489f...` passed manifests, scans,
+  636/636 regression, and the separate 5/5 host-only closure. The fresh
+  focused all-nine gate failed only `large_chronological_chunks` with
+  `PERIODIC_EPISODE_EVOLUTION_NOT_EXERCISED`, two ledger/exercise differences,
+  despite identical terminal semantic state. Full-six and deployment were not
+  started. Repair and rerun are required; do not create the verified tag.
+
 - The non-destructive merge is complete and pushed as `dcccc723c6584bd929fab1aef531c3aad32eb1a2`; no verified tag exists.
 - The merged 38-file engine and 47-file deployment manifests are exact and independently verified. Reseal only if an allowlisted byte changes.
 - The clean-B GUI comparator repair is committed and pushed as `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`; the security/test/report milestone is pushed as `19c5489f9845f1325da1e1f6e3d9118b95bd959b`. Fresh focused August 19 and canonical six-session all-nine equivalence must complete from the pinned `c42e703` checkout.

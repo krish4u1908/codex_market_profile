@@ -323,7 +323,14 @@ RESULT: REJECTED EXTERNAL INTERRUPTION; six-session received signal 15 at 15:42:
 2026-08-27 collector and protected-service lifecycle audit
 COMMAND: read-only process/start-tick/unit/hash/journal/watchdog inspection after the acceptance interruptions
 RESULT: PASS for non-interference. Ports 8803/8804 retain exact PIDs, start ticks, unit identities, invocation IDs, and NRestarts=0. Collector code/scripts are unchanged; PID 1006842 followed its recurring in-process near-close watchdog shutdown at 15:40:56 after an active-option silence recovery request. No R6E command signalled, restarted, or modified it, and no replacement PID exists after close.
+2026-08-27 isolated current-head host verification
+COMMAND: detached verification of commit 19c5489f; exact manifest/allowlist checks; full provisioned pytest; separate three runtime-open/strace and two user-systemd/bubblewrap tests
+RESULT: PASS; engine 38/38 and deployment 47/47 exact; scans/diff/clean gate PASS; complete regression 636 passed, zero failed/skipped in 116.45s (116.82s wall, 673,164 KiB peak RSS); separate host-only closure 5/5 in 1.34s.
 
-2026-08-27 detached focused host-verification v1
-COMMAND: exact 19c5489f focused A/B plus all nine required schedules from clean detached checkout and fresh roots
-RESULT: REJECTED; exit 1, summary FAIL, schedules 8/9. Large chronological chunks produced final semantic equality but schedule-dependent ledger identity/content and did not observe episode-end evolution at five periodic refreshes. All 21 component, 8 ledger, 9 causality, 72 checkpoint, 2 recovery, and 8 source-hash rows otherwise passed; all causality/open/source zero gates passed. Retained-snapshot targeted diagnosis started; no acceptance claim.
+2026-08-27 isolated current-head focused all-nine gate
+COMMAND: fresh August 19 focused fixture, all nine required schedules, independent clean batch, new versioned output/work roots
+RESULT: FAIL after 3,401.855s (56m42.71s wall); parent peak RSS 1,763,052 KiB, child peak RSS 900,908 KiB. Eight schedules exact. large_chronological_chunks terminal semantic hash exact but ledger/exercise gate failed PERIODIC_EPISODE_EVOLUTION_NOT_EXERCISED with two differences. Baseline 21/21 components, 8/8 ledgers, 9/9 invariants exact; future joins, tolerance violations, backdating, duplicate IDs, refusals, checkpoint failures, prohibited/unmeasured opens, and source mutations all zero. Full-six and deployment not started by failure policy.
+
+2026-08-27 retained focused large-schedule diagnosis
+COMMAND: rerun only large_chronological_chunks with retained variant snapshot from a fresh output/work root
+RESULT: RUNNING to identify the exact append-only ledger row delta before repair; no acceptance claim.

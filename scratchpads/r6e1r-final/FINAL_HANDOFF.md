@@ -1,6 +1,17 @@
 # R6E1R-FINAL Handoff
 
-Final status: **IN PROGRESS — NOT VERIFIED**
+Final status: **BLOCKED BY CURRENT-HEAD FOCUSED SCHEDULE FAILURE**
+
+## 2026-08-27 current-head host result
+
+Detached commit `19c5489f9845f1325da1e1f6e3d9118b95bd959b` passed the
+sealed manifests/scans, complete 636/636 regression, and separate 5/5
+Hostinger-only closure. Its fresh focused all-nine run passed eight schedules
+and failed `large_chronological_chunks` because periodic episode evolution was
+not exercised; terminal semantic state was identical but the append-only
+ledger/exercise gate had two differences. All baseline component, ledger,
+causality, open-audit, checkpoint, refusal, and source-integrity gates were
+otherwise exact/zero. Full-six, deployment, and tagging were not started.
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
