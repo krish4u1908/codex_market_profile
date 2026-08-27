@@ -1,82 +1,32 @@
-R6E1R-FINAL PUBLIC COMMAND/RESULT SUMMARY
+R6E1R SANITIZED V2 COMMAND SUMMARY
 
 Classification: LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL
-Status: IMPLEMENTATION SEALED; HOSTINGER ACCEPTANCE AND DEPLOYMENT PENDING
 
-This public file intentionally omits host filesystem locations, raw-data lineage,
-temporary output roots, process identifiers, usernames, interface addresses, and
-other infrastructure-specific values. The detailed unsanitized execution log is
-retained only in a private local checkpoint that is not part of the public
-branch.
+- Reviewed diagnostic commit 0da02be and repair commit bd01b8d.
+  Result: compound runtime publication plus harness-accounting cause confirmed.
 
-CURRENT REVIEWED SOURCE RESULTS
+- Ran orchestrator module.
+  Result: 114 passed, 0 failed.
 
-- Ingestion suite: 127 passed, 0 failed.
-- Orchestration suite: 111 passed, 0 failed.
-- Combined ingestion/orchestration rerun: 238 passed, 0 failed.
-- Equivalence harness: 32 passed; 3 host-only ptrace/strace cases unavailable
-  in the local managed container and still mandatory on Hostinger.
-- Deployment/package/gateway/runner suite: 130 passed; 2 user-systemd and
-  bubblewrap cases unavailable locally and still mandatory on Hostinger.
-- Stable-seal non-browser collection: 545 passed, 20 skipped, 13 failed, and
-  16 errored. All 29 failures/errors and 20 skips require Hostinger-only
-  facilities or sealed reference packages; no code-attributable failure remained.
-- Browser acceptance: pending Hostinger Chromium/Playwright execution.
-- Current focused all-nine and current full-six all-nine equivalence: pending
-  fresh Hostinger execution from the exact published commit.
+- Ran ingestion, orchestrator, and equivalence-harness modules.
+  Result: 278 passed, 3 failed, 0 skipped.
+  The three failures require ptrace/strace, which this container prohibits.
+  They remain mandatory host gates.
 
-SEALED IDENTITIES
+- Ran new repair selections.
+  Result: 7 passed, 0 failed.
 
-- Engine allowlist: 38/38 files.
-- Engine manifest companion SHA-256:
-  715a82b48e7bffe68f749f94c29b6d0e098bfe0e55f24d91e00db690e38827b3
-- Engine aggregate SHA-256:
-  021935bc0722b16a16e3af52deb7a7f26ef1aa6b4983aa3442420596bc00725d
-- Deployment allowlist: 47/47 files.
-- Deployment manifest companion SHA-256:
-  c75d269da49f141352aeedffd0e3b7fc09d9045ab814bdf917214e44ac905a7b
-- Deployment package aggregate SHA-256:
-  563e2d848933c41eea1db20008bf92e29ee6162baaeb767361e5c605aec18c4c
-- Runtime configuration SHA-256:
-  5ce1058763ecc47494f9bdf231439117c6a4fb64c2e491d70395b4be0c50b031
+- Ran projection reuse, gateway limit, and GUI parity selections.
+  Result: 27 passed, 0 failed.
 
-PUBLIC-SAFE COMMAND FORMS
+- Verified engine and deployment companions and manifest tests.
+  Result: 38/38 engine files and 47/47 deployment files exact; 3 tests passed.
 
-  PYTHONPATH=src <PYTHON> -m pytest -q \
-    tests/unit/test_r6e1r_ingestion.py \
-    tests/unit/test_r6e1r_orchestrator.py
+- Ran diff and public-handoff sanitation checks.
+  Result: no current host path, IP, username, PID, raw filename, credential, or
+  private-key content added by v2.
 
-  PYTHONPATH=src <PYTHON> -m pytest -q \
-    tests/unit/test_r6e1r_equivalence_harness.py
-
-  <PYTHON> scripts/run_r6e1r_equivalence.py \
-    --data-root <HOST_RAW_ROOT> \
-    --output-root <FRESH_OUTPUT_ROOT> \
-    --work-root <FRESH_WORK_ROOT> \
-    --config configs/r6e_shadow.json
-
-  sha256sum -c manifests/r6e1r_engine_source_manifest.sha256
-  sha256sum -c manifests/r6e1r_deployment_package_manifest.sha256
-  git diff --check
-
-DIAGNOSTIC HISTORY
-
-- Focused all-nine v12 passed its historical source checkpoint, but it predates
-  the final durability and package repairs and is not current acceptance.
-- Full-six v6 sealed exact A/B baselines and reference surfaces, then exposed a
-  schedule-harness visibility defect that produced 898 ingestion and 898
-  analytical out-of-order refusals. The run was interrupted and rejected.
-- The causal-backlog repair passed 31/31 harness tests and 116/116 broader
-  callback tests. A fresh full-six run remains mandatory.
-- The auxiliary August 20 sample exposed an unstable terminal dependency-group
-  publication defect. The repair has dedicated restart and idempotency tests;
-  the auxiliary sample cannot replace canonical acceptance.
-
-PUBLICATION/DEPLOYMENT STATE
-
-- No verified tag has been created.
-- No R6E1R service has been installed by this workspace.
-- No external URL has been verified.
-- Protected services and collectors were not modified.
-- Hostinger must use fresh state/output roots, rerun every mandatory gate, and
-  deploy only after every gate passes.
+Focused all-nine: NOT RUN.
+Full six-session all-nine: NOT RUN.
+Deployment: NOT PERFORMED.
+Verification tag: NOT CREATED.

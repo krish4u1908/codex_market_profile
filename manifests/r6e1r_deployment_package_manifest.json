@@ -49,8 +49,8 @@
     "src/banknifty_profiler/shadow/symbols.py"
   ],
   "classification": "LIVE MARKET-PROFILING DIAGNOSTIC \u2014 NOT A BUY/SELL SIGNAL",
-  "engine_hash": "021935bc0722b16a16e3af52deb7a7f26ef1aa6b4983aa3442420596bc00725d",
-  "engine_source_manifest_sha256": "715a82b48e7bffe68f749f94c29b6d0e098bfe0e55f24d91e00db690e38827b3",
+  "engine_hash": "362474858eda75b18180ad2fce48e50e1d4acdd1b04a0db405eaae199e70b7a7",
+  "engine_source_manifest_sha256": "51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7",
   "file_count": 47,
   "files": [
     {
@@ -75,7 +75,7 @@
     },
     {
       "path": "deploy/r6e1r/r6e1r-runtime-config.json.example",
-      "sha256": "c38479baeefe25c4cc47981d5ad86cf5538b20aa0eb1ae6fab2fade1c1a58364",
+      "sha256": "ecfa9e1a8afb4622f8d4f3128511817bef451f5353ff1998d72e6475c67ebab2",
       "size": 903
     },
     {
@@ -95,17 +95,17 @@
     },
     {
       "path": "deploy/r6e1r/validate_preloaded_state.py",
-      "sha256": "4e527187413115d178117aef8536bf15b4bdc1c51b78a552922bc1cb5249e87f",
-      "size": 42803
+      "sha256": "ffe27dfffeef2f756f6f0868235448a31325779b39970c5e07de487e643dc627",
+      "size": 49552
     },
     {
       "path": "manifests/r6e1r_engine_source_manifest.json",
-      "sha256": "715a82b48e7bffe68f749f94c29b6d0e098bfe0e55f24d91e00db690e38827b3",
+      "sha256": "51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7",
       "size": 8851
     },
     {
       "path": "manifests/r6e1r_engine_source_manifest.sha256",
-      "sha256": "c36d05207666447501bdeef4c06dfe95838adb17b8f762d1da55c92a4c940df2",
+      "sha256": "a6ef10c91e7f481d422bb36e7c943fe0549c22f047584d5e8c43805d813daa0a",
       "size": 110
     },
     {
@@ -275,8 +275,8 @@
     },
     {
       "path": "src/banknifty_profiler/shadow/orchestrator.py",
-      "sha256": "f7e525306621f99101c7b4c0d937c38dc4036fbd67d04369472db52049d041ef",
-      "size": 166658
+      "sha256": "29d7ed1d15333355fac0388ac12f0ad231df01dac19725f27389342ad3c186a3",
+      "size": 168495
     },
     {
       "path": "src/banknifty_profiler/shadow/state.py",
@@ -289,7 +289,7 @@
       "size": 10039
     }
   ],
-  "package_hash": "563e2d848933c41eea1db20008bf92e29ee6162baaeb767361e5c605aec18c4c",
-  "runtime_configuration_hash": "5ce1058763ecc47494f9bdf231439117c6a4fb64c2e491d70395b4be0c50b031",
+  "package_hash": "83ac33a6a82bc93db49a1464d237adc9658f9318b5331321a6693622384a6bf8",
+  "runtime_configuration_hash": "43654758453b2a39209dbe0df6f6d2587c63c2bf5cb77c99d44df07dd54f485b",
   "schema": "R6E1R_DEPLOYMENT_PACKAGE_MANIFEST_V1"
 }

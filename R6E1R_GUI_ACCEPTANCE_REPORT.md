@@ -2,7 +2,9 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT LOCAL API/FUNCTIONAL EVIDENCE PASSED; CURRENT BROWSER AND EXTERNAL LIVE ACCEPTANCE PENDING**
+Status: **V2 HOST ACCEPTANCE PENDING — SEE `R6E1R_CURRENT_STATUS.md`**
+
+Current exact v2 evidence is authoritative only in `R6E1R_CURRENT_STATUS.md`; the detailed sections below are acceptance contracts or commit-scoped historical evidence.
 
 The intended GUI contract follows the verified R6D visual model while adding operational availability and receipt-age state. The browser must render server-published analytical rows; it may select, sort, filter, and draw them, but it must not recompute detector, inventory, lifecycle, participation, or cross-layer analytics.
 

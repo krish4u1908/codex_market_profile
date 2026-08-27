@@ -1,12 +1,15 @@
-# Secret and Unsafe-File Scan
+# Secret and Public-Handoff Scan
 
-Status: **PASS**
+Status: **PASS FOR SANITIZED V2 CHANGES**
 
-- No private-key headers found.
-- No credentials, tokens, collector environment files, `.env` files, or secrets tracked.
-- No raw JSONL, minute-market CSV, replay HTML, screenshots, logs, archives, caches, checkpoints, or virtual environments tracked.
-- No runtime source dependency on the original research directories.
-- No runtime dependency on ports 8803 or 8804.
-- Absolute original paths occur only in the required provenance inventory.
-- Git remotes configured: none.
+- No credential, token, password, private-key header, or environment secret is
+  present in the v2 diff.
+- No raw JSONL, archive, checkpoint, cache, virtual environment, or runtime log
+  is tracked by the v2 commits.
+- Current R6E1R reports and scratchpads contain no host IP, username, PID,
+  physical work/output root, raw filename, or private source-lineage row.
+- Operational locations are expressed with placeholders in public handoff text.
+- Historical repository provenance inventories predate v2 and are outside this
+  current-handoff result; v2 neither expands nor republishes their content.
+- No verification tag or deployment credential is present.
 

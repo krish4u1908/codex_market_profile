@@ -2,7 +2,9 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT BROWSER RUN UNAVAILABLE LOCALLY; HOSTINGER BROWSER AND DEPLOYED-LIVE EVIDENCE PENDING**
+Status: **V2 HOST ACCEPTANCE PENDING — SEE `R6E1R_CURRENT_STATUS.md`**
+
+Current exact v2 evidence is authoritative only in `R6E1R_CURRENT_STATUS.md`; the detailed sections below are acceptance contracts or commit-scoped historical evidence.
 
 Python Playwright/Chromium is not installed in the current local environment. No current-source browser run was executed here, so historical screenshots or browser counts are not promoted to current acceptance evidence.
 

@@ -2,7 +2,9 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **SEALED PACKAGE PREPARED — HOSTINGER ACCEPTANCE AND INSTALLATION PENDING**
+Status: **V2 HOST ACCEPTANCE PENDING — SEE `R6E1R_CURRENT_STATUS.md`**
+
+Current exact v2 evidence is authoritative only in `R6E1R_CURRENT_STATUS.md`; the detailed sections below are acceptance contracts or commit-scoped historical evidence.
 
 The authoritative package guide is
 [deploy/r6e1r/README.md](deploy/r6e1r/README.md). This root-level runbook records
@@ -32,16 +34,16 @@ port; never open the range.
 
 | Item | Required value |
 |---|---|
-| Feature branch | `fix/r6e1r-final-live-shadow` |
+| Feature branch | `fix/r6e1r-final-live-shadow-v2` |
 | Exact pushed commit | `PENDING_FINAL_PUSH` |
 | Clean remote worktree | `PENDING_HOSTINGER_EVIDENCE` |
 | Engine source files | PASS — 38/38 |
-| Engine manifest/companion SHA-256 | `715a82b48e7bffe68f749f94c29b6d0e098bfe0e55f24d91e00db690e38827b3` |
-| Engine aggregate hash | `021935bc0722b16a16e3af52deb7a7f26ef1aa6b4983aa3442420596bc00725d` |
+| Engine manifest/companion SHA-256 | `51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7` |
+| Engine aggregate hash | `362474858eda75b18180ad2fce48e50e1d4acdd1b04a0db405eaae199e70b7a7` |
 | Deployment package files | PASS — 47/47 |
-| Deployment manifest/companion SHA-256 | `c75d269da49f141352aeedffd0e3b7fc09d9045ab814bdf917214e44ac905a7b` |
-| Deployment package aggregate hash | `563e2d848933c41eea1db20008bf92e29ee6162baaeb767361e5c605aec18c4c` |
-| Runtime configuration hash | `5ce1058763ecc47494f9bdf231439117c6a4fb64c2e491d70395b4be0c50b031` |
+| Deployment manifest/companion SHA-256 | `d1b955715280670189dfd623f60ec8c57c870397057b7a81de597e68a9d42104` |
+| Deployment package aggregate hash | `83ac33a6a82bc93db49a1464d237adc9658f9318b5331321a6693622384a6bf8` |
+| Runtime configuration hash | `43654758453b2a39209dbe0df6f6d2587c63c2bf5cb77c99d44df07dd54f485b` |
 
 Hostinger must fetch the exact final commit, fast-forward only, start from a clean
 worktree, and independently verify both companions and every allowlisted byte.

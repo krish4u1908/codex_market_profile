@@ -2,7 +2,9 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT LOCAL TEST TIMINGS RECORDED; CURRENT-SEALED FOCUSED AND SIX-SESSION HOST MEASUREMENTS PENDING**
+Status: **V2 HOST ACCEPTANCE PENDING — SEE `R6E1R_CURRENT_STATUS.md`**
+
+Current exact v2 evidence is authoritative only in `R6E1R_CURRENT_STATUS.md`; the detailed sections below are acceptance contracts or commit-scoped historical evidence.
 
 ## Current-source local measurements
 

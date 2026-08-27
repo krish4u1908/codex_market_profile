@@ -2,7 +2,9 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT INGESTION 127/127 AND ORCHESTRATION 111/111; HOSTINGER FOCUSED/SIX-SESSION PENDING**
+Status: **V2 HOST ACCEPTANCE PENDING — SEE `R6E1R_CURRENT_STATUS.md`**
+
+Current exact v2 evidence is authoritative only in `R6E1R_CURRENT_STATUS.md`; the detailed sections below are acceptance contracts or commit-scoped historical evidence.
 
 | Stage | Repository-owned entry point | Required input/output contract | Draft evidence | Local/historical evidence; final Hostinger gate |
 |---|---|---|---|---|
@@ -13,7 +15,7 @@ Status: **CURRENT INGESTION 127/127 AND ORCHESTRATION 111/111; HOSTINGER FOCUSED
 | Durable raw staging | Authenticated SQLite outbox plus normalized event ledger | Full schema, column/payload/content binding; unbound legacy rows fail closed; neither a JSON mirror nor surviving append-only evidence can bootstrap missing/empty SQLite authority; every trusted source must retain monotonic row/offset/identity coverage | Exception/restart/tamper/forged-or-missing-mirror/partial-source/rollback tests recorded | PASS — current ingestion 127/127; Hostinger focused/full six pending |
 | Futures selection barrier | Candidate outbox and receipt watermark | Hold equal/later publication until canonical depth selection | Repair and restart fixture present | PASS — focused v12 zero refusals plus targeted restart fixtures; full six pending |
 | Registered callback | `register_callback(orchestrator)` | Production poll invokes batch callback; no manual double processing | Integration coverage recorded | PASS — focused production callback path; full six pending |
-| Durable analytical stage | `LiveAnalyticalOrchestrator.process_observations` | Retained generic append intent, reconcile before seen-ID, acknowledge only after accepted staging; unstable terminal-group rows remain provisional until causally immutable | Failure-injection coverage recorded | PASS — current orchestrator 111/111; Hostinger full six pending |
+| Durable analytical stage | `LiveAnalyticalOrchestrator.process_observations` | Retained generic append intent, reconcile before seen-ID, acknowledge only after accepted staging; unstable terminal-group rows remain provisional until causally immutable | Failure-injection coverage recorded | PASS — current orchestrator 114/114; Hostinger full six pending |
 | Fixed context | Orchestrator fixed-context loader/cache | Raw predecessor chain; current session excluded; source-hash cached | Targeted context tests recorded | PASS — targeted and focused evidence; full predecessor-chain gate pending |
 | Causal synchronization | `_divergence` / canonical `causal_basis` | Backward Index as-of, inclusive 0-2,000 ms, no future join | Unit/reference coverage recorded | PASS — focused v12 zero future/tolerance violations; full six pending |
 | Inventory | `_inventory` | BN-reference Price and OI VPOC; frozen backward as-of through 5,000 ms; fixed plus Intraday | Focused fallback comparison recorded | PASS — focused Intraday equality and real 3-4s inventory fixture; frozen-count full six pending |
@@ -31,6 +33,6 @@ Status: **CURRENT INGESTION 127/127 AND ORCHESTRATION 111/111; HOSTINGER FOCUSED
 
 Final acceptance requires every callback invocation key in each applicable focused fixture and exact A/B artifact equality; a non-qualifying divergence in the small sample does not waive unit exercise of the detector, dependency, lifecycle, participation, cross-layer, or GUI path.
 
-Historical focused-v12 identity: engine manifest SHA-256 `7c13b44c...`, engine hash `980b6af2...`, focused summary SHA-256 `19b6c15f...`. It predates the current repair and is not acceptance evidence. Current engine manifest SHA-256 is `715a82b48e7bffe68f749f94c29b6d0e098bfe0e55f24d91e00db690e38827b3`; current engine hash is `021935bc0722b16a16e3af52deb7a7f26ef1aa6b4983aa3442420596bc00725d`.
+Historical focused-v12 identity: engine manifest SHA-256 `7c13b44c...`, engine hash `980b6af2...`, focused summary SHA-256 `19b6c15f...`. It predates the current repair and is not acceptance evidence. Current engine manifest SHA-256 is `51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7`; current engine hash is `362474858eda75b18180ad2fce48e50e1d4acdd1b04a0db405eaae199e70b7a7`.
 
 Fresh six-session sealed callback matrix: `PENDING_FINAL_EVIDENCE`.

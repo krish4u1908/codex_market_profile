@@ -2,7 +2,9 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT FOCUSED LOCAL SUITES RECORDED; HOSTINGER FOCUSED/SIX-SESSION AND COMPLETE GATES PENDING**
+Status: **V2 HOST ACCEPTANCE PENDING — SEE `R6E1R_CURRENT_STATUS.md`**
+
+Current exact v2 evidence is authoritative only in `R6E1R_CURRENT_STATUS.md`; the detailed sections below are acceptance contracts or commit-scoped historical evidence.
 
 ## Production path
 
@@ -63,7 +65,7 @@ The fixed 1D/2D/3D context reader uses predecessor raw bytes, excludes the curre
 
 | Evidence | Recorded result | Final standing |
 |---|---|---|
-| Pre-write, post-fsync, partial multi-session, publication exception, continuation, checkpoint-authority, unstable-terminal-group, and runner coverage | Ingestion 127/127; orchestrator 111/111 | Local PASS; Hostinger complete regression pending |
+| Pre-write, post-fsync, partial multi-session, publication exception, continuation, checkpoint-authority, unstable-terminal-group, and runner coverage | Ingestion 127/127; orchestrator 114/114 | Local PASS; Hostinger complete regression pending |
 | Production callback registration | Covered by ingestor/orchestrator integration tests | Implemented |
 | API reads do not flush analytics | Covered by live API/state tests | Implemented |
 | One-record unresolved Futures candidate | Earlier probe exposed 668 refusals | Repaired; focused v12 exercised all nine schedules with zero analytical refusals |
@@ -77,7 +79,7 @@ Focused v12 is retained as historical evidence bound to commits
 `71a868f1339773df06d0932dd72a3c908caa1028` and
 `02594dc222afeff5135ac0404dd24211d09f425f`. Current runtime identity is engine
 manifest SHA-256
-`715a82b48e7bffe68f749f94c29b6d0e098bfe0e55f24d91e00db690e38827b3`
+`51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7`
 and engine hash
-`021935bc0722b16a16e3af52deb7a7f26ef1aa6b4983aa3442420596bc00725d`;
+`362474858eda75b18180ad2fce48e50e1d4acdd1b04a0db405eaae199e70b7a7`;
 it requires a fresh Hostinger focused and full-six run.
