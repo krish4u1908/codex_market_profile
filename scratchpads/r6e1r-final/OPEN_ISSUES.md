@@ -2,9 +2,9 @@
 
 - The non-destructive merge is complete and pushed as `dcccc723c6584bd929fab1aef531c3aad32eb1a2`; no verified tag exists.
 - The merged 38-file engine and 47-file deployment manifests are exact and independently verified. Reseal only if an allowlisted byte changes.
-- Commit and push the clean-B GUI comparator repair, then run fresh focused August 19 and canonical six-session all-nine equivalence from that exact repair commit. Focused v12/full-six v7/v10 and the stopped merged v2/v1 runs are historical diagnostics only.
+- The clean-B GUI comparator repair is committed and pushed as `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`; the security/test/report milestone is pushed as `19c5489f9845f1325da1e1f6e3d9118b95bd959b`. Fresh focused August 19 and canonical six-session all-nine equivalence must complete from the pinned `c42e703` checkout.
 - Require zero stream/batch differences, canonical-reference mismatches, future joins, backdating, duplicate analytical IDs, prohibited or unmeasured opens, checkpoint failures, analytical refusals, and source mutations across every required schedule.
-- The focused-v2 clean-GUI resolution mismatch was repaired without changing analytical outputs; after direct oversized-gateway hardening, the complete regression is 636/636 with zero failures/skips. Fresh focused-v3 and full-six-v2 all-nine runs remain mandatory and are active from the pushed repair commit.
+- The focused-v2 clean-GUI resolution mismatch was repaired without changing analytical outputs; after direct oversized-gateway hardening, the complete regression is 636/636 with zero failures/skips. Focused-v3/full-six-v2 were externally interrupted by simultaneous SIGINT and are rejected diagnostics. Fresh focused-v4 and full-six-v3 all-nine runs are active as persistent non-transient user services from the pushed repair commit.
 - User lingering is enabled (`Linger=yes`). Isolated installation, cold-preload measurement, health/readiness, restart recovery, public-interface reachability, and final screenshots remain pending.
 - Verify ports 8803/8804 and collectors remain byte/process/restart unchanged. Use only localhost backend 18805 and one selected external research port after every verification gate passes.
 - The auxiliary August 20 material remains diagnostic only and cannot replace the canonical focused or six-session inputs.

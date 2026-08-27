@@ -307,3 +307,11 @@ RESULT: PASS; 636 passed, 0 failed, 0 skipped in 129.36s; wall 2m09.72s; max pro
 2026-08-27 preliminary credential and oversized-file scan
 COMMAND: tracked/history key-token patterns, credential-bearing path inventory, tracked sizes, and all reachable Git blob sizes
 RESULT: PASS; no real key/token signature; fake credential strings confined to redaction tests; no raw JSONL/database/credential files; largest reachable blob 314,380 bytes; blobs over 1 MiB=0 and over 10 MiB=0. Final-commit rerun remains mandatory.
+
+2026-08-27 simultaneous external-SIGINT rejection
+COMMAND: inspect user journal, `/usr/bin/time` records, process traces, linger state, and partial artifacts for focused_merged_v3 and six_session_merged_v2
+RESULT: REJECTED EXTERNAL INTERRUPTION; both processes received signal 2 at the same wall-clock instant after 33m04s. Neither emitted an analytical mismatch. Linger remained `yes`, standard input was null, and the user manager remained active. All partial material was preserved under exact `rejected_external_sigint` names and is excluded from acceptance.
+
+2026-08-27 persistent acceptance relaunch
+COMMAND: install and verify non-transient no-restart user units for focused_merged_v4 and six_session_merged_v3; use pinned c42e703 checkout, explicit pinned PYTHONPATH, clean roots, independent launches, and a SIGINT-ignoring/SIGTERM-controllable exec wrapper
+RESULT: RUNNING from 2026-08-27 15:40:10 and 15:40:14 IST. Unit files verify; Transient=no; StandardInput=null; KillSignal=SIGTERM; Linger=yes. Initial missing-PYTHONPATH launcher preflight was preserved separately and corrected before any analytical work began.
