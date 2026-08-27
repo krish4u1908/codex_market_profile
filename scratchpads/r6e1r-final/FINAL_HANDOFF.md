@@ -14,9 +14,9 @@ content-only artifact.
 
 ## Commits
 
-- `a6b0e1c`: strict projection reuse, gateway limit coverage, runtime test
+- `9669842054ec74b63b86576e4b5540b1a2c9dd63`: strict projection reuse, gateway limit coverage, runtime test
   portability, and per-episode GUI resolution parity.
-- `d92c715`: provisional immutable-ledger repair, exact session-local refresh
+- `a3c20bc2ea1a6251a84f41737d5b21413305bbd6`: provisional immutable-ledger repair, exact session-local refresh
   accounting, restart coverage, and bounded failure diagnostics.
 - The branch-head report/seal commit contains only sanitized status and exact
   package identities.

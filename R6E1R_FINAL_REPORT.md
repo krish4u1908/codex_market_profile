@@ -47,8 +47,8 @@ alone.
 |---|---|
 | Branch | `fix/r6e1r-final-live-shadow-v2` |
 | Sanitized base | `c91df5a660195fa7b4595e0da02488c9db7cb8b1` |
-| Projection/GUI hardening | `a6b0e1c` |
-| Ledger/harness repair | `d92c715` |
+| Projection/GUI hardening | `9669842054ec74b63b86576e4b5540b1a2c9dd63` |
+| Ledger/harness repair | `a3c20bc2ea1a6251a84f41737d5b21413305bbd6` |
 | Tag | Not created |
 
 The diagnostic and contaminated merge branches were not merged into v2.
