@@ -107,3 +107,17 @@ checkpoints. Only the current 636/636 result closes current regression gates.
 Local source verification is sufficient for handoff, not release. Final aggregate status is:
 
 `COMPLETE_REGRESSION_PASS_FRESH_EQUIVALENCE_AND_LIVE_DEPLOYMENT_PENDING`
+# Current-head authorized-host addendum — 2026-08-27
+
+- Tested commit: `19c5489f9845f1325da1e1f6e3d9118b95bd959b`
+- Complete repository suite: 636 passed, 0 failed, 0 skipped in 116.45 seconds.
+- Host-only closure: 3 runtime-open/strace plus 2 user-systemd/bubblewrap
+  tests, 5/5 passed in 1.34 seconds.
+- Focused all-nine equivalence: FAIL, eight schedules passed and
+  `large_chronological_chunks` failed
+  `PERIODIC_EPISODE_EVOLUTION_NOT_EXERCISED` with two differences.
+- Baseline A/B: 21/21 components, 8/8 ledgers, and 9/9 invariants exact.
+- Zero counters: future joins, tolerance violations, backdating, duplicate
+  analytical IDs, analytical refusals, checkpoint failures, prohibited opens,
+  unmeasured opens, and source mutations.
+- Full-six and deployment: not started by failure policy.

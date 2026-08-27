@@ -2,7 +2,21 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT REGRESSION MEASURED — FOCUSED-V3/FULL-SIX-V2 FINAL MEASUREMENTS PENDING**
+Status: **CURRENT REGRESSION PASSED — FOCUSED GATE FAILED — FULL SIX NOT STARTED**
+
+## Current-head host measurement
+
+At commit `19c5489f9845f1325da1e1f6e3d9118b95bd959b`, the complete
+repository regression passed 636/636 in 116.45 seconds (116.82 seconds wall)
+with peak process RSS 673,164 KiB. The separate five-test host-only closure
+passed in 1.34 seconds.
+
+The focused all-nine run completed in 3,401.855 seconds (56m42.71s wall).
+Parent peak RSS was 1,763,052 KiB and child peak RSS was 900,908 KiB. Its
+retained diagnostic output is approximately 492 MiB and retained work state
+approximately 32 MiB. The run failed only the large-chronological schedule
+exercise/ledger gate, so it is rejected performance evidence and cannot
+authorize the full-six workload or deployment.
 
 Current pushed repair commit: `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`.
 
