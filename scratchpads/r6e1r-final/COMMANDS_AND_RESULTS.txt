@@ -269,3 +269,29 @@ COMMAND: PYTHONPATH=src pytest -q deploy/r6e1r/test_deployment.py deploy/r6e1r/t
 RESULT: PASS; 117/117 in 23.16s (23.45s wall, 128,460 KiB peak RSS), including transient user-systemd and bubblewrap cases with no deselection.
 COMMAND: merged deployment/gateway/live-API/runner selection; render_service_units.py for the authorized paths and port 8805; systemd-analyze --user verify rendered units; both manifest companion checks; git diff --check
 RESULT: PASS; 173/173 selection; rendered gateway/shadow SHA-256 values 988ac6effc1f54d68f7d3adee27c77d0b9f1dcd0461613f33b83c0aef3b2dc6a and 811e7fc7472ab9ad804b58f6292098a8264319b35abf8734cb3b4a186d6abb40; 38/38 engine and 47/47 deployment files exact; diff check PASS.
+
+2026-08-27 merged fixture-browser acceptance
+COMMAND: R6E1R_BROWSER_LIBRARY_PATH=/opt/banknifty/research/.browser_libs/root/usr/lib/x86_64-linux-gnu PYTHONPATH=src /opt/banknifty/research/.venv/bin/python -m pytest -q tests/browser/test_r6e1r_live_gui.py
+RESULT: PASS; 1/1 in 4.86s (5.17s wall, 146,684 KiB peak RSS), zero console/page errors. Screenshots are 1600x1915: complete f1d5548afea149b024f8cac1b42c1ad450c5e2c0398d94ec794b9a8df4439a22; Intraday-only 729db0b8828c67db807133b67d2f2b1861deaf5c1b1c049ad8436699c616ee90; fixture live/latest 9cb2d78c568e5d6f2db22b2d4d2af2d4f01ff3f08fc5805175b5be80b72c1155. An initial invocation without the documented library path failed before page creation on missing libnspr4.so and was repaired by supplying the existing host library root; no test was weakened or skipped.
+
+2026-08-27 focused merged v1 invocation correction
+COMMAND: pinned dcccc723 focused all-nine with the authorized fixture but six-session configs/r6b3_participation.json and configs/r6c0i_inventory.json
+RESULT: REJECTED INVOCATION; incremental A sealed, then clean B refused because canonical stack sessions were six dates rather than requested 2026-08-19. Exit 1 after 3m35.62s, 895,116 KiB process peak RSS. Partial output/work/log/time retained with rejected_six_session_configs and excluded from acceptance.
+COMMAND: compare fixture manifest dynamic Futures with persisted one-session stack/inventory configs; start focused merged v2 from fresh roots under r6e1r-focused-merged-v2.service
+RESULT: PASS preflight and RUNNING from 2026-08-27 14:48:09 IST. Stack/inventory SHA-256 values d45d8622bbdf7992695ab640b539bc1dd194fa3ddd6d3ea2063da696bada5735 and 7dc5b22b97f683ac916b9be81f919b1504e2767d55706211c2f192e6ecfef664; both name the repository-discovered fixture contract NSE:BANKNIFTY26AUGFUT for 2026-08-19.
+
+2026-08-27 exact merged complete repository regression
+COMMAND: PYTHONPATH=src PYTHON=/opt/banknifty/research/.venv/bin/python plus the sealed R6C0I/R6B3/R6B3A/R6B3R evidence roots and R6E1R_BROWSER_LIBRARY_PATH=/opt/banknifty/research/.browser_libs/root/usr/lib/x86_64-linux-gnu /opt/banknifty/research/.venv/bin/python -m pytest -q
+RESULT: PASS; 634 passed, 0 failed, 0 skipped in 124.28s; wall 2m04.69s; max process RSS 670,164 KiB; service result success/exit 0. Retained log SHA-256 f076b8abb0535b4f941c99da70c0c1eb9ea4242e897a4c7fb1f54f199668ec6c; timing SHA-256 83aba30d44e6c4a65499afb4d6a7826d5b4aae23ba0bd78649a11af4cdfcf399. No test was deselected, skipped, weakened, or reclassified.
+
+2026-08-27 focused-v2 GUI-resolution diagnostic and fail-fast preservation
+COMMAND: compare focused merged-v2 incremental-A and clean-B GUI projections by component; replay clean-B through the repository live per-episode/native-mechanism compaction; stop both affected pinned equivalence units; preserve partial roots with rejected_gui_resolution_compaction
+RESULT: REPAIR REQUIRED and preserved; analytical components other than GUI were exact and all eight ledgers/invariants passed. The only GUI sub-surfaces that differed were resolution_mechanisms (live 1,294 material transitions versus clean 11,486 dense observations) and its count. Applying the existing live rule made the full GUI projection exact. Both partial runs are rejected diagnostics, not acceptance.
+
+2026-08-27 clean-B GUI-resolution compaction repair
+COMMAND: PYTHONPATH=src /opt/banknifty/research/.venv/bin/python -m pytest -q tests/unit/test_r6e1r_equivalence_harness.py; independently recompare the preserved focused A/B snapshots through the repaired builder
+RESULT: PASS; 36/36 harness tests; preserved focused snapshot recomparison 21/21 components including GUI exact. Independent static review confirms exact live/R6D compaction parity and no frozen analytical rule, timestamp, dense artifact, ID, ledger, or threshold change.
+
+2026-08-27 complete repository regression after GUI comparator repair
+COMMAND: same fully provisioned complete pytest invocation as the exact merged gate, now on repaired source and added regression
+RESULT: PASS; 635 passed, 0 failed, 0 skipped in 124.39s; wall 2m04.82s; max process RSS 670,496 KiB; service result success/exit 0. Log SHA-256 5f63c3436f3bb7dd94f822da05dbdb33d9569536d657fd055e234920ade1e31f; timing SHA-256 e76aa1cdcbec963ccaf73c8f55babd258b329f7baf08eda8952396a421364c8a. No test was deselected, skipped, weakened, or reclassified.

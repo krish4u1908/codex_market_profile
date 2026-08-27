@@ -1,10 +1,10 @@
 # R6E1R-FINAL Open Issues
 
-- Complete the non-destructive merge of published runtime/deployment commits `8038c9f`, `d6736b0`, `c91df5a` with local fail-closed preload commit `6180735`; run all targeted closures and push the merge. No verification tag exists.
-- Reseal and independently verify the merged 38-file engine and 47-file deployment manifests after every conflict resolution. Current provisional identities must not be promoted until the merged test gate passes.
-- Run a fresh focused August 19 all-nine equivalence and fresh canonical six-session all-nine equivalence from the exact merged commit. Focused v12 and full-six v7/v10 predate `8038c9f` and are historical diagnostics only.
+- The non-destructive merge is complete and pushed as `dcccc723c6584bd929fab1aef531c3aad32eb1a2`; no verified tag exists.
+- The merged 38-file engine and 47-file deployment manifests are exact and independently verified. Reseal only if an allowlisted byte changes.
+- Commit and push the clean-B GUI comparator repair, then run fresh focused August 19 and canonical six-session all-nine equivalence from that exact repair commit. Focused v12/full-six v7/v10 and the stopped merged v2/v1 runs are historical diagnostics only.
 - Require zero stream/batch differences, canonical-reference mismatches, future joins, backdating, duplicate analytical IDs, prohibited or unmeasured opens, checkpoint failures, analytical refusals, and source mutations across every required schedule.
-- Run the complete repository regression, ptrace/strace file-open audit, browser/geometry tests, user-systemd/bubblewrap gates, API/security tests, and package closure without skips, waivers, or reclassification.
+- The focused-v2 clean-GUI resolution mismatch was repaired without changing analytical outputs; the post-repair complete regression is now 635/635 with zero failures/skips. Fresh focused and full-six all-nine runs remain mandatory because both affected pre-repair runs were deliberately stopped and rejected.
 - User lingering is enabled (`Linger=yes`). Isolated installation, cold-preload measurement, health/readiness, restart recovery, public-interface reachability, and final screenshots remain pending.
 - Verify ports 8803/8804 and collectors remain byte/process/restart unchanged. Use only localhost backend 18805 and one selected external research port after every verification gate passes.
 - The auxiliary August 20 material remains diagnostic only and cannot replace the canonical focused or six-session inputs.

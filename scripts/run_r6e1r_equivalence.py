@@ -4231,27 +4231,30 @@ def rebuild_clean_gui_payload(snapshot: dict[str, Any], sessions: tuple[str, ...
         payload["inventory"] = gui_adapter._pack(
             [row for row in all_inventory if _evaluation_date(row) == session]
         )
-        payload["resolution_mechanisms"] = gui_adapter._pack(
-            [
-                gui_adapter._project(
-                    row,
-                    (
-                        "episode_id",
-                        "timestamp",
-                        "availability_timestamp",
-                        "resolution_mechanism_native",
-                        "resolution_mechanism_compatibility",
-                        "signed_basis_convergence",
-                        "index_contribution",
-                        "futures_contribution",
-                        "new_extreme_flag",
-                        "stalled_extreme_duration_seconds",
-                    ),
-                )
-                for row in _as_rows(snapshot.get("resolution", []))
-                if _evaluation_date(row) == session
-            ]
+        mechanism_fields = (
+            "episode_id",
+            "timestamp",
+            "availability_timestamp",
+            "resolution_mechanism_native",
+            "resolution_mechanism_compatibility",
+            "signed_basis_convergence",
+            "index_contribution",
+            "futures_contribution",
+            "new_extreme_flag",
+            "stalled_extreme_duration_seconds",
         )
+        mechanism: list[dict[str, Any]] = []
+        prior_mechanism: dict[str, object] = {}
+        for row in _as_rows(snapshot.get("resolution", [])):
+            if _evaluation_date(row) != session:
+                continue
+            episode = str(row.get("episode_id", ""))
+            value = row.get("resolution_mechanism_native")
+            if prior_mechanism.get(episode) == value:
+                continue
+            prior_mechanism[episode] = value
+            mechanism.append(gui_adapter._project(row, mechanism_fields))
+        payload["resolution_mechanisms"] = gui_adapter._pack(mechanism)
         for payload_key, snapshot_key in (
             ("participation_dense", "participation_dense"),
             ("participation_transitions", "participation_transitions"),
