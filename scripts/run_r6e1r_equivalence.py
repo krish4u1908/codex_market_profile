@@ -35,7 +35,12 @@ from typing import Any, BinaryIO, Iterator
 
 import pandas as pd
 
-from banknifty_profiler.shadow.contracts import validate_shadow_contract
+from banknifty_profiler.shadow.contracts import (
+    ENGINE_SOURCE_MANIFEST_PATH,
+    checked_in_engine_source_manifest_sha256,
+    validate_shadow_contract,
+    verify_engine_source_manifest,
+)
 from banknifty_profiler.shadow.ingest import IncrementalJSONLIngestor
 from banknifty_profiler.shadow.orchestrator import LiveAnalyticalOrchestrator
 from banknifty_profiler.shadow.api import _chart as sanitized_chart_projection
@@ -85,6 +90,16 @@ EXPECTED_COUNTS = {
 STATE_TREE_MANIFEST_SCHEMA = "R6E1R_INCREMENTAL_A_STATE_TREE_MANIFEST_V1"
 STATE_TREE_SIDECAR_SUFFIXES = (
     "-journal", "-wal", "-shm", ".journal", ".wal",
+)
+SCHEDULE_RESUME_CONTRACT_SCHEMA = "R6E1R_SCHEDULE_RESUME_CONTRACT_V1"
+SCHEDULE_BUNDLE_SCHEMA = "R6E1R_ATOMIC_SCHEDULE_BUNDLE_V1"
+SCHEDULE_BUNDLE_MARKER = "schedule_bundle.json"
+SCHEDULE_BUNDLE_ARTIFACTS = (
+    "snapshot.json",
+    "seal.json",
+    "checkpoint_accounting.json",
+    "file_open_audit.json",
+    "source_integrity.json",
 )
 
 REFERENCE_PACKAGE_CONTRACTS = {
@@ -296,6 +311,12 @@ class RuntimeOpenRecorder:
         if mode is None and isinstance(flags, int):
             mutating = flags & (os.O_CREAT | os.O_TRUNC | os.O_EXCL)
             readable = not mutating and flags & os.O_ACCMODE != os.O_WRONLY
+            # Descriptor-anchored secure reads walk directory ancestors with
+            # read-only directory descriptors.  Those are control operations,
+            # not file-content reads, and their relative component names do not
+            # carry the dirfd in Python's ``open`` audit event.
+            if flags & os.O_DIRECTORY:
+                return
         if not readable:
             return
         try:
@@ -303,13 +324,23 @@ class RuntimeOpenRecorder:
             raw = Path(decoded)
             cwd = "" if raw.is_absolute() else os.getcwd()
             cache_key = (cwd, decoded)
-            normalized = self._normalized_paths.get(cache_key)
+            # Descriptor numbers are routinely reused.  A cached resolution of
+            # /proc/self/fd/N/name could therefore attribute a later read to an
+            # earlier directory.  Resolve descriptor-anchored audit paths while
+            # their parent fd is still open and never cache that association.
+            descriptor_anchored = decoded.startswith("/proc/self/fd/")
+            normalized = (
+                None
+                if descriptor_anchored
+                else self._normalized_paths.get(cache_key)
+            )
             if normalized is None:
                 requested = raw if raw.is_absolute() else Path(cwd) / raw
                 requested = requested.absolute()
                 resolved = requested.resolve(strict=False)
                 normalized = (str(requested), str(resolved))
-                self._normalized_paths[cache_key] = normalized
+                if not descriptor_anchored:
+                    self._normalized_paths[cache_key] = normalized
         except (OSError, TypeError, ValueError):
             return
         self.counts[(self.scope, *normalized)] += 1
@@ -353,7 +384,12 @@ class RuntimeOpenRecorder:
             resolved = Path(resolved_text)
             requested_path = Path(requested)
             classification, purpose = _classify_observed_open(
-                requested_path,
+                # Resume imports are a trust boundary.  A lexical path under a
+                # permitted root is insufficient if its actually opened target
+                # resolves elsewhere.  Normal schedule processing retains the
+                # requested-or-resolved behavior needed by read-only context
+                # links.
+                resolved if scope.startswith("resume_import:") else requested_path,
                 resolved,
                 data_roots=data_roots,
                 state_roots=state_roots,
@@ -530,6 +566,138 @@ def verify_reference_package_manifest(
 
 def _json_bytes(value: Any) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def _atomic_write_bytes(path: Path, payload: bytes) -> None:
+    """Durably publish one file; an interrupted write never looks complete."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.parent / f".{path.name}.{uuid.uuid4().hex}.tmp"
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        _fsync_directory(path.parent)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def _atomic_write_json(path: Path, value: Any) -> None:
+    _atomic_write_bytes(path, _json_bytes(value))
+
+
+def _fsync_directory(path: Path) -> None:
+    directory_fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+
+
+def _fsync_existing_file(path: Path) -> None:
+    if not path.is_file() or stat.S_ISLNK(path.lstat().st_mode):
+        raise ValueError(f"durable bundle file is missing or unsafe: {path}")
+    with path.open("rb") as handle:
+        os.fsync(handle.fileno())
+
+
+@contextmanager
+def _plain_directory_fd(path: Path) -> Iterator[int]:
+    """Open an absolute directory chain without following any component link."""
+    lexical = Path(os.path.abspath(os.fspath(path)))
+    if not lexical.is_absolute():
+        raise ValueError(f"plain directory path is not absolute: {path}")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    descriptor = os.open(lexical.anchor, flags)
+    try:
+        for part in lexical.parts[1:]:
+            child = os.open(part, flags, dir_fd=descriptor)
+            try:
+                metadata = os.fstat(child)
+                if not stat.S_ISDIR(metadata.st_mode):
+                    raise ValueError(f"plain directory component is unsafe: {path}")
+            except BaseException:
+                os.close(child)
+                raise
+            os.close(descriptor)
+            descriptor = child
+        yield descriptor
+    except OSError as error:
+        raise ValueError(f"plain directory chain is unsafe: {path}") from error
+    finally:
+        os.close(descriptor)
+
+
+@contextmanager
+def _plain_file_handle(path: Path) -> Iterator[BinaryIO]:
+    """Open one regular file through a no-follow, descriptor-anchored parent."""
+    lexical = Path(os.path.abspath(os.fspath(path)))
+    if lexical.name in {"", ".", ".."}:
+        raise ValueError(f"plain file path is unsafe: {path}")
+    with _plain_directory_fd(lexical.parent) as parent_fd:
+        # /proc/self/fd keeps the file-content audit event absolute while the
+        # already-open parent descriptor prevents an ancestor replacement race.
+        anchored = Path("/proc/self/fd") / str(parent_fd) / lexical.name
+        try:
+            descriptor = os.open(anchored, os.O_RDONLY | os.O_NOFOLLOW)
+        except OSError as error:
+            raise ValueError(f"plain file is missing or unsafe: {path}") from error
+        try:
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode):
+                raise ValueError(f"plain file is not regular: {path}")
+            with os.fdopen(descriptor, "rb", closefd=True) as handle:
+                descriptor = -1
+                yield handle
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+
+
+def _plain_file_bytes(path: Path) -> bytes:
+    with _plain_file_handle(path) as handle:
+        return handle.read()
+
+
+def _plain_file_identity(path: Path) -> tuple[int, str]:
+    digest = hashlib.sha256()
+    size = 0
+    with _plain_file_handle(path) as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+            size += len(chunk)
+    return size, digest.hexdigest()
+
+
+def _durable_copy_file(
+    source: Path,
+    destination: Path,
+    *,
+    expected_size: int,
+    expected_sha256: str,
+) -> None:
+    digest = hashlib.sha256()
+    copied = 0
+    with (
+        _plain_file_handle(source) as source_handle,
+        destination.open("xb") as target_handle,
+    ):
+        while True:
+            chunk = source_handle.read(1024 * 1024)
+            if not chunk:
+                break
+            target_handle.write(chunk)
+            digest.update(chunk)
+            copied += len(chunk)
+        target_handle.flush()
+        os.fsync(target_handle.fileno())
+    if copied != expected_size or digest.hexdigest() != expected_sha256:
+        raise ValueError("copied schedule bundle artifact identity mismatch")
 
 
 def _safe_state_relative_path(value: str) -> bool:
@@ -5228,12 +5396,684 @@ def seal_run(run_root: Path, snapshot: Mapping[str, Any], metrics: Mapping[str, 
 def _load_sealed_snapshot(run_root: Path) -> dict[str, Any]:
     seal_path = run_root / "seal.json"
     snapshot_path = run_root / "snapshot.json"
-    if not seal_path.is_file() or not snapshot_path.is_file():
-        raise ValueError(f"unsealed equivalence run: {run_root}")
-    seal = json.loads(seal_path.read_text())
-    if not seal.get("sealed") or seal.get("snapshot_sha256") != _sha256_file(snapshot_path):
+    try:
+        seal_bytes = _plain_file_bytes(seal_path)
+        snapshot_bytes = _plain_file_bytes(snapshot_path)
+    except (OSError, ValueError) as error:
+        raise ValueError(f"unsealed equivalence run: {run_root}") from error
+    seal = json.loads(seal_bytes)
+    if (
+        not seal.get("sealed")
+        or seal.get("snapshot_sha256") != _sha256_bytes(snapshot_bytes)
+    ):
         raise ValueError(f"invalid equivalence seal: {run_root}")
-    return json.loads(snapshot_path.read_text())
+    return json.loads(snapshot_bytes)
+
+
+def _verified_engine_source_identity(repository: Path) -> dict[str, Any]:
+    """Use the repository-owned allowlist verifier for engine identity."""
+    expected = checked_in_engine_source_manifest_sha256(repository)
+    verification = verify_engine_source_manifest(
+        repository,
+        ENGINE_SOURCE_MANIFEST_PATH,
+        expected,
+    )
+    if verification.get("verified") is not True:
+        raise ValueError("engine source manifest verification failed")
+    return {
+        "manifest_sha256": verification["manifest_sha256"],
+        "engine_hash": verification["engine_hash"],
+        "verified_files": verification["file_count"],
+    }
+
+
+def _repository_commit(repository: Path) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    commit = completed.stdout.strip()
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise ValueError("repository commit identity is invalid")
+    status = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    if status.stdout:
+        raise ValueError(
+            "schedule resume contract requires a clean tracked and untracked worktree"
+        )
+    return commit
+
+
+def _harness_source_sha256() -> str:
+    return _sha256_file(Path(__file__).resolve())
+
+
+def _configuration_identity(path: Path, *, canonical_runtime: bool = False) -> dict[str, Any]:
+    parsed = json.loads(path.read_text())
+    if not isinstance(parsed, Mapping):
+        raise ValueError(f"configuration is not an object: {path}")
+    result = {
+        "path": str(path.resolve()),
+        "sha256": _sha256_file(path),
+        "canonical_json_sha256": _sha256_bytes(_json_bytes(parsed)),
+    }
+    if canonical_runtime:
+        result["canonical_runtime_sha256"] = canonical_configuration_sha256(parsed)
+    return result
+
+
+def build_schedule_resume_contract(
+    *,
+    repository: Path,
+    analytical_data_root: Path,
+    all_sources: Iterable[SourceFile],
+    live_relatives: set[Path],
+    analytical_hashes_before: Mapping[str, str],
+    projection_manifest: Mapping[str, Any] | None,
+    focused_fixture_source: Path | None,
+    config_path: Path,
+    stack_config_path: Path,
+    inventory_config_path: Path,
+    sessions: tuple[str, ...],
+    requested_schedules: list[str],
+    schedule_profile: str,
+    maximum_feasible_polls: int,
+    no_expected_count_gate: bool,
+    skip_references: bool,
+) -> dict[str, Any]:
+    """Build the stable identity to which every reusable schedule is bound."""
+    source_rows = []
+    for source in sorted(all_sources, key=lambda item: str(item.relative)):
+        source_rows.append(
+            {
+                "relative_path": str(source.relative),
+                "size": source.size,
+                "complete_rows": source.complete_rows,
+                "json_records": source.json_records,
+                "sha256": analytical_hashes_before[str(source.source)],
+                "role": "live" if source.relative in live_relatives else "context",
+            }
+        )
+    projection_identity: dict[str, Any] | None = None
+    if projection_manifest is not None:
+        projection_identity = {
+            "manifest_sha256": projection_manifest.get("manifest_sha256", ""),
+            "provenance_sha256": projection_manifest.get("provenance_sha256", ""),
+            "selected_outer_records": projection_manifest.get(
+                "selected_outer_records", 0
+            ),
+            "evaluation_sessions": projection_manifest.get(
+                "evaluation_sessions", []
+            ),
+            "causal_source_sessions": projection_manifest.get(
+                "causal_source_sessions", []
+            ),
+            "august_17_policy": projection_manifest.get("august_17_policy", ""),
+            "contract_selection": projection_manifest.get("contract_selection", {}),
+        }
+    payload = {
+        "classification": "LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL",
+        "repository_root": str(repository.resolve()),
+        "repository_commit": _repository_commit(repository),
+        "harness_sha256": _harness_source_sha256(),
+        "engine": _verified_engine_source_identity(repository),
+        "configuration": {
+            "shadow": _configuration_identity(config_path, canonical_runtime=True),
+            "stack": _configuration_identity(stack_config_path),
+            "inventory": _configuration_identity(inventory_config_path),
+        },
+        "analytical_data_root": str(analytical_data_root.resolve()),
+        "sources": source_rows,
+        "projection": projection_identity,
+        "focused_fixture_manifest_sha256": (
+            AUTHORIZED_FOCUSED_MANIFEST_SHA256
+            if focused_fixture_source is not None
+            else ""
+        ),
+        "sessions": list(sessions),
+        "requested_schedules": requested_schedules,
+        "required_schedules": list(REQUIRED_SCHEDULES),
+        "schedule_definitions": {
+            name: _jsonable(asdict(SCHEDULES[name])) for name in requested_schedules
+        },
+        "schedule_profile": schedule_profile,
+        "maximum_feasible_polls": maximum_feasible_polls,
+        "no_expected_count_gate": no_expected_count_gate,
+        "skip_references": skip_references,
+        "expected_counts_sha256": _sha256_bytes(_json_bytes(EXPECTED_COUNTS)),
+        "reference_contracts_sha256": _sha256_bytes(
+            _json_bytes(REFERENCE_PACKAGE_CONTRACTS)
+        ),
+    }
+    return {
+        "schema": SCHEDULE_RESUME_CONTRACT_SCHEMA,
+        "contract_sha256": _sha256_bytes(_json_bytes(payload)),
+        "contract": payload,
+    }
+
+
+def load_schedule_resume_contract(
+    path: Path, *, expected: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
+    try:
+        value = json.loads(_plain_file_bytes(path))
+    except (OSError, ValueError, TypeError) as error:
+        raise ValueError(
+            f"schedule resume contract missing or unsafe: {path}"
+        ) from error
+    payload = value.get("contract") if isinstance(value, Mapping) else None
+    if (
+        not isinstance(value, Mapping)
+        or value.get("schema") != SCHEDULE_RESUME_CONTRACT_SCHEMA
+        or not isinstance(payload, Mapping)
+        or value.get("contract_sha256") != _sha256_bytes(_json_bytes(payload))
+    ):
+        raise ValueError("schedule resume contract is invalid")
+    if expected is not None and value != expected:
+        raise ValueError("schedule resume contract identity mismatch")
+    return dict(value)
+
+
+def schedule_source_integrity_rows(
+    *,
+    all_sources: Iterable[SourceFile],
+    analytical_hashes_before: Mapping[str, str],
+) -> list[dict[str, Any]]:
+    rows = []
+    for source in sorted(all_sources, key=lambda item: str(item.relative)):
+        digest = _sha256_file(source.source)
+        size = source.source.stat().st_size
+        expected = analytical_hashes_before[str(source.source)]
+        unchanged = digest == expected and size == source.size
+        rows.append(
+            {
+                "relative_path": str(source.relative),
+                "sha256_before": expected,
+                "sha256_after_schedule": digest,
+                "bytes_before": source.size,
+                "bytes_after_schedule": size,
+                "status": "PASS" if unchanged else "FAIL",
+            }
+        )
+    return rows
+
+
+def _bundle_artifact_rows(run_root: Path) -> list[dict[str, Any]]:
+    rows = []
+    for relative_text in SCHEDULE_BUNDLE_ARTIFACTS:
+        path = run_root / relative_text
+        if not _safe_state_relative_path(relative_text):
+            raise ValueError(f"schedule bundle artifact is missing or unsafe: {path}")
+        try:
+            size, digest = _plain_file_identity(path)
+        except (OSError, ValueError) as error:
+            raise ValueError(
+                f"schedule bundle artifact is missing or unsafe: {path}"
+            ) from error
+        rows.append(
+            {
+                "path": relative_text,
+                "size": size,
+                "sha256": digest,
+            }
+        )
+    return rows
+
+
+def verify_schedule_bundle_storage(
+    *,
+    run_root: Path,
+    schedule_name: str,
+    contract_sha256: str,
+    marker_bytes: bytes | None = None,
+) -> dict[str, Any]:
+    """Recheck durable bytes without parsing the potentially large snapshot."""
+    marker_path = run_root / SCHEDULE_BUNDLE_MARKER
+    failures: list[str] = []
+    try:
+        captured = (
+            _plain_file_bytes(marker_path) if marker_bytes is None else marker_bytes
+        )
+        marker = json.loads(captured)
+    except (OSError, ValueError, TypeError):
+        marker = None
+        captured = b"" if marker_bytes is None else marker_bytes
+        failures.append("MARKER_MISSING_OR_UNSAFE")
+    artifacts = marker.get("artifacts") if isinstance(marker, Mapping) else None
+    if (
+        not isinstance(marker, Mapping)
+        or marker.get("schema") != SCHEDULE_BUNDLE_SCHEMA
+        or marker.get("classification")
+        != "LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL"
+        or marker.get("complete") is not True
+        or marker.get("schedule") != schedule_name
+        or marker.get("contract_sha256") != contract_sha256
+        or not isinstance(artifacts, list)
+    ):
+        failures.append("MARKER_CONTRACT_MISMATCH")
+        artifacts = []
+    expected = set(SCHEDULE_BUNDLE_ARTIFACTS)
+    seen: set[str] = set()
+    for row in artifacts:
+        relative_text = str(row.get("path", "")) if isinstance(row, Mapping) else ""
+        path = run_root / relative_text
+        try:
+            actual_size, actual_sha256 = _plain_file_identity(path)
+            valid = (
+                relative_text in expected
+                and relative_text not in seen
+                and _safe_state_relative_path(relative_text)
+                and actual_size == int(row.get("size", -1))
+                and actual_sha256 == row.get("sha256")
+            )
+        except (OSError, TypeError, ValueError):
+            valid = False
+        if not valid:
+            failures.append(f"ARTIFACT_MISMATCH:{relative_text or 'INVALID'}")
+        seen.add(relative_text)
+    if seen != expected:
+        failures.append("ARTIFACT_COVERAGE_MISMATCH")
+    return {
+        "schedule": schedule_name,
+        "status": "PASS" if not failures else "FAIL",
+        "failures": "|".join(failures),
+        "artifact_count": len(seen & expected),
+        "bundle_sha256": _sha256_bytes(captured),
+    }
+
+
+def seal_schedule_bundle(
+    *,
+    run_root: Path,
+    schedule_name: str,
+    contract_sha256: str,
+    seal: Mapping[str, Any],
+    accounting_rows: list[dict[str, Any]],
+    audit_rows: list[dict[str, Any]],
+    source_integrity_rows: list[dict[str, Any]],
+    audit_authorization: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Publish a resume marker only after every schedule artifact is durable."""
+    _fsync_existing_file(run_root / "snapshot.json")
+    finalized_seal = {
+        **dict(seal),
+        "resume_contract_sha256": contract_sha256,
+        "snapshot_retained": True,
+    }
+    _atomic_write_json(run_root / "seal.json", finalized_seal)
+    _atomic_write_json(
+        run_root / "checkpoint_accounting.json",
+        {"schema": SCHEDULE_BUNDLE_SCHEMA, "rows": accounting_rows},
+    )
+    _atomic_write_json(
+        run_root / "file_open_audit.json",
+        {"schema": SCHEDULE_BUNDLE_SCHEMA, "rows": audit_rows},
+    )
+    _atomic_write_json(
+        run_root / "source_integrity.json",
+        {"schema": SCHEDULE_BUNDLE_SCHEMA, "rows": source_integrity_rows},
+    )
+    _fsync_directory(run_root)
+    marker = {
+        "schema": SCHEDULE_BUNDLE_SCHEMA,
+        "classification": "LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL",
+        "schedule": schedule_name,
+        "contract_sha256": contract_sha256,
+        "complete": True,
+        "audit_authorization": dict(audit_authorization),
+        "artifacts": _bundle_artifact_rows(run_root),
+    }
+    _atomic_write_json(run_root / SCHEDULE_BUNDLE_MARKER, marker)
+    return marker
+
+
+def _load_bundle_rows(path: Path) -> list[dict[str, Any]]:
+    value = json.loads(_plain_file_bytes(path))
+    rows = value.get("rows") if isinstance(value, Mapping) else None
+    if (
+        not isinstance(value, Mapping)
+        or value.get("schema") != SCHEDULE_BUNDLE_SCHEMA
+        or not isinstance(rows, list)
+    ):
+        raise ValueError(f"schedule bundle sidecar is invalid: {path.name}")
+    if not all(isinstance(row, Mapping) for row in rows):
+        raise ValueError(f"schedule bundle sidecar row is invalid: {path.name}")
+    return [dict(row) for row in rows]
+
+
+def _required_audit_relative(row: Mapping[str, Any], relatives: set[str]) -> str:
+    path = str(row.get("path", "")).replace("\\", "/")
+    matches = [relative for relative in relatives if path.endswith(f"/{relative}")]
+    if len(matches) != 1:
+        raise ValueError("schedule bundle required-open path is not uniquely bound")
+    return matches[0]
+
+
+def _bundle_audit_roots(
+    marker: Mapping[str, Any], contract: Mapping[str, Any]
+) -> dict[str, Any]:
+    authorization = marker.get("audit_authorization")
+    payload = contract.get("contract")
+    if not isinstance(authorization, Mapping) or not isinstance(payload, Mapping):
+        raise ValueError("schedule bundle audit authorization is missing")
+    configuration = payload.get("configuration")
+    if not isinstance(configuration, Mapping):
+        raise ValueError("schedule bundle configuration identity is missing")
+    shadow = configuration.get("shadow")
+    expected_config = str(shadow.get("path", "")) if isinstance(shadow, Mapping) else ""
+    expected = {
+        "analytical_data_root": str(payload.get("analytical_data_root", "")),
+        "repository_root": str(payload.get("repository_root", "")),
+        "config_paths": [expected_config],
+    }
+    if any(authorization.get(key) != value for key, value in expected.items()):
+        raise ValueError("schedule bundle audit authorization identity mismatch")
+    roots = {
+        "analytical_data_root": Path(expected["analytical_data_root"]),
+        "staging_root": Path(str(authorization.get("staging_root", ""))),
+        "state_root": Path(str(authorization.get("state_root", ""))),
+        "repository_root": Path(expected["repository_root"]),
+        "config_paths": tuple(Path(value) for value in expected["config_paths"]),
+    }
+    required_absolute = (
+        roots["analytical_data_root"],
+        roots["staging_root"],
+        roots["state_root"],
+        roots["repository_root"],
+        *roots["config_paths"],
+    )
+    if any(not path.is_absolute() or path == Path(path.anchor) for path in required_absolute):
+        raise ValueError("schedule bundle audit authorization root is unsafe")
+    if len(
+        {
+            str(roots["analytical_data_root"]),
+            str(roots["staging_root"]),
+            str(roots["state_root"]),
+            str(roots["repository_root"]),
+        }
+    ) != 4:
+        raise ValueError("schedule bundle audit authorization roots overlap")
+    return roots
+
+
+def _validate_bundle_open_classifications(
+    *,
+    rows: Iterable[Mapping[str, Any]],
+    marker: Mapping[str, Any],
+    contract: Mapping[str, Any],
+    contract_sources: Mapping[str, Mapping[str, Any]],
+) -> None:
+    roots = _bundle_audit_roots(marker, contract)
+    relatives = set(contract_sources)
+    for row in rows:
+        if row.get("required_source_open") is True:
+            relative = _required_audit_relative(row, relatives)
+            purpose = str(row.get("purpose", ""))
+            base = (
+                roots["analytical_data_root"]
+                if purpose == "HARNESS_BYTE_EXACT_SOURCE_READ"
+                else roots["staging_root"]
+            )
+            if (
+                Path(str(row.get("path", ""))).absolute()
+                != (base / relative).absolute()
+                or row.get("classification")
+                != "PERMITTED_OBSERVED_REQUIRED_SOURCE_OPEN"
+            ):
+                raise ValueError("schedule bundle required-open authorization mismatch")
+            continue
+        requested = Path(str(row.get("path", "")))
+        resolved = Path(str(row.get("resolved_path", "")))
+        if not requested.is_absolute() or not resolved.is_absolute():
+            raise ValueError("schedule bundle runtime-open path is not absolute")
+        classification, purpose = _classify_observed_open(
+            requested,
+            resolved,
+            data_roots=(roots["analytical_data_root"], roots["staging_root"]),
+            state_roots=(roots["state_root"],),
+            config_paths=roots["config_paths"],
+            repository=roots["repository_root"],
+            runtime_roots=_runtime_library_roots(),
+        )
+        if (
+            row.get("classification") != classification
+            or row.get("purpose") != purpose
+        ):
+            raise ValueError("schedule bundle runtime-open classification mismatch")
+
+
+def validate_schedule_bundle(
+    *,
+    run_root: Path,
+    schedule_name: str,
+    contract: Mapping[str, Any],
+    canonical_a_seal: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    """Validate one completed bundle; an absent marker means it was partial."""
+    marker_path = run_root / SCHEDULE_BUNDLE_MARKER
+    try:
+        marker_path.lstat()
+    except FileNotFoundError:
+        return None
+    try:
+        marker_bytes = _plain_file_bytes(marker_path)
+    except (OSError, ValueError) as error:
+        raise ValueError(f"schedule bundle marker is unsafe: {marker_path}") from error
+    storage = verify_schedule_bundle_storage(
+        run_root=run_root,
+        schedule_name=schedule_name,
+        contract_sha256=str(contract.get("contract_sha256", "")),
+        marker_bytes=marker_bytes,
+    )
+    if storage["status"] != "PASS":
+        raise ValueError(
+            f"schedule bundle storage mismatch: {schedule_name}: "
+            f"{storage['failures']}"
+        )
+    marker = json.loads(marker_bytes)
+
+    snapshot = _load_sealed_snapshot(run_root)
+    seal = json.loads(_plain_file_bytes(run_root / "seal.json"))
+    if (
+        not isinstance(seal, Mapping)
+        or seal.get("schedule") != schedule_name
+        or seal.get("resume_contract_sha256") != contract.get("contract_sha256")
+        or seal.get("analytical_semantic_sha256")
+        != named_rows_semantic_hash(component_rows(snapshot))
+        or seal.get("analytical_ledgers_sha256")
+        != named_rows_semantic_hash(analytical_ledger_rows(snapshot))
+        or scheduling_comparison(
+            canonical_a_seal, [(schedule_name, seal)]
+        )[0]["status"]
+        != "PASS"
+    ):
+        raise ValueError(f"schedule bundle analytical identity mismatch: {schedule_name}")
+
+    accounting_rows = _load_bundle_rows(run_root / "checkpoint_accounting.json")
+    audit_rows = _load_bundle_rows(run_root / "file_open_audit.json")
+    source_rows = _load_bundle_rows(run_root / "source_integrity.json")
+    contract_sources = {
+        str(row["relative_path"]): dict(row)
+        for row in contract["contract"]["sources"]
+    }
+    live_sources = {
+        relative: row
+        for relative, row in contract_sources.items()
+        if row.get("role") == "live"
+    }
+    context_sources = set(contract_sources) - set(live_sources)
+    expected_source_sizes = {
+        relative: int(row["size"]) for relative, row in live_sources.items()
+    }
+    expected_json_records = sum(
+        int(
+            row.get("json_records")
+            if row.get("json_records") is not None
+            else row["complete_rows"]
+        )
+        for row in live_sources.values()
+    )
+    if (
+        int(seal.get("source_files", -1)) != len(live_sources)
+        or int(seal.get("read_only_context_source_files", -1))
+        != len(context_sources)
+        or int(seal.get("source_bytes", -1))
+        != sum(int(row["size"]) for row in live_sources.values())
+        or int(seal.get("source_complete_rows", -1))
+        != sum(int(row["complete_rows"]) for row in live_sources.values())
+        or int(seal.get("source_json_records", -1)) != expected_json_records
+        or {
+            str(key): int(value)
+            for key, value in dict(
+                seal.get("source_sizes_by_relative", {})
+            ).items()
+        }
+        != expected_source_sizes
+    ):
+        raise ValueError(f"schedule bundle source inventory mismatch: {schedule_name}")
+    if (
+        len(accounting_rows) != len(live_sources)
+        or {str(row.get("source_file", "")) for row in accounting_rows}
+        != set(live_sources)
+        or any(
+            row.get("run") != schedule_name
+            or row.get("status") != "PASS"
+            or row.get("source_sha256")
+            != live_sources[str(row.get("source_file", ""))]["sha256"]
+            or row.get("staged_sha256") != row.get("source_sha256")
+            or row.get("source_byte_identical") is not True
+            or int(row.get("source_bytes", -1))
+            != int(live_sources[str(row.get("source_file", ""))]["size"])
+            or int(row.get("bytes_seen", -1))
+            != int(live_sources[str(row.get("source_file", ""))]["size"])
+            or int(row.get("bytes_committed", -1))
+            != int(live_sources[str(row.get("source_file", ""))]["size"])
+            or int(row.get("deferred_tail_bytes", -1)) != 0
+            or int(row.get("source_complete_rows", -1))
+            != int(live_sources[str(row.get("source_file", ""))]["complete_rows"])
+            or int(row.get("complete_rows", -1))
+            != int(live_sources[str(row.get("source_file", ""))]["complete_rows"])
+            or row.get("processed_once") is not True
+            or row.get("reason") != "EXACT_COMPLETE_LINE_COMMIT"
+            for row in accounting_rows
+        )
+    ):
+        raise ValueError(f"schedule bundle checkpoint evidence mismatch: {schedule_name}")
+
+    trusted_open_sources = {
+        "PYTHON_SYS_AUDIT_HOOK_OPEN",
+        "LINUX_STRACE_SUCCESSFUL_READ_OPEN",
+    }
+    if not audit_rows or any(
+        row.get("run") != f"schedule:{schedule_name}"
+        or row.get("evidence_source") not in trusted_open_sources
+        or int(row.get("observed_open_count") or 0) <= 0
+        or row.get("status", "PASS") == "FAIL"
+        or "UNMEASURED" in str(row.get("classification", "")).upper()
+        or "PROHIBITED" in str(row.get("classification", "")).upper()
+        or "DERIVED_ANALYTICAL_INPUT"
+        in str(row.get("classification", "")).upper()
+        for row in audit_rows
+    ):
+        raise ValueError(f"schedule bundle runtime-open evidence mismatch: {schedule_name}")
+    required_rows = [row for row in audit_rows if row.get("required_source_open") is True]
+    required_observed = Counter(
+        (
+            str(row.get("purpose", "")),
+            _required_audit_relative(row, set(contract_sources)),
+        )
+        for row in required_rows
+    )
+    required_expected = Counter()
+    for relative in live_sources:
+        required_expected[("HARNESS_BYTE_EXACT_SOURCE_READ", relative)] += 1
+        required_expected[("INGESTOR_STAGED_LIVE_SOURCE_READ", relative)] += 1
+    for relative in context_sources:
+        required_expected[("FIXED_CONTEXT_STAGED_SOURCE_READ", relative)] += 1
+    if required_observed != required_expected:
+        raise ValueError(f"schedule bundle required-open coverage mismatch: {schedule_name}")
+    _validate_bundle_open_classifications(
+        rows=audit_rows,
+        marker=marker,
+        contract=contract,
+        contract_sources=contract_sources,
+    )
+
+    if (
+        len(source_rows) != len(contract_sources)
+        or {str(row.get("relative_path", "")) for row in source_rows}
+        != set(contract_sources)
+        or any(
+            row.get("status") != "PASS"
+            or row.get("sha256_before")
+            != contract_sources[str(row.get("relative_path", ""))]["sha256"]
+            or row.get("sha256_after_schedule") != row.get("sha256_before")
+            or int(row.get("bytes_before", -1))
+            != int(contract_sources[str(row.get("relative_path", ""))]["size"])
+            or int(row.get("bytes_after_schedule", -1))
+            != int(contract_sources[str(row.get("relative_path", ""))]["size"])
+            for row in source_rows
+        )
+    ):
+        raise ValueError(f"schedule bundle source-integrity mismatch: {schedule_name}")
+    return {
+        "seal": seal,
+        "accounting_rows": accounting_rows,
+        "audit_rows": audit_rows,
+        "source_integrity_rows": source_rows,
+        "bundle_sha256": storage["bundle_sha256"],
+        "marker": dict(marker),
+        "marker_bytes": marker_bytes,
+    }
+
+
+def copy_schedule_bundle(
+    source_root: Path,
+    destination_root: Path,
+    *,
+    marker: Mapping[str, Any],
+    marker_bytes: bytes,
+    marker_sha256: str,
+) -> None:
+    """Copy only validated bundle artifacts and publish its marker last."""
+    if destination_root.exists():
+        raise ValueError(f"schedule bundle destination already exists: {destination_root}")
+    if _sha256_bytes(marker_bytes) != marker_sha256:
+        raise ValueError("captured schedule bundle marker identity mismatch")
+    destination_root.mkdir(parents=True, exist_ok=False)
+    for row in marker["artifacts"]:
+        relative_text = str(row["path"])
+        _durable_copy_file(
+            source_root / relative_text,
+            destination_root / relative_text,
+            expected_size=int(row["size"]),
+            expected_sha256=str(row["sha256"]),
+        )
+    _fsync_directory(destination_root)
+    _atomic_write_bytes(destination_root / SCHEDULE_BUNDLE_MARKER, marker_bytes)
+
+
+def schedule_bundle_failure_count(
+    *row_sets: Iterable[Mapping[str, Any]],
+) -> int:
+    return sum(
+        row.get("status") != "PASS"
+        for rows in row_sets
+        for row in rows
+    )
 
 
 def expected_record_group_sequence(
@@ -5676,6 +6516,32 @@ def _new_output_root(path: Path) -> Path:
     return resolved
 
 
+def _resolve_plain_directory_without_symlinks(path: Path, *, label: str) -> Path:
+    lexical = Path(os.path.abspath(os.fspath(path)))
+    cursor = Path(lexical.anchor)
+    for part in lexical.parts[1:]:
+        cursor /= part
+        if cursor.is_symlink():
+            raise ValueError(f"{label} contains a symlink ancestor: {cursor}")
+    if not lexical.is_dir():
+        raise ValueError(f"{label} must be an existing directory")
+    return lexical.resolve(strict=True)
+
+
+def _resume_schedule_root(resume_root: Path, schedule_name: str) -> Path:
+    if schedule_name not in SCHEDULES:
+        raise ValueError(f"unknown resume schedule: {schedule_name}")
+    cursor = resume_root
+    for part in ("runs", "schedules", schedule_name):
+        cursor /= part
+        if cursor.is_symlink():
+            raise ValueError(f"resume schedule path contains a symlink: {cursor}")
+        resolved = cursor.resolve(strict=False)
+        if resolved != resume_root and resume_root not in resolved.parents:
+            raise ValueError(f"resume schedule path escapes prior output: {cursor}")
+    return cursor
+
+
 def runtime_open_audit_summary(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     """Gate only observed reader/audit-hook opens, never declarations."""
     materialized = list(rows)
@@ -5684,6 +6550,7 @@ def runtime_open_audit_summary(rows: Iterable[Mapping[str, Any]]) -> dict[str, A
         for row in materialized
         if str(row.get("run", "")) in {"incremental_a", "batch_b"}
         or str(row.get("run", "")).startswith("schedule:")
+        or str(row.get("run", "")).startswith("resume_import:")
     ]
     trusted = {
         "PYTHON_SYS_AUDIT_HOOK_OPEN",
@@ -5878,6 +6745,14 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--resume-schedules-from",
+        type=Path,
+        help=(
+            "import only complete atomic schedule bundles from a prior interrupted "
+            "full-six output; A, B, references and final gates always run fresh"
+        ),
+    )
+    parser.add_argument(
         "--retain-staging",
         action="store_true",
         help="retain per-schedule staged raw copies (large; off by default)",
@@ -5885,7 +6760,10 @@ def main() -> int:
     parser.add_argument(
         "--retain-variant-snapshots",
         action="store_true",
-        help="retain large noncanonical schedule snapshots (off by default)",
+        help=(
+            "compatibility flag; schedule snapshots are retained unconditionally "
+            "because sealed resume validation requires their exact bytes"
+        ),
     )
     parser.add_argument("--no-expected-count-gate", action="store_true")
     parser.add_argument(
@@ -5904,6 +6782,38 @@ def main() -> int:
         parser.error("--maximum-feasible-polls must be positive")
 
     sessions = _parse_sessions(args.sessions)
+    requested_schedules = [
+        name.strip() for name in args.schedules.split(",") if name.strip()
+    ]
+    unknown = [name for name in requested_schedules if name not in SCHEDULES]
+    if unknown:
+        parser.error(f"unknown schedules: {unknown}")
+    if len(set(requested_schedules)) != len(requested_schedules):
+        parser.error("duplicate schedules are not permitted")
+    omitted_required = [
+        name for name in REQUIRED_SCHEDULES if name not in requested_schedules
+    ]
+    resume_source: Path | None = None
+    if args.resume_schedules_from is not None:
+        try:
+            resume_source = _resolve_plain_directory_without_symlinks(
+                args.resume_schedules_from,
+                label="--resume-schedules-from",
+            )
+        except ValueError as error:
+            parser.error(str(error))
+        if (
+            sessions != SESSIONS
+            or tuple(requested_schedules) != REQUIRED_SCHEDULES
+            or args.schedule_profile != "required"
+            or args.skip_references
+            or args.no_expected_count_gate
+            or args.use_existing_projection_manifest is None
+        ):
+            parser.error(
+                "--resume-schedules-from requires the exact full-six required "
+                "schedule/reference/count contract and an existing projection manifest"
+            )
     if not args.skip_references and (
         args.r6c2_reference_root is None or args.r6d_reference_root is None
     ):
@@ -6046,6 +6956,43 @@ def main() -> int:
         analytical_hashes_before = {
             str(source.source): _sha256_file(source.source) for source in all_sources
         }
+        resume_contract = build_schedule_resume_contract(
+            repository=repository,
+            analytical_data_root=analytical_data_root,
+            all_sources=all_sources,
+            live_relatives=live_relatives,
+            analytical_hashes_before=analytical_hashes_before,
+            projection_manifest=projection_manifest,
+            focused_fixture_source=focused_fixture_source,
+            config_path=args.config,
+            stack_config_path=args.stack_config,
+            inventory_config_path=args.inventory_config,
+            sessions=sessions,
+            requested_schedules=requested_schedules,
+            schedule_profile=args.schedule_profile,
+            maximum_feasible_polls=args.maximum_feasible_polls,
+            no_expected_count_gate=args.no_expected_count_gate,
+            skip_references=args.skip_references,
+        )
+        _atomic_write_json(output / "schedule_resume_contract.json", resume_contract)
+        open_recorder = RuntimeOpenRecorder()
+        resume_import_expected_scopes: set[str] = set()
+        resume_contract_audit_rows: list[dict[str, Any]] = []
+        if resume_source is not None:
+            contract_import_scope = "resume_import:contract"
+            with open_recorder.recording(contract_import_scope):
+                load_schedule_resume_contract(
+                    resume_source / "schedule_resume_contract.json",
+                    expected=resume_contract,
+                )
+            resume_contract_audit_rows = open_recorder.audit_rows(
+                scope=contract_import_scope,
+                permitted_data_roots=(),
+                permitted_state_roots=(resume_source, output),
+                permitted_config_paths=(args.config,),
+                repository=repository,
+            )
+            resume_import_expected_scopes.add(contract_import_scope)
         audit = [
             {
                 "run": "A_AND_B_SOURCE",
@@ -6088,8 +7035,8 @@ def main() -> int:
                     "source_unchanged": True,
                 }
             )
+        audit.extend(resume_contract_audit_rows)
         all_accounting: list[dict[str, Any]] = []
-        open_recorder = RuntimeOpenRecorder()
         a_staging = work / "a_collector"
         a_state = output / "runs/incremental_a/state"
         with open_recorder.recording("incremental_a"):
@@ -6230,14 +7177,11 @@ def main() -> int:
                 ]
             )
 
-        requested_schedules = [name.strip() for name in args.schedules.split(",") if name.strip()]
-        unknown = [name for name in requested_schedules if name not in SCHEDULES]
-        if unknown:
-            raise ValueError(f"unknown schedules: {unknown}")
-        omitted_required = [name for name in REQUIRED_SCHEDULES if name not in requested_schedules]
         variant_seals: list[tuple[str, Mapping[str, Any]]] = [
             ("original_source_chunks", a_seal)
         ]
+        schedule_bundle_rows: list[dict[str, Any]] = []
+        publication_storage_rows: list[dict[str, Any]] = []
         feasibility_rows = [
             estimate_schedule_work(SCHEDULES[name], sources, args.maximum_feasible_polls)
             for name in requested_schedules
@@ -6268,6 +7212,57 @@ def main() -> int:
                     }
                 )
                 continue
+            prior_bundle = None
+            if resume_source is not None:
+                prior_run_root = _resume_schedule_root(resume_source, name)
+                import_scope = f"resume_import:{name}"
+                with open_recorder.recording(import_scope):
+                    prior_bundle = validate_schedule_bundle(
+                        run_root=prior_run_root,
+                        schedule_name=name,
+                        contract=resume_contract,
+                        canonical_a_seal=a_seal,
+                    )
+                    if prior_bundle is not None:
+                        destination = output / f"runs/schedules/{name}"
+                        copy_schedule_bundle(
+                            prior_run_root,
+                            destination,
+                            marker=prior_bundle["marker"],
+                            marker_bytes=prior_bundle["marker_bytes"],
+                            marker_sha256=prior_bundle["bundle_sha256"],
+                        )
+                        imported_storage = verify_schedule_bundle_storage(
+                            run_root=destination,
+                            schedule_name=name,
+                            contract_sha256=resume_contract["contract_sha256"],
+                        )
+                if prior_bundle is not None:
+                    import_audit_rows = open_recorder.audit_rows(
+                        scope=import_scope,
+                        permitted_data_roots=(),
+                        permitted_state_roots=(resume_source, destination),
+                        permitted_config_paths=(args.config,),
+                        repository=repository,
+                    )
+                    audit.extend(import_audit_rows)
+                    resume_import_expected_scopes.add(import_scope)
+            if prior_bundle is not None:
+                variant_seals.append((name, prior_bundle["seal"]))
+                all_accounting.extend(prior_bundle["accounting_rows"])
+                audit.extend(prior_bundle["audit_rows"])
+                publication_storage_rows.append(
+                    {"phase": "POST_IMPORT_COPY", **imported_storage}
+                )
+                schedule_bundle_rows.append(
+                    {
+                        "schedule": name,
+                        "status": imported_storage["status"],
+                        "provenance": "IMPORTED_COMPLETE_ATOMIC_SCHEDULE_BUNDLE",
+                        "bundle_sha256": prior_bundle["bundle_sha256"],
+                    }
+                )
+                continue
             variant_scope = f"schedule:{name}"
             variant_staging = work / f"schedule_{name}/collector"
             variant_state = output / f"runs/schedules/{name}/state"
@@ -6281,17 +7276,15 @@ def main() -> int:
                     sessions=sessions,
                     context_sources=context_sources,
                 )
-            all_accounting.extend({"run": name, **row} for row in accounting)
-            audit.extend(
-                open_recorder.audit_rows(
-                    scope=variant_scope,
-                    permitted_data_roots=(analytical_data_root, variant_staging),
-                    permitted_state_roots=(variant_state,),
-                    permitted_config_paths=(args.config,),
-                    repository=repository,
-                )
+            bundle_accounting_rows = [{"run": name, **row} for row in accounting]
+            bundle_audit_rows = open_recorder.audit_rows(
+                scope=variant_scope,
+                permitted_data_roots=(analytical_data_root, variant_staging),
+                permitted_state_roots=(variant_state,),
+                permitted_config_paths=(args.config,),
+                repository=repository,
             )
-            audit.extend(
+            bundle_audit_rows.extend(
                 required_schedule_open_coverage(
                     open_recorder,
                     scope=variant_scope,
@@ -6300,20 +7293,82 @@ def main() -> int:
                     staging_root=variant_staging,
                 )
             )
+            bundle_source_rows = schedule_source_integrity_rows(
+                all_sources=all_sources,
+                analytical_hashes_before=analytical_hashes_before,
+            )
+            all_accounting.extend(bundle_accounting_rows)
+            audit.extend(bundle_audit_rows)
             variant_run_root = output / f"runs/schedules/{name}"
             variant_seal = seal_run(variant_run_root, variant_snapshot, metrics)
-            variant_seal["snapshot_retained"] = bool(
-                args.retain_staging or args.retain_variant_snapshots
+            bundle_marker = seal_schedule_bundle(
+                run_root=variant_run_root,
+                schedule_name=name,
+                contract_sha256=resume_contract["contract_sha256"],
+                seal=variant_seal,
+                accounting_rows=bundle_accounting_rows,
+                audit_rows=bundle_audit_rows,
+                source_integrity_rows=bundle_source_rows,
+                audit_authorization={
+                    "analytical_data_root": str(analytical_data_root.resolve()),
+                    "staging_root": str(variant_staging.resolve()),
+                    "state_root": str(variant_state.resolve()),
+                    "config_paths": [str(args.config.resolve())],
+                    "repository_root": str(repository.resolve()),
+                },
             )
-            if not variant_seal["snapshot_retained"]:
-                (variant_run_root / "snapshot.json").unlink()
-                variant_seal["snapshot_removed_after_seal"] = True
-            (variant_run_root / "seal.json").write_bytes(_json_bytes(variant_seal))
+            fresh_storage = verify_schedule_bundle_storage(
+                run_root=variant_run_root,
+                schedule_name=name,
+                contract_sha256=resume_contract["contract_sha256"],
+            )
+            publication_storage_rows.append(
+                {"phase": "POST_FRESH_PUBLICATION", **fresh_storage}
+            )
+            variant_seal = json.loads((variant_run_root / "seal.json").read_text())
             variant_seals.append((name, variant_seal))
+            bundle_failures = (
+                sum(row.get("status") != "PASS" for row in bundle_accounting_rows)
+                + sum(row.get("status", "PASS") == "FAIL" for row in bundle_audit_rows)
+                + sum(row.get("status") != "PASS" for row in bundle_source_rows)
+                + int(fresh_storage["status"] != "PASS")
+            )
+            schedule_bundle_rows.append(
+                {
+                    "schedule": name,
+                    "status": "PASS" if not bundle_failures else "FAIL",
+                    "provenance": "FRESH_COMPLETE_ATOMIC_SCHEDULE_BUNDLE",
+                    "bundle_sha256": fresh_storage["bundle_sha256"],
+                }
+            )
             del variant_snapshot
             if not args.retain_staging:
                 shutil.rmtree(work / f"schedule_{name}/collector")
                 shutil.rmtree(output / f"runs/schedules/{name}/state")
+        final_storage_rows = [
+            {
+                "phase": "FINAL_ON_DISK_GATE",
+                **verify_schedule_bundle_storage(
+                    run_root=output / f"runs/schedules/{row['schedule']}",
+                    schedule_name=str(row["schedule"]),
+                    contract_sha256=resume_contract["contract_sha256"],
+                ),
+            }
+            for row in schedule_bundle_rows
+        ]
+        _write_csv(
+            output / "schedule_bundle_storage_verification.csv",
+            [*publication_storage_rows, *final_storage_rows],
+        )
+        _atomic_write_json(
+            output / "schedule_resume_imports.json",
+            {
+                "schema": SCHEDULE_BUNDLE_SCHEMA,
+                "contract_sha256": resume_contract["contract_sha256"],
+                "resume_source_used": resume_source is not None,
+                "rows": schedule_bundle_rows,
+            },
+        )
         schedule_rows = scheduling_comparison(a_seal, variant_seals)
         schedule_rows.extend(skipped_schedule_rows)
         schedule_rows.extend(
@@ -6352,6 +7407,35 @@ def main() -> int:
         open_audit = runtime_open_audit_summary(audit)
         _write_csv(output / "file_open_audit.csv", audit)
 
+        completed_schedule_names = {
+            name for name, _ in variant_seals if name != "original_source_chunks"
+        }
+        expected_open_scopes = {"incremental_a", "batch_b"} | {
+            f"schedule:{name}" for name in completed_schedule_names
+        } | resume_import_expected_scopes
+        observed_open_scopes = {
+            str(row.get("run", ""))
+            for row in audit
+            if str(row.get("run", "")) in {"incremental_a", "batch_b"}
+            or str(row.get("run", "")).startswith("schedule:")
+            or str(row.get("run", "")).startswith("resume_import:")
+        }
+        schedule_open_scope_failures = len(
+            expected_open_scopes.symmetric_difference(observed_open_scopes)
+        )
+        expected_accounting = Counter(
+            (run, str(source.relative))
+            for run in ({"incremental_a"} | completed_schedule_names)
+            for source in sources
+        )
+        observed_accounting = Counter(
+            (str(row.get("run", "")), str(row.get("source_file", "")))
+            for row in all_accounting
+        )
+        checkpoint_accounting_coverage_failures = sum(
+            (expected_accounting - observed_accounting).values()
+        ) + sum((observed_accounting - expected_accounting).values())
+
         summary = {
             "incremental_a_seal": a_seal,
             "incremental_a_state_manifest_sha256": a_seal[
@@ -6384,7 +7468,30 @@ def main() -> int:
                 sessions, disabled=args.no_expected_count_gate
             ),
             "schedule_failures": sum(row["status"] != "PASS" for row in schedule_rows),
+            "schedule_bundle_failures": schedule_bundle_failure_count(
+                schedule_bundle_rows,
+                publication_storage_rows,
+                final_storage_rows,
+            ),
+            "schedule_bundle_storage_final_failures": (
+                schedule_bundle_failure_count(final_storage_rows)
+            ),
+            "variant_snapshots_retained_unconditionally": True,
+            "schedule_resume_contract_sha256": resume_contract["contract_sha256"],
+            "schedule_resume_source_used": resume_source is not None,
+            "resume_import_measured_scope_count": len(
+                resume_import_expected_scopes
+            ),
+            "resumed_schedule_count": sum(
+                row["provenance"]
+                == "IMPORTED_COMPLETE_ATOMIC_SCHEDULE_BUNDLE"
+                for row in schedule_bundle_rows
+            ),
+            "schedule_runtime_open_scope_failures": schedule_open_scope_failures,
             "checkpoint_failures": sum(row["status"] != "PASS" for row in all_accounting),
+            "checkpoint_accounting_coverage_failures": (
+                checkpoint_accounting_coverage_failures
+            ),
             "checkpoint_recovery_failures": sum(
                 row["status"] != "PASS" for row in recovery_rows
             ),
@@ -6438,7 +7545,10 @@ def main() -> int:
             and (focused_equivalence or summary["reference_manifests_verified"])
             and summary["frozen_count_gate_satisfied"]
             and not summary["schedule_failures"]
+            and not summary["schedule_bundle_failures"]
+            and not summary["schedule_runtime_open_scope_failures"]
             and not summary["checkpoint_failures"]
+            and not summary["checkpoint_accounting_coverage_failures"]
             and not summary["checkpoint_recovery_failures"]
             and summary["file_open_audit_measured"]
             and not summary["file_open_audit_unmeasured_rows"]

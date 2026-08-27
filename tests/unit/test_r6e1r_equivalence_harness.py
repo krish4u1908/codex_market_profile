@@ -191,6 +191,144 @@ def _batch_configs(root: Path, sessions: tuple[str, ...]) -> tuple[Path, Path]:
     return stack, inventory
 
 
+def _synthetic_schedule_bundle(
+    root: Path, *, accounting_status: str = "PASS"
+) -> tuple[dict, dict]:
+    schedule = "empty_repeated_polls"
+    live_relative = "raw/2026-08-20/events_09.jsonl"
+    context_relative = "oi/2026-08-19/oi_09.jsonl"
+    sources = [
+        {
+            "relative_path": live_relative,
+            "size": 31,
+            "complete_rows": 1,
+            "json_records": 10,
+            "sha256": "1" * 64,
+            "role": "live",
+        },
+        {
+            "relative_path": context_relative,
+            "size": 47,
+            "complete_rows": 2,
+            "json_records": 2,
+            "sha256": "2" * 64,
+            "role": "context",
+        },
+    ]
+    payload = {
+        "sources": sources,
+        "analytical_data_root": str(root / "authority"),
+        "repository_root": str(SCRIPT.parents[1]),
+        "configuration": {
+            "shadow": {"path": str(root / "shadow.json")},
+        },
+    }
+    contract = {
+        "schema": harness.SCHEDULE_RESUME_CONTRACT_SCHEMA,
+        "contract_sha256": harness._sha256_bytes(harness._json_bytes(payload)),
+        "contract": payload,
+    }
+    metrics = {
+        "schedule": schedule,
+        "source_json_records": 10,
+        "exposed_records": 10,
+        "poll_calls_by_harness": 1,
+        "analytical_refusals": 0,
+        "explicit_empty_poll_count": 20,
+        "source_files": 1,
+        "read_only_context_source_files": 1,
+        "source_bytes": sources[0]["size"],
+        "source_complete_rows": sources[0]["complete_rows"],
+        "source_sizes_by_relative": {live_relative: sources[0]["size"]},
+    }
+    seal = harness.seal_run(root, {}, metrics)
+    accounting = [
+        {
+            "run": schedule,
+            "source_file": live_relative,
+            "source_bytes": sources[0]["size"],
+            "source_sha256": sources[0]["sha256"],
+            "staged_sha256": sources[0]["sha256"],
+            "source_byte_identical": True,
+            "bytes_seen": sources[0]["size"],
+            "bytes_committed": sources[0]["size"],
+            "deferred_tail_bytes": 0,
+            "source_complete_rows": sources[0]["complete_rows"],
+            "complete_rows": sources[0]["complete_rows"],
+            "processed_once": True,
+            "status": accounting_status,
+            "reason": "EXACT_COMPLETE_LINE_COMMIT",
+        }
+    ]
+    audit = [
+        {
+            "run": f"schedule:{schedule}",
+            "path": str(root / "authority" / live_relative),
+            "purpose": "HARNESS_BYTE_EXACT_SOURCE_READ",
+            "classification": "PERMITTED_OBSERVED_REQUIRED_SOURCE_OPEN",
+            "evidence_source": "PYTHON_SYS_AUDIT_HOOK_OPEN",
+            "observed_open_count": 1,
+            "required_source_open": True,
+            "status": "PASS",
+        },
+        {
+            "run": f"schedule:{schedule}",
+            "path": str(root / "staged" / live_relative),
+            "purpose": "INGESTOR_STAGED_LIVE_SOURCE_READ",
+            "classification": "PERMITTED_OBSERVED_REQUIRED_SOURCE_OPEN",
+            "evidence_source": "PYTHON_SYS_AUDIT_HOOK_OPEN",
+            "observed_open_count": 1,
+            "required_source_open": True,
+            "status": "PASS",
+        },
+        {
+            "run": f"schedule:{schedule}",
+            "path": str(root / "staged" / context_relative),
+            "purpose": "FIXED_CONTEXT_STAGED_SOURCE_READ",
+            "classification": "PERMITTED_OBSERVED_REQUIRED_SOURCE_OPEN",
+            "evidence_source": "PYTHON_SYS_AUDIT_HOOK_OPEN",
+            "observed_open_count": 1,
+            "required_source_open": True,
+            "status": "PASS",
+        },
+    ]
+    integrity = [
+        {
+            "relative_path": row["relative_path"],
+            "sha256_before": row["sha256"],
+            "sha256_after_schedule": row["sha256"],
+            "bytes_before": row["size"],
+            "bytes_after_schedule": row["size"],
+            "status": "PASS",
+        }
+        for row in sources
+    ]
+    harness.seal_schedule_bundle(
+        run_root=root,
+        schedule_name=schedule,
+        contract_sha256=contract["contract_sha256"],
+        seal=seal,
+        accounting_rows=accounting,
+        audit_rows=audit,
+        source_integrity_rows=integrity,
+        audit_authorization={
+            "analytical_data_root": str(root / "authority"),
+            "staging_root": str(root / "staged"),
+            "state_root": str(root / "state"),
+            "config_paths": [str(root / "shadow.json")],
+            "repository_root": str(SCRIPT.parents[1]),
+        },
+    )
+    return contract, json.loads((root / "seal.json").read_text())
+
+
+def _refresh_synthetic_bundle_marker(root: Path) -> None:
+    marker_path = root / harness.SCHEDULE_BUNDLE_MARKER
+    marker = json.loads(marker_path.read_text())
+    marker["artifacts"] = harness._bundle_artifact_rows(root)
+    harness._atomic_write_json(marker_path, marker)
+
+
 def test_canonicalize_drops_only_run_metadata() -> None:
     value = {
         "effective_timestamp": "2026-08-20T09:15:00+05:30",
@@ -865,6 +1003,601 @@ def test_named_schedule_cannot_pass_when_adversary_was_not_exercised() -> None:
         "schedule_exercise_failures"
     ]
     assert rows[1]["status"] == "PASS"
+
+
+def test_schedule_resume_contract_binds_code_config_source_and_schedule(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source_path = tmp_path / "collector/raw/2026-08-20/events.jsonl"
+    _write_jsonl(source_path, [{"received_at": "2026-08-20T09:15:00+05:30"}])
+    rows, newline = harness._count_lines(source_path)
+    source = harness.SourceFile(
+        source_path,
+        Path("raw/2026-08-20/events.jsonl"),
+        source_path.stat().st_size,
+        rows,
+        newline,
+        rows,
+    )
+    config = _config(tmp_path / "shadow.json")
+    stack, inventory = _batch_configs(tmp_path, ("2026-08-20",))
+    engine_identity = {
+        "manifest_sha256": "a" * 64,
+        "engine_hash": "b" * 64,
+        "verified_files": 38,
+    }
+    commit_identity = {"value": "c" * 40}
+    harness_identity = {"value": "d" * 64}
+    monkeypatch.setattr(
+        harness,
+        "_verified_engine_source_identity",
+        lambda _repository: dict(engine_identity),
+    )
+    monkeypatch.setattr(
+        harness, "_repository_commit", lambda _repository: commit_identity["value"]
+    )
+    monkeypatch.setattr(
+        harness, "_harness_source_sha256", lambda: harness_identity["value"]
+    )
+
+    arguments = {
+        "repository": SCRIPT.parents[1],
+        "analytical_data_root": source_path.parents[3],
+        "all_sources": [source],
+        "live_relatives": {source.relative},
+        "analytical_hashes_before": {
+            str(source_path): harness._sha256_file(source_path)
+        },
+        "projection_manifest": None,
+        "focused_fixture_source": None,
+        "config_path": config,
+        "stack_config_path": stack,
+        "inventory_config_path": inventory,
+        "sessions": ("2026-08-20",),
+        "requested_schedules": ["empty_repeated_polls"],
+        "schedule_profile": "required",
+        "maximum_feasible_polls": 50_000,
+        "no_expected_count_gate": True,
+        "skip_references": True,
+    }
+    first = harness.build_schedule_resume_contract(**arguments)
+    assert harness.build_schedule_resume_contract(**arguments) == first
+
+    changed_arguments = {
+        **arguments,
+        "requested_schedules": ["deterministic_variable_chunks"],
+    }
+    changed = harness.build_schedule_resume_contract(**changed_arguments)
+    assert changed["contract_sha256"] != first["contract_sha256"]
+
+    original_config = config.read_bytes()
+    config.write_bytes(original_config + b"\n")
+    assert harness.build_schedule_resume_contract(**arguments)[
+        "contract_sha256"
+    ] != first["contract_sha256"]
+    config.write_bytes(original_config)
+
+    engine_identity["engine_hash"] = "e" * 64
+    assert harness.build_schedule_resume_contract(**arguments)[
+        "contract_sha256"
+    ] != first["contract_sha256"]
+    engine_identity["engine_hash"] = "b" * 64
+
+    commit_identity["value"] = "f" * 40
+    assert harness.build_schedule_resume_contract(**arguments)[
+        "contract_sha256"
+    ] != first["contract_sha256"]
+    commit_identity["value"] = "c" * 40
+
+    harness_identity["value"] = "0" * 64
+    harness_changed = harness.build_schedule_resume_contract(**arguments)
+    assert harness_changed["contract_sha256"] != first["contract_sha256"]
+    changed_path = tmp_path / "changed_contract.json"
+    harness._atomic_write_json(changed_path, harness_changed)
+    with pytest.raises(ValueError, match="identity mismatch"):
+        harness.load_schedule_resume_contract(changed_path, expected=first)
+    harness_identity["value"] = "d" * 64
+
+    source_path.write_bytes(source_path.read_bytes() + b"{}\n")
+    changed_source = harness.SourceFile(
+        source_path,
+        source.relative,
+        source_path.stat().st_size,
+        rows + 1,
+        True,
+        rows + 1,
+    )
+    changed_source_contract = harness.build_schedule_resume_contract(
+        **{
+            **arguments,
+            "all_sources": [changed_source],
+            "analytical_hashes_before": {
+                str(source_path): harness._sha256_file(source_path)
+            },
+        }
+    )
+    assert changed_source_contract["contract_sha256"] != first["contract_sha256"]
+
+
+def test_schedule_resume_contract_file_detects_integrity_changes(tmp_path: Path) -> None:
+    payload = {"sources": [], "sessions": list(harness.SESSIONS)}
+    contract = {
+        "schema": harness.SCHEDULE_RESUME_CONTRACT_SCHEMA,
+        "contract_sha256": harness._sha256_bytes(harness._json_bytes(payload)),
+        "contract": payload,
+    }
+    path = tmp_path / "schedule_resume_contract.json"
+    harness._atomic_write_json(path, contract)
+    assert harness.load_schedule_resume_contract(path, expected=contract) == contract
+
+    contract["contract"]["sessions"] = ["2026-08-20"]
+    path.write_bytes(harness._json_bytes(contract))
+    with pytest.raises(ValueError, match="schedule resume contract is invalid"):
+        harness.load_schedule_resume_contract(path)
+
+
+def test_schedule_resume_contract_refuses_dirty_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    class Completed:
+        def __init__(self, output: str) -> None:
+            self.stdout = output
+
+    def fake_run(arguments: list[str], **_kwargs: object) -> Completed:
+        calls.append(tuple(arguments))
+        if "rev-parse" in arguments:
+            return Completed("a" * 40 + "\n")
+        return Completed("?? untracked-evidence\n")
+
+    monkeypatch.setattr(harness.subprocess, "run", fake_run)
+    with pytest.raises(ValueError, match="clean tracked and untracked worktree"):
+        harness._repository_commit(tmp_path)
+    assert any("--untracked-files=all" in call for call in calls)
+
+
+def test_resume_engine_identity_uses_canonical_allowlist_verifier(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    observed: dict[str, object] = {}
+    monkeypatch.setattr(
+        harness,
+        "checked_in_engine_source_manifest_sha256",
+        lambda repository: observed.setdefault("companion_repo", repository)
+        and "1" * 64,
+    )
+
+    def verify(repository: Path, manifest: str, digest: str) -> dict[str, object]:
+        observed.update(
+            repository=repository,
+            manifest=manifest,
+            digest=digest,
+        )
+        return {
+            "verified": True,
+            "manifest_sha256": digest,
+            "engine_hash": "2" * 64,
+            "file_count": 38,
+        }
+
+    monkeypatch.setattr(harness, "verify_engine_source_manifest", verify)
+    assert harness._verified_engine_source_identity(tmp_path) == {
+        "manifest_sha256": "1" * 64,
+        "engine_hash": "2" * 64,
+        "verified_files": 38,
+    }
+    assert observed["manifest"] == harness.ENGINE_SOURCE_MANIFEST_PATH
+
+
+def test_schedule_resume_refuses_symlinked_root_and_schedule_ancestor(
+    tmp_path: Path,
+) -> None:
+    prior = tmp_path / "prior"
+    prior.mkdir()
+    linked = tmp_path / "linked-prior"
+    linked.symlink_to(prior, target_is_directory=True)
+    with pytest.raises(ValueError, match="symlink ancestor"):
+        harness._resolve_plain_directory_without_symlinks(
+            linked, label="resume"
+        )
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (prior / "runs").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="contains a symlink"):
+        harness._resume_schedule_root(prior.resolve(), "empty_repeated_polls")
+
+
+def test_schedule_resume_ignores_unmarked_partial_and_validates_complete_bundle(
+    tmp_path: Path,
+) -> None:
+    partial = tmp_path / "partial"
+    partial.mkdir()
+    (partial / "snapshot.json").write_text("{}\n")
+    assert harness.validate_schedule_bundle(
+        run_root=partial,
+        schedule_name="empty_repeated_polls",
+        contract={"contract_sha256": "unused"},
+        canonical_a_seal={},
+    ) is None
+
+    complete = tmp_path / "complete"
+    contract, canonical = _synthetic_schedule_bundle(complete)
+    validated = harness.validate_schedule_bundle(
+        run_root=complete,
+        schedule_name="empty_repeated_polls",
+        contract=contract,
+        canonical_a_seal=canonical,
+    )
+    assert validated is not None
+    assert validated["seal"]["snapshot_retained"] is True
+    assert validated["seal"]["resume_contract_sha256"] == contract[
+        "contract_sha256"
+    ]
+
+
+def test_schedule_resume_refuses_invalid_evidence_and_artifact_tampering(
+    tmp_path: Path,
+) -> None:
+    failing = tmp_path / "failing"
+    contract, canonical = _synthetic_schedule_bundle(
+        failing, accounting_status="FAIL"
+    )
+    with pytest.raises(ValueError, match="checkpoint evidence mismatch"):
+        harness.validate_schedule_bundle(
+            run_root=failing,
+            schedule_name="empty_repeated_polls",
+            contract=contract,
+            canonical_a_seal=canonical,
+        )
+
+    complete = tmp_path / "complete"
+    contract, canonical = _synthetic_schedule_bundle(complete)
+    (complete / "checkpoint_accounting.json").write_text("{}\n")
+    with pytest.raises(ValueError, match="storage mismatch"):
+        harness.validate_schedule_bundle(
+            run_root=complete,
+            schedule_name="empty_repeated_polls",
+            contract=contract,
+            canonical_a_seal=canonical,
+        )
+
+
+def test_schedule_resume_recomputes_inventory_and_open_authorization(
+    tmp_path: Path,
+) -> None:
+    inventory_root = tmp_path / "inventory"
+    contract, canonical = _synthetic_schedule_bundle(inventory_root)
+    seal_path = inventory_root / "seal.json"
+    seal = json.loads(seal_path.read_text())
+    seal["source_files"] = 2
+    harness._atomic_write_json(seal_path, seal)
+    _refresh_synthetic_bundle_marker(inventory_root)
+    with pytest.raises(ValueError, match="source inventory mismatch"):
+        harness.validate_schedule_bundle(
+            run_root=inventory_root,
+            schedule_name="empty_repeated_polls",
+            contract=contract,
+            canonical_a_seal=canonical,
+        )
+
+    audit_root = tmp_path / "audit"
+    contract, canonical = _synthetic_schedule_bundle(audit_root)
+    audit_path = audit_root / "file_open_audit.json"
+    audit = json.loads(audit_path.read_text())
+    audit["rows"][0]["path"] = str(
+        tmp_path / "unauthorized/raw/2026-08-20/events_09.jsonl"
+    )
+    harness._atomic_write_json(audit_path, audit)
+    _refresh_synthetic_bundle_marker(audit_root)
+    with pytest.raises(ValueError, match="required-open authorization mismatch"):
+        harness.validate_schedule_bundle(
+            run_root=audit_root,
+            schedule_name="empty_repeated_polls",
+            contract=contract,
+            canonical_a_seal=canonical,
+        )
+
+
+def test_schedule_bundle_marker_is_last_and_validated_copy_is_self_contained(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    interrupted = tmp_path / "interrupted"
+    interrupted.mkdir()
+    harness.seal_run(
+        interrupted,
+        {},
+        {"schedule": "empty_repeated_polls"},
+    )
+    original_atomic_write = harness._atomic_write_json
+
+    def interrupt_before_final_sidecar(path: Path, value: object) -> None:
+        if path.name == "source_integrity.json":
+            raise RuntimeError("simulated interruption")
+        original_atomic_write(path, value)
+
+    monkeypatch.setattr(harness, "_atomic_write_json", interrupt_before_final_sidecar)
+    with pytest.raises(RuntimeError, match="simulated interruption"):
+        harness.seal_schedule_bundle(
+            run_root=interrupted,
+            schedule_name="empty_repeated_polls",
+            contract_sha256="f" * 64,
+            seal=json.loads((interrupted / "seal.json").read_text()),
+            accounting_rows=[],
+            audit_rows=[],
+            source_integrity_rows=[],
+            audit_authorization={},
+        )
+    assert not (interrupted / harness.SCHEDULE_BUNDLE_MARKER).exists()
+    monkeypatch.setattr(harness, "_atomic_write_json", original_atomic_write)
+
+    source = tmp_path / "source"
+    contract, canonical = _synthetic_schedule_bundle(source)
+    validated = harness.validate_schedule_bundle(
+        run_root=source,
+        schedule_name="empty_repeated_polls",
+        contract=contract,
+        canonical_a_seal=canonical,
+    )
+    assert validated is not None
+    destination = tmp_path / "destination"
+    harness.copy_schedule_bundle(
+        source,
+        destination,
+        marker=validated["marker"],
+        marker_bytes=validated["marker_bytes"],
+        marker_sha256=validated["bundle_sha256"],
+    )
+    assert (destination / harness.SCHEDULE_BUNDLE_MARKER).is_file()
+    assert harness.verify_schedule_bundle_storage(
+        run_root=destination,
+        schedule_name="empty_repeated_polls",
+        contract_sha256=contract["contract_sha256"],
+    )["status"] == "PASS"
+    assert harness.validate_schedule_bundle(
+        run_root=destination,
+        schedule_name="empty_repeated_polls",
+        contract=contract,
+        canonical_a_seal=canonical,
+    ) is not None
+
+
+def test_schedule_bundle_copy_refuses_identical_external_symlink_swap(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    contract, canonical = _synthetic_schedule_bundle(source)
+    validated = harness.validate_schedule_bundle(
+        run_root=source,
+        schedule_name="empty_repeated_polls",
+        contract=contract,
+        canonical_a_seal=canonical,
+    )
+    assert validated is not None
+
+    artifact = source / "snapshot.json"
+    external = tmp_path / "outside/snapshot.json"
+    external.parent.mkdir()
+    external.write_bytes(artifact.read_bytes())
+    artifact.unlink()
+    artifact.symlink_to(external)
+
+    destination = tmp_path / "destination"
+    with pytest.raises(ValueError, match="plain file is missing or unsafe"):
+        harness.copy_schedule_bundle(
+            source,
+            destination,
+            marker=validated["marker"],
+            marker_bytes=validated["marker_bytes"],
+            marker_sha256=validated["bundle_sha256"],
+        )
+    assert artifact.is_symlink()
+    assert not (destination / harness.SCHEDULE_BUNDLE_MARKER).exists()
+
+
+def test_resume_import_open_requires_resolved_target_inside_allowed_root(
+    tmp_path: Path,
+) -> None:
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    outside.mkdir()
+    target = outside / "identical.json"
+    target.write_text("{}\n")
+    linked = allowed / "linked.json"
+    linked.symlink_to(target)
+
+    recorder = harness.RuntimeOpenRecorder()
+    with recorder.recording("resume_import:symlink-probe"):
+        linked.read_bytes()
+    rows = recorder.audit_rows(
+        scope="resume_import:symlink-probe",
+        permitted_data_roots=(),
+        permitted_state_roots=(allowed,),
+        repository=Path(__file__).resolve().parents[2],
+    )
+    assert len(rows) == 1
+    assert rows[0]["resolved_path"] == str(target)
+    assert rows[0]["classification"] == (
+        "PROHIBITED_OBSERVED_UNCLASSIFIED_EXTERNAL_OPEN"
+    )
+
+
+def test_descriptor_anchored_audit_resolution_is_not_reused_across_scopes(
+    tmp_path: Path,
+) -> None:
+    first_root = tmp_path / "first"
+    second_root = tmp_path / "second"
+    first_root.mkdir()
+    second_root.mkdir()
+    first = first_root / "same.json"
+    second = second_root / "same.json"
+    first.write_text('{"source":"first"}\n')
+    second.write_text('{"source":"second"}\n')
+
+    recorder = harness.RuntimeOpenRecorder()
+    with recorder.recording("resume_import:first"):
+        harness._plain_file_bytes(first)
+    with recorder.recording("resume_import:second"):
+        harness._plain_file_bytes(second)
+
+    first_rows = recorder.audit_rows(
+        scope="resume_import:first",
+        permitted_data_roots=(),
+        permitted_state_roots=(first_root,),
+        repository=Path(__file__).resolve().parents[2],
+    )
+    second_rows = recorder.audit_rows(
+        scope="resume_import:second",
+        permitted_data_roots=(),
+        permitted_state_roots=(second_root,),
+        repository=Path(__file__).resolve().parents[2],
+    )
+    assert [row["resolved_path"] for row in first_rows] == [str(first)]
+    assert [row["resolved_path"] for row in second_rows] == [str(second)]
+    assert all(
+        row["classification"] == "PERMITTED_OBSERVED_STATE_OPEN"
+        for row in (*first_rows, *second_rows)
+    )
+
+
+def test_schedule_bundle_publication_and_copy_fsync_before_marker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    publication = tmp_path / "publication"
+    publication.mkdir()
+    seal = harness.seal_run(
+        publication,
+        {},
+        {"schedule": "empty_repeated_polls"},
+    )
+    events: list[str] = []
+    original_fsync_file = harness._fsync_existing_file
+    original_fsync_directory = harness._fsync_directory
+    original_atomic_json = harness._atomic_write_json
+
+    def track_file(path: Path) -> None:
+        events.append(f"file:{path.name}")
+        original_fsync_file(path)
+
+    def track_directory(path: Path) -> None:
+        events.append(f"directory:{path.name}")
+        original_fsync_directory(path)
+
+    def track_json(path: Path, value: object) -> None:
+        events.append(f"json:{path.name}")
+        original_atomic_json(path, value)
+
+    monkeypatch.setattr(harness, "_fsync_existing_file", track_file)
+    monkeypatch.setattr(harness, "_fsync_directory", track_directory)
+    monkeypatch.setattr(harness, "_atomic_write_json", track_json)
+    harness.seal_schedule_bundle(
+        run_root=publication,
+        schedule_name="empty_repeated_polls",
+        contract_sha256="a" * 64,
+        seal=seal,
+        accounting_rows=[],
+        audit_rows=[],
+        source_integrity_rows=[],
+        audit_authorization={},
+    )
+    marker_event = events.index(f"json:{harness.SCHEDULE_BUNDLE_MARKER}")
+    assert events.index("file:snapshot.json") < marker_event
+    for name in (
+        "seal.json",
+        "checkpoint_accounting.json",
+        "file_open_audit.json",
+        "source_integrity.json",
+    ):
+        assert events.index(f"json:{name}") < marker_event
+    assert any(
+        event == "directory:publication" for event in events[:marker_event]
+    )
+
+    monkeypatch.setattr(harness, "_fsync_existing_file", original_fsync_file)
+    monkeypatch.setattr(harness, "_fsync_directory", original_fsync_directory)
+    monkeypatch.setattr(harness, "_atomic_write_json", original_atomic_json)
+    source = tmp_path / "source"
+    contract, canonical = _synthetic_schedule_bundle(source)
+    validated = harness.validate_schedule_bundle(
+        run_root=source,
+        schedule_name="empty_repeated_polls",
+        contract=contract,
+        canonical_a_seal=canonical,
+    )
+    assert validated is not None
+    copy_events: list[str] = []
+    original_copy = harness._durable_copy_file
+    original_atomic_bytes = harness._atomic_write_bytes
+
+    def track_copy(
+        source_path: Path,
+        destination_path: Path,
+        *,
+        expected_size: int,
+        expected_sha256: str,
+    ) -> None:
+        copy_events.append(f"copy:{destination_path.name}")
+        original_copy(
+            source_path,
+            destination_path,
+            expected_size=expected_size,
+            expected_sha256=expected_sha256,
+        )
+
+    def track_copy_directory(path: Path) -> None:
+        copy_events.append(f"directory:{path.name}")
+        original_fsync_directory(path)
+
+    def track_marker(path: Path, payload: bytes) -> None:
+        copy_events.append(f"marker:{path.name}")
+        original_atomic_bytes(path, payload)
+
+    monkeypatch.setattr(harness, "_durable_copy_file", track_copy)
+    monkeypatch.setattr(harness, "_fsync_directory", track_copy_directory)
+    monkeypatch.setattr(harness, "_atomic_write_bytes", track_marker)
+    destination = tmp_path / "durable-copy"
+    harness.copy_schedule_bundle(
+        source,
+        destination,
+        marker=validated["marker"],
+        marker_bytes=validated["marker_bytes"],
+        marker_sha256=validated["bundle_sha256"],
+    )
+    marker_event = copy_events.index(f"marker:{harness.SCHEDULE_BUNDLE_MARKER}")
+    assert all(
+        copy_events.index(f"copy:{name}") < marker_event
+        for name in harness.SCHEDULE_BUNDLE_ARTIFACTS
+    )
+    assert f"directory:{destination.name}" in copy_events[:marker_event]
+
+
+def test_schedule_bundle_storage_result_feeds_failure_aggregation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "bundle"
+    contract, _ = _synthetic_schedule_bundle(root)
+    monkeypatch.setattr(
+        harness,
+        "_load_sealed_snapshot",
+        lambda _root: (_ for _ in ()).throw(AssertionError("must not parse snapshot")),
+    )
+    storage = harness.verify_schedule_bundle_storage(
+        run_root=root,
+        schedule_name="empty_repeated_polls",
+        contract_sha256=contract["contract_sha256"],
+    )
+    assert storage["status"] == "PASS"
+    assert harness.schedule_bundle_failure_count([storage]) == 0
+    (root / "snapshot.json").write_text("tampered\n")
+    failed = harness.verify_schedule_bundle_storage(
+        run_root=root,
+        schedule_name="empty_repeated_polls",
+        contract_sha256=contract["contract_sha256"],
+    )
+    assert failed["status"] == "FAIL"
+    assert harness.schedule_bundle_failure_count([storage], [failed]) == 1
 
 
 def test_periodic_refresh_plan_is_session_local_and_asymmetric() -> None:

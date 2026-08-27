@@ -1,5 +1,12 @@
 # R6E1R-FINAL Open Issues
 
+- The resumable all-nine harness is now security-reviewed and test-complete,
+  but no bundle produced by an older or uncommitted harness is eligible for
+  reuse. Commit and push the frozen harness first, create a clean detached
+  checkout, then generate fresh focused and full-six evidence. Resume imports
+  require the same checkout path, exact commit/config/projection/source
+  contract and only accept completed marker-last schedule bundles.
+
 - The large-chunk publication defect is diagnosed and repaired locally. The
   only retained-snapshot difference was one provisional absence-based expiry
   and its linked cross-layer row; later raw Index response evidence removed it
