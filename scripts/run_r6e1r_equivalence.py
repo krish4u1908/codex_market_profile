@@ -4263,10 +4263,15 @@ def compare_gui_visual_authority(
         "display_metadata",
         "availability_instruments",
     }
-    targets = {
-        "incremental_a": a_snapshot.get("gui_payload", {}),
-        "batch_b": b_snapshot.get("gui_payload", {}),
+    target_snapshots = {
+        "incremental_a": a_snapshot,
+        "batch_b": b_snapshot,
     }
+    targets = {
+        name: snapshot.get("gui_payload", {})
+        for name, snapshot in target_snapshots.items()
+    }
+    historical_availability: dict[str, dict[str, list[dict[str, Any]]]] = {}
     reference_payloads = reference_snapshot.get("gui_payload", {})
     if not isinstance(reference_payloads, Mapping):
         raise ValueError("R6D visual authority payload is not session keyed")
@@ -4308,6 +4313,29 @@ def compare_gui_visual_authority(
                     continue
                 reference_rows = reference.get(component, [])
                 target_rows = target.get(component, [])
+                if component == "availability" and reference_rows:
+                    # The frozen R6D payload records the same historical
+                    # material-eligibility surface as R6C2.  A/B GUI payloads
+                    # deliberately expose the newer operational as-of surface,
+                    # which can finish STALE_DATA after the last quote.  Derive
+                    # the like-for-like R6D compatibility rows from each sealed
+                    # target independently; never compare the operational rows
+                    # to a different reference contract or use B to project A.
+                    if target_name not in historical_availability:
+                        mode = (
+                            "incremental"
+                            if target_name == "incremental_a"
+                            else "canonical"
+                        )
+                        by_session: dict[str, list[dict[str, Any]]] = {}
+                        for row in _historical_reference_availability_projection(
+                            target_snapshots[target_name], mode=mode
+                        ):
+                            by_session.setdefault(_evaluation_date(row), []).append(row)
+                        historical_availability[target_name] = by_session
+                    target_rows = historical_availability[target_name].get(
+                        str(session), []
+                    )
                 if component == "display_metadata":
                     # R6D predates sanitized operational chart metadata.  Its
                     # visual authority here is the displayed session identity;

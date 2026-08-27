@@ -1497,6 +1497,121 @@ def test_gui_visual_authority_requires_reference_rows_but_allows_live_extensions
     )
 
 
+def test_gui_visual_authority_compares_historical_availability_by_target_role() -> None:
+    session = "2026-08-20"
+    common = {
+        "evaluation_date": session,
+        "overall_state": "LIVE_FULL_CONTEXT",
+        "market_display_enabled": True,
+        "divergence_state": "AVAILABLE",
+        "participation_state": "AVAILABLE",
+        "available_horizons": "1D|2D|3D|ID",
+        "unavailable_horizons": "",
+    }
+    canonical_availability = [
+        {
+            **common,
+            "horizon": horizon,
+            "availability_state": "AVAILABLE",
+            "availability_reason": (
+                "RAW_CONTINUITY_VERIFIED"
+                if horizon == "ID"
+                else "RAW_ACCEPTED_SOURCE_CHAIN"
+            ),
+        }
+        for horizon in ("1D", "2D", "3D", "ID")
+    ]
+    operational_stale = {
+        "session_date": session,
+        "overall_state": "STALE_PARTIAL",
+        "market_display_enabled": True,
+        "divergence_state": "STALE_DATA",
+        "participation_state": "SUSPENDED_REQUIRED_INPUT_UNAVAILABLE",
+        "available_horizons": "1D|2D|3D",
+        "unavailable_horizons": "ID",
+        "layers": {
+            horizon: {
+                "state": "STALE_DATA" if horizon == "ID" else "AVAILABLE",
+                "reason": (
+                    "MARKET_INPUT_STALE_OR_MISSING"
+                    if horizon == "ID"
+                    else "CACHED_RAW_PRIOR_CONTEXT"
+                ),
+            }
+            for horizon in ("1D", "2D", "3D", "ID")
+        },
+    }
+    gui_payload = {
+        "date": session,
+        "availability": operational_stale,
+    }
+    incremental = {
+        "availability": [operational_stale],
+        "inventory": [
+            {"evaluation_date": session, "horizon": horizon}
+            for horizon in ("1D", "2D", "3D", "ID")
+        ],
+        "basis": [{"evaluation_date": session, "validity_status": "VALID"}],
+        "participation_dense": [{"evaluation_date": session}],
+        "gui_payload": {session: gui_payload},
+    }
+    batch = {
+        "availability": canonical_availability,
+        "gui_payload": {session: gui_payload},
+    }
+    reference = {
+        "gui_payload": {
+            session: {
+                "date": session,
+                "availability": canonical_availability,
+            }
+        }
+    }
+
+    rows = harness.compare_gui_visual_authority(
+        a_snapshot=incremental,
+        b_snapshot=batch,
+        reference_snapshot=reference,
+        reference_name="R6D_GUI",
+    )
+    availability = [row for row in rows if row["component"] == "availability"]
+    assert len(availability) == 2
+    assert all(row["status"] == "PASS" for row in availability)
+    operational_rows = harness._gui_projection(gui_payload)["availability"]
+    assert next(row for row in operational_rows if row["horizon"] == "ID")[
+        "availability_state"
+    ] == "STALE_DATA"
+
+    incremental["participation_dense"] = []
+    rows = harness.compare_gui_visual_authority(
+        a_snapshot=incremental,
+        b_snapshot=batch,
+        reference_snapshot=reference,
+        reference_name="R6D_GUI",
+    )
+    availability = [row for row in rows if row["component"] == "availability"]
+    assert next(row for row in availability if row["target"] == "incremental_a")[
+        "status"
+    ] == "FAIL"
+    assert next(row for row in availability if row["target"] == "batch_b")[
+        "status"
+    ] == "PASS"
+
+    mixed_batch = {
+        **batch,
+        "availability": [*canonical_availability, operational_stale],
+    }
+    with pytest.raises(
+        ValueError, match="canonical reference availability must be a nonempty"
+    ):
+        harness.compare_gui_visual_authority(
+            a_snapshot=incremental,
+            b_snapshot=mixed_batch,
+            reference_snapshot=reference,
+            reference_name="R6D_GUI",
+        )
+
+
 def test_real_live_path_chunk_split_and_restart_equivalence(tmp_path: Path) -> None:
     physical, sessions = _physical_fixture(tmp_path / "collector")
     config = _config(tmp_path / "shadow.json")

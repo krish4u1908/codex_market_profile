@@ -198,3 +198,12 @@ RESULT: PASS; preserved real A/B/Reference historical projection hash e819692a87
 
 2026-08-27 full six-session v4 pre-hardening diagnostic
 RESULT: INTERRUPTED AND REJECTED before baseline seal because the running process had loaded pre-hardening harness bytes; signal 2 after 20m02.30s, max RSS 4,832,816 KiB; analytical input itself was pure/unaffected, but no result promoted; partial output/work/timing preserved at /tmp/r6e1r_rejected_and_partial_diagnostics_20260826/six_final_v4_pre_reference_schema_hardening_*.
+
+2026-08-27 full six-session v5 R6D availability diagnostic
+RESULT: INTERRUPTED AND REJECTED before schedules completed; A/B 21/21 components, 8/8 ledgers, 9/9 invariants, and R6C2 30/30 reference rows passed, but R6D GUI had 168 PASS and 12 FAIL. All failures were availability (six sessions times both targets) caused by comparing operational terminal availability with historical eligibility. Output/work/time preserved at /tmp/r6e1r_rejected_and_partial_diagnostics_20260827/six_final_v5_gui_reference_failure_*; no acceptance claim.
+
+2026-08-27 repaired R6D historical-availability projection
+COMMAND: PYTHONPATH=src python -m pytest -q tests/unit/test_r6e1r_equivalence_harness.py -k 'reference_availability or gui_visual_authority'
+RESULT: PASS; 3 passed, 27 deselected; operational STALE_DATA remains unchanged; missing A material fails only A; mixed canonical/operational B refuses.
+COMMAND: load preserved sealed v5 A/B snapshots and compare_gui_visual_authority against all six verified R6D payloads with current source
+RESULT: PASS; 180/180 rows, failures 0; wall 1m19.43s; max RSS 7,306,544 KiB.
