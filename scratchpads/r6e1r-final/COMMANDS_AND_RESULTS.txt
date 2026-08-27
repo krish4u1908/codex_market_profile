@@ -333,4 +333,24 @@ RESULT: FAIL after 3,401.855s (56m42.71s wall); parent peak RSS 1,763,052 KiB, c
 
 2026-08-27 retained focused large-schedule diagnosis
 COMMAND: rerun only large_chronological_chunks with retained variant snapshot from a fresh output/work root
-RESULT: RUNNING to identify the exact append-only ledger row delta before repair; no acceptance claim.
+RESULT: REJECTED DIAGNOSTIC; terminal semantic state remained exact. The only periodic-only rows were provisional lifecycle ID R6B2R-F91B70D4B8E10376C90C and linked cross-layer ID XL-0BC3579C663866CBE2C768A1; there were no clean-only rows or shared-ID content differences. A later standalone Index response at 11:52:29 suppressed that 11:07:20 absence-based expiry in final chronology.
+
+2026-08-27 provisional analytical-publication repair
+COMMAND: run full orchestrator module and adversarial provisional-expiry/participation/cross-layer publication coverage
+RESULT: PASS; 112/112 orchestrator tests. The real fixture removes 1 lifecycle, 6 participation-transition, and 7 linked cross-layer candidates after later causal response evidence, leaves no ghost ledger rows, and publishes every retained sealed row exactly once.
+
+2026-08-27 periodic-refresh evidence hardening
+COMMAND: bind two deterministic interior refresh targets per evaluation session to actual merged source coordinates; require successive periodic generations; run complete harness module and independent read-only re-review
+RESULT: PASS; 38/38 harness tests in 12.57s, 137,656 KiB peak RSS. Exact-discharge, dirty/flush/accepted/cutoff trace gates, distinct session recomputation, nullable clocks, interleaved source coordinates, finalization-only changes, missing later updates, and plan/trace tampering are covered. Independent review found no release-blocking defect; git diff --check passed.
+
+2026-08-27 repaired allowlist closure
+COMMAND: validate both companion hashes, 38-file engine manifest, 47-file deployment manifest, runtime-open allowlist, and prohibited-open audit
+RESULT: PASS; engine manifest SHA-256 51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7, engine hash 362474858eda75b18180ad2fce48e50e1d4acdd1b04a0db405eaae199e70b7a7; deployment manifest SHA-256 ca505bb67ee46247e5d68d4dfa60d6b82de4dbc126eec3214ebed1b2647c33e4, package hash 940ef119e7caf4cbc0599fd5bd24f79b5bca352061da67b00541242c33d1435e; runtime opens 39/39 allowlisted, prohibited 0; 5/5 selected gates passed.
+
+2026-08-27 repair diagnostic launch/interruption record
+COMMAND: start large-only repaired diagnostics v2 and v3 from fresh roots
+RESULT: REJECTED before acceptance. V2 omitted required PYTHONPATH and failed immediately. V3 used the correct environment but received external signal 2 after 7m36.88s (peak RSS 1,339,084 KiB) before schedule seal. No equivalence result is claimed; fresh pinned runs are required.
+
+2026-08-27 combined repaired callback gate
+COMMAND: /usr/bin/time -v env PYTHONPATH=src /opt/banknifty/research/.venv/bin/python -B -m pytest -q tests/unit/test_r6e1r_ingestion.py tests/unit/test_r6e1r_orchestrator.py tests/unit/test_r6e1r_equivalence_harness.py; git diff --check; sha256sum -c both R6E1R manifest companions
+RESULT: PASS; 277/277 in 28.98s (29.25s wall), peak RSS 145,384 KiB; diff check PASS; engine and deployment companion checks PASS.

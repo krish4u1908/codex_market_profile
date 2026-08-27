@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 import pandas as pd
@@ -866,6 +867,180 @@ def test_named_schedule_cannot_pass_when_adversary_was_not_exercised() -> None:
     assert rows[1]["status"] == "PASS"
 
 
+def test_periodic_refresh_plan_is_session_local_and_asymmetric() -> None:
+    sources = [
+        harness.SourceFile(
+            Path(f"/source/{stream}/{session}/{name}"),
+            Path(f"{stream}/{session}/{name}"),
+            1,
+            records,
+            True,
+            records,
+        )
+        for session, values in (
+            ("2026-08-19", (("raw", "events.jsonl", 90), ("oi", "oi.jsonl", 9))),
+            ("2026-08-20", (("raw", "events.jsonl", 12), ("oi", "oi.jsonl", 3))),
+        )
+        for stream, name, records in values
+    ]
+    assert harness._per_session_refresh_thresholds(sources, 2) == (
+        {
+            "session_date": "2026-08-19",
+            "session_generation": 1,
+            "session_record_ordinal": 33,
+            "session_record_count": 99,
+        },
+        {
+            "session_date": "2026-08-19",
+            "session_generation": 2,
+            "session_record_ordinal": 66,
+            "session_record_count": 99,
+        },
+        {
+            "session_date": "2026-08-20",
+            "session_generation": 1,
+            "session_record_ordinal": 5,
+            "session_record_count": 15,
+        },
+        {
+            "session_date": "2026-08-20",
+            "session_generation": 2,
+            "session_record_ordinal": 10,
+            "session_record_count": 15,
+        },
+    )
+
+    targets = {
+        (str(row["session_date"]), int(row["session_record_ordinal"])): row
+        for row in harness._per_session_refresh_thresholds(sources, 2)
+    }
+    seen: Counter[str] = Counter()
+    bound = []
+    for global_ordinal, session in enumerate(
+        (
+            *("2026-08-20" for _ in range(5)),
+            *("2026-08-19" for _ in range(66)),
+            *("2026-08-20" for _ in range(5)),
+            *("2026-08-19" for _ in range(33)),
+            *("2026-08-20" for _ in range(5)),
+        ),
+        start=1,
+    ):
+        value = harness._bind_analytical_refresh_target(
+            targets,
+            seen,
+            source_session=session,
+            global_record_ordinal=global_ordinal,
+        )
+        if value is not None:
+            bound.append(value)
+    assert [
+        (row["session_date"], row["session_record_ordinal"], row["global_record_ordinal"])
+        for row in bound
+    ] == [
+        ("2026-08-20", 5, 5),
+        ("2026-08-19", 33, 38),
+        ("2026-08-19", 66, 71),
+        ("2026-08-20", 10, 76),
+    ]
+
+
+def test_refresh_closure_coverage_is_opportunity_aware() -> None:
+    snapshot = {
+        "session_snapshots": {
+            "2026-08-20": {
+                "episodes": [
+                    {
+                        "episode_id": "E1",
+                        "confirmation_timestamp": "2026-08-20T10:00:00+05:30",
+                        "episode_end_timestamp": "2026-08-20T10:05:00+05:30",
+                    },
+                    {
+                        "episode_id": "ACTIVE",
+                        "confirmation_timestamp": "2026-08-20T10:07:00+05:30",
+                        "episode_end_timestamp": None,
+                    },
+                ],
+                "lifecycle": [
+                    {
+                        "record_id": "L1",
+                        "state_entry_timestamp": "2026-08-20T10:00:00+05:30",
+                        "state_exit_timestamp": "2026-08-20T10:04:00+05:30",
+                    },
+                    {
+                        "record_id": "ACTIVE-L",
+                        "state_entry_timestamp": "2026-08-20T10:07:00+05:30",
+                        "state_exit_timestamp": None,
+                    },
+                ],
+            }
+        }
+    }
+    early = {
+            "session_date": "2026-08-20",
+            "evidence_cutoff_timestamp": "2026-08-20T10:02:00+05:30",
+            "episodes": {"E1": "2026-08-20T10:02:00+05:30"},
+            "lifecycle": {"L1": ""},
+    }
+    finalization_only = harness._analytical_refresh_closure_coverage(
+        [early],
+        snapshot,
+    )
+    assert finalization_only[
+        "analytical_refresh_episode_boundary_opportunity_ids"
+    ] == []
+    assert finalization_only[
+        "analytical_refresh_episode_boundary_finalization_only_ids"
+    ] == ["E1"]
+    assert finalization_only[
+        "analytical_refresh_lifecycle_boundary_finalization_only_ids"
+    ] == ["L1"]
+
+    later = {
+        "session_date": "2026-08-20",
+        "evidence_cutoff_timestamp": "2026-08-20T10:06:00+05:30",
+        "episodes": {"E1": "2026-08-20T10:05:00+05:30"},
+        "lifecycle": {"L1": "2026-08-20T10:04:00+05:30"},
+    }
+    measured = harness._analytical_refresh_closure_coverage(
+        [early, later], snapshot
+    )
+    assert measured["analytical_refresh_episode_boundary_opportunity_ids"] == [
+        "E1"
+    ]
+    assert measured["analytical_refresh_episode_boundary_observed_ids"] == [
+        "E1"
+    ]
+    assert measured[
+        "analytical_refresh_lifecycle_boundary_opportunity_ids"
+    ] == ["L1"]
+    assert measured["analytical_refresh_lifecycle_boundary_observed_ids"] == [
+        "L1"
+    ]
+
+    missed = harness._analytical_refresh_closure_coverage(
+        [
+            early,
+            {
+                **later,
+                "episodes": {"E1": "2026-08-20T10:03:00+05:30"},
+                "lifecycle": {"L1": ""},
+            },
+        ],
+        snapshot,
+    )
+    assert missed["analytical_refresh_episode_boundary_missing_ids"] == ["E1"]
+    assert missed["analytical_refresh_lifecycle_boundary_missing_ids"] == ["L1"]
+
+    not_applicable = harness._analytical_refresh_closure_coverage([], snapshot)
+    assert not_applicable["analytical_refresh_episode_boundary_status"] == (
+        "NOT_APPLICABLE_NO_CAUSAL_REFRESH_BOUNDARY"
+    )
+    assert not_applicable["analytical_refresh_lifecycle_boundary_status"] == (
+        "NOT_APPLICABLE_NO_CAUSAL_REFRESH_BOUNDARY"
+    )
+
+
 def test_every_configured_schedule_predicate_is_exact() -> None:
     records = 1000
     variable_count, variable_hash = harness.expected_record_group_sequence(
@@ -878,6 +1053,30 @@ def test_every_configured_schedule_predicate_is_exact() -> None:
         "source_files": 2,
         "analytical_refusals": 0,
     }
+    refresh_plan = [
+        {
+            "session_date": session,
+            "session_generation": generation,
+            "session_record_ordinal": local,
+            "session_record_count": 500,
+            "global_record_ordinal": prefix + local,
+        }
+        for session, prefix in (("2026-08-19", 0), ("2026-08-20", 500))
+        for generation, local in ((1, 166), (2, 333))
+    ]
+    refresh_trace = [
+        {
+            **row,
+            "exact_threshold_discharge": True,
+            "distinct_poll_generation": True,
+            "target_was_dirty": True,
+            "flush_returned_target": True,
+            "accepted_observation_count_advanced": True,
+            "causal_evidence_cutoff_advanced": True,
+            "valid_basis_cutoff_advanced": True,
+        }
+        for row in refresh_plan
+    ]
     passing = {
         "original_source_chunks": {
             **base,
@@ -913,11 +1112,40 @@ def test_every_configured_schedule_predicate_is_exact() -> None:
             "record_group_sizes_exercised": [1000],
             "maximum_exposure_bytes": 1_000_000,
             "maximum_record_group_bytes": 900_000,
-            "analytical_refresh_flush_count": 5,
+            "analytical_refresh_events_per_session": 2,
+            "analytical_refresh_evaluation_session_count": 2,
+            "analytical_refresh_evaluation_sessions": [
+                "2026-08-19", "2026-08-20",
+            ],
+            "analytical_refresh_expected_count": 4,
+            "analytical_refresh_plan": refresh_plan,
+            "analytical_refresh_trace": refresh_trace,
+            "analytical_refresh_recomputed_target_sessions": [
+                "2026-08-19", "2026-08-20",
+            ],
+            "analytical_refresh_flush_count": 4,
             "analytical_refresh_nonempty_count": 4,
-            "analytical_refresh_repeat_session_count": 3,
-            "analytical_refresh_episode_end_update_count": 2,
-            "analytical_refresh_lifecycle_exit_update_count": 2,
+            "analytical_refresh_repeat_session_count": 2,
+            "analytical_refresh_episode_end_update_count": 0,
+            "analytical_refresh_lifecycle_exit_update_count": 0,
+            "analytical_refresh_episode_boundary_opportunity_count": 0,
+            "analytical_refresh_episode_boundary_observed_count": 0,
+            "analytical_refresh_episode_boundary_opportunity_ids": [],
+            "analytical_refresh_episode_boundary_observed_ids": [],
+            "analytical_refresh_episode_boundary_missing_ids": [],
+            "analytical_refresh_episode_boundary_finalization_only_ids": [],
+            "analytical_refresh_episode_boundary_status": (
+                "NOT_APPLICABLE_NO_CAUSAL_REFRESH_BOUNDARY"
+            ),
+            "analytical_refresh_lifecycle_boundary_opportunity_ids": [],
+            "analytical_refresh_lifecycle_boundary_observed_ids": [],
+            "analytical_refresh_lifecycle_boundary_missing_ids": [],
+            "analytical_refresh_lifecycle_boundary_finalization_only_ids": [],
+            "analytical_refresh_lifecycle_boundary_opportunity_count": 0,
+            "analytical_refresh_lifecycle_boundary_observed_count": 0,
+            "analytical_refresh_lifecycle_boundary_status": (
+                "NOT_APPLICABLE_NO_CAUSAL_REFRESH_BOUNDARY"
+            ),
             "analytical_refresh_timestamp_backdating": 0,
             "analytical_refresh_duplicate_analytical_ids": 0,
             "analytical_refresh_future_joins": 0,
@@ -946,7 +1174,7 @@ def test_every_configured_schedule_predicate_is_exact() -> None:
         elif name == "hourly_file_rotation":
             broken["hourly_rotation_boundary_count"] = 1
         else:
-            broken["analytical_refresh_flush_count"] = 4
+            broken["analytical_refresh_flush_count"] -= 1
         assert harness.schedule_exercise_failures(name, broken), name
     remainder = {
         **passing["one_record_per_increment"],
@@ -957,20 +1185,82 @@ def test_every_configured_schedule_predicate_is_exact() -> None:
     )
 
     large = passing["large_chronological_chunks"]
-    no_episode_evolution = {
-        **large, "analytical_refresh_episode_end_update_count": 0,
-    }
-    assert "PERIODIC_EPISODE_EVOLUTION_NOT_EXERCISED" in (
+    assert harness.schedule_exercise_failures(
+        "large_chronological_chunks", large
+    ) == []
+    for field in (
+        "exact_threshold_discharge",
+        "distinct_poll_generation",
+        "target_was_dirty",
+        "flush_returned_target",
+        "accepted_observation_count_advanced",
+        "causal_evidence_cutoff_advanced",
+        "valid_basis_cutoff_advanced",
+    ):
+        broken_trace = [dict(row) for row in refresh_trace]
+        broken_trace[0][field] = False
+        failures = harness.schedule_exercise_failures(
+            "large_chronological_chunks",
+            {**large, "analytical_refresh_trace": broken_trace},
+        )
+        assert "PERIODIC_ANALYTICAL_REFRESH_CAUSAL_TRACE_FAILED" in failures
+    tampered_plan = [dict(row) for row in refresh_plan]
+    tampered_plan[0]["session_generation"] = 2
+    assert "PER_SESSION_ANALYTICAL_REFRESH_PLAN_STRUCTURE_INVALID" in (
         harness.schedule_exercise_failures(
-            "large_chronological_chunks", no_episode_evolution
+            "large_chronological_chunks",
+            {
+                **large,
+                "analytical_refresh_plan": tampered_plan,
+                "analytical_refresh_trace": [
+                    {**row, "session_generation": 2}
+                    if index == 0 else row
+                    for index, row in enumerate(refresh_trace)
+                ],
+            },
         )
     )
-    no_lifecycle_evolution = {
-        **large, "analytical_refresh_lifecycle_exit_update_count": 0,
-    }
-    assert "PERIODIC_LIFECYCLE_EVOLUTION_NOT_EXERCISED" in (
+    assert "PERIODIC_ANALYTICAL_RECOMPUTATION_NOT_EXERCISED" in (
         harness.schedule_exercise_failures(
-            "large_chronological_chunks", no_lifecycle_evolution
+            "large_chronological_chunks",
+            {
+                **large,
+                "analytical_refresh_recomputed_target_sessions": [
+                    "2026-08-19"
+                ],
+            },
+        )
+    )
+    missed_episode_boundary = {
+        **large,
+        "analytical_refresh_episode_boundary_opportunity_ids": ["E1"],
+        "analytical_refresh_episode_boundary_observed_ids": [],
+        "analytical_refresh_episode_boundary_missing_ids": ["E1"],
+        "analytical_refresh_episode_boundary_opportunity_count": 1,
+        "analytical_refresh_episode_boundary_observed_count": 0,
+        "analytical_refresh_episode_boundary_status": "EXERCISED",
+    }
+    assert "PERIODIC_EPISODE_BOUNDARY_UPDATE_MISSING" in (
+        harness.schedule_exercise_failures(
+            "large_chronological_chunks", missed_episode_boundary
+        )
+    )
+    covered_episode_boundary = {
+        **missed_episode_boundary,
+        "analytical_refresh_episode_boundary_observed_ids": ["E1"],
+        "analytical_refresh_episode_boundary_missing_ids": [],
+        "analytical_refresh_episode_boundary_observed_count": 1,
+    }
+    assert harness.schedule_exercise_failures(
+        "large_chronological_chunks", covered_episode_boundary
+    ) == []
+    inconsistent_boundary_status = {
+        **large,
+        "analytical_refresh_episode_boundary_status": "EXERCISED",
+    }
+    assert "PERIODIC_EPISODE_BOUNDARY_STATUS_INCONSISTENT" in (
+        harness.schedule_exercise_failures(
+            "large_chronological_chunks", inconsistent_boundary_status
         )
     )
     missed_large_target = {
@@ -1969,7 +2259,10 @@ def test_real_live_path_chunk_split_and_restart_equivalence(tmp_path: Path) -> N
             )
         )
     )
-    assert chunked_metrics["analytical_refresh_flush_count"] == 5
+    assert chunked_metrics["analytical_refresh_flush_count"] == 2
+    # This compact ordering fixture intentionally leaves one refresh behind a
+    # selection barrier; the real-schedule gate separately requires every
+    # planned refresh target to compute on the complete focused/full inputs.
     assert chunked_metrics["analytical_refresh_nonempty_count"] == 1
     assert chunked["session_snapshots"][sessions[0]]["session_date"] == sessions[0]
     assert boundary_metrics["unexpected_staged_sessions"] == []

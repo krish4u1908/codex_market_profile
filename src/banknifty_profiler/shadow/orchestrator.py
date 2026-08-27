@@ -2742,6 +2742,31 @@ class LiveAnalyticalOrchestrator:
                 str(row["episode_id"]): str(row["dependency_group_id"])
                 for row in result["dependencies"]
             }
+            provisional_lifecycle_ids: set[str] = set()
+            provisional_episode_ids: set[str] = set()
+            if not publish_deferred:
+                for row in result["lifecycle"]:
+                    if (
+                        row.get("state") == "EXPIRED_OR_UNRESOLVED"
+                        and row.get("reason_code")
+                        == "LIFECYCLE_END_WITHOUT_FAVOURABLE_RESPONSE"
+                    ):
+                        provisional_lifecycle_ids.add(str(row["record_id"]))
+                        provisional_episode_ids.add(str(row["episode_id"]))
+            # Participation is bounded by the latest lifecycle state entry.
+            # A live prefix can therefore contain observations admitted only
+            # by a provisional terminal expiration.  A later standalone Index
+            # response can remove that expiration and shrink the participation
+            # window.  Hold every transition for the affected episode until
+            # either the provisional condition clears or the session seals.
+            provisional_participation_ids = {
+                str(row["transition_id"])
+                for row in result["participation_transitions"]
+                if str(row.get("episode_id", "")) in provisional_episode_ids
+            }
+            provisional_cross_layer_sources = (
+                provisional_lifecycle_ids | provisional_participation_ids
+            )
 
             def deferred_episode(row: Mapping[str, object]) -> bool:
                 if not deferred_group:
@@ -2756,18 +2781,29 @@ class LiveAnalyticalOrchestrator:
             for row in result["dependencies"]:
                 self._append_once("dependency_retriggers", row, f"dependency:{row['episode_id']}", cutoff)
             for row in result["lifecycle"]:
-                if deferred_episode(row):
+                if (
+                    deferred_episode(row)
+                    or str(row["record_id"]) in provisional_lifecycle_ids
+                ):
                     continue
                 self._append_once("lifecycle_transitions", row, str(row["record_id"]), cutoff)
             for row in result["inventory"]:
                 identity = _hash("INVENTORY", row.get("evaluation_date"), row.get("horizon"), row.get("family"), row.get("control_effective_timestamp"), row.get("control_value"))
                 self._append_once("inventory_winner_transitions", row, identity, cutoff)
             for row in result["participation_transitions"]:
-                if deferred_episode(row):
+                if (
+                    deferred_episode(row)
+                    or str(row["transition_id"])
+                    in provisional_participation_ids
+                ):
                     continue
                 self._append_once("participation_transitions", row, str(row["transition_id"]), cutoff)
             for row in result["cross_layer_transitions"]:
-                if row.get("episode_id") and deferred_episode(row):
+                if (
+                    row.get("episode_id") and deferred_episode(row)
+                ) or str(row.get("source_record_id", "")) in (
+                    provisional_cross_layer_sources
+                ):
                     continue
                 self._append_once("cross_layer_transitions", row, str(row["transition_id"]), cutoff)
 

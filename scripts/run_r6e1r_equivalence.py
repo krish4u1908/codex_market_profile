@@ -212,7 +212,7 @@ class Schedule:
     restart_events: int = 0
     restart_on_analytical_transition: bool = False
     original_byte_chunks: bool = False
-    analytical_flush_events: int = 0
+    analytical_flush_events_per_session: int = 0
 
 
 def _runtime_library_roots() -> tuple[Path, ...]:
@@ -440,7 +440,8 @@ SCHEDULES = {
     ),
     "hourly_file_rotation": Schedule("hourly_file_rotation", (257,)),
     "large_chronological_chunks": Schedule(
-        "large_chronological_chunks", (8192,), analytical_flush_events=5
+        "large_chronological_chunks", (8192,),
+        analytical_flush_events_per_session=2,
     ),
 }
 
@@ -2704,6 +2705,250 @@ def _fraction_thresholds(total: int, count: int) -> tuple[int, ...]:
     )
 
 
+def _per_session_refresh_thresholds(
+    sources: Iterable[SourceFile], count: int,
+) -> tuple[dict[str, int | str], ...]:
+    """Plan distinct interior refreshes for every evaluation session.
+
+    Global stream fractions can put one refresh in each of several sessions
+    and never recompute a dirty session.  The live contract is session-local,
+    so use two causal interior cutpoints per session.  Their global positions
+    are bound later while consuming the actual receipt-ordered merge;
+    source-coordinate sessions cannot be assumed contiguous under adversarial
+    timestamps.  Context/predecessor sources are not passed to this function.
+    """
+    records_by_session: Counter[str] = Counter()
+    for source in sources:
+        if len(source.relative.parts) < 2:
+            raise ValueError(
+                f"analytical refresh source lacks session coordinate: {source.relative}"
+            )
+        records_by_session[str(source.relative.parts[1])] += int(
+            source.json_records
+            if source.json_records is not None
+            else source.complete_rows
+        )
+    plan: list[dict[str, int | str]] = []
+    for session, total in sorted(records_by_session.items()):
+        local_thresholds = tuple(
+            sorted(
+                {
+                    (total * index) // (count + 1)
+                    for index in range(1, count + 1)
+                    if 0 < (total * index) // (count + 1) < total
+                }
+            )
+        ) if count > 0 else ()
+        for generation, local_ordinal in enumerate(local_thresholds, start=1):
+            plan.append(
+                {
+                    "session_date": session,
+                    "session_generation": generation,
+                    "session_record_ordinal": local_ordinal,
+                    "session_record_count": total,
+                }
+            )
+    return tuple(plan)
+
+
+def _bind_analytical_refresh_target(
+    targets: Mapping[tuple[str, int], Mapping[str, Any]],
+    seen_by_session: Counter[str],
+    *,
+    source_session: str,
+    global_record_ordinal: int,
+) -> dict[str, Any] | None:
+    """Bind one local cutpoint to its measured receipt-merge position."""
+    seen_by_session[source_session] += 1
+    local_ordinal = int(seen_by_session[source_session])
+    target = targets.get((source_session, local_ordinal))
+    if target is None:
+        return None
+    return {
+        **dict(target),
+        "global_record_ordinal": int(global_record_ordinal),
+    }
+
+
+def _analytical_refresh_closure_coverage(
+    refresh_views: Iterable[Mapping[str, Any]],
+    snapshot: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Measure closure evolution between two periodic callback generations."""
+    session_snapshots = snapshot.get("session_snapshots", {})
+    if not isinstance(session_snapshots, Mapping):
+        session_snapshots = {}
+    views_by_session: dict[str, list[tuple[pd.Timestamp, Mapping[str, Any]]]] = {}
+    for view in refresh_views:
+        session = str(view.get("session_date", ""))
+        cutoff_value = view.get("evidence_cutoff_timestamp")
+        if not session or cutoff_value in (None, ""):
+            continue
+        cutoff = parse_timestamp(
+            cutoff_value,
+            field_name="analytical refresh causal evidence cutoff",
+        )
+        views_by_session.setdefault(session, []).append((cutoff, view))
+
+    episode_opportunities: set[str] = set()
+    episode_observed: set[str] = set()
+    episode_finalization_only: set[str] = set()
+    lifecycle_opportunities: set[str] = set()
+    lifecycle_observed: set[str] = set()
+    lifecycle_finalization_only: set[str] = set()
+
+    for session, views in views_by_session.items():
+        final = session_snapshots.get(session, {})
+        if not isinstance(final, Mapping):
+            continue
+        for row in _as_rows(final.get("episodes", [])):
+            identity = str(row.get("episode_id", ""))
+            confirmation_value = row.get("confirmation_timestamp")
+            final_end_value = row.get("episode_end_timestamp")
+            if (
+                not identity
+                or confirmation_value in (None, "")
+                or final_end_value in (None, "")
+            ):
+                continue
+            confirmation = parse_timestamp(
+                confirmation_value,
+                field_name="final episode confirmation clock",
+            )
+            final_end = parse_timestamp(
+                final_end_value,
+                field_name="final episode closure clock",
+            )
+            final_end_text = str(final_end_value)
+            for index, (early_cutoff, early_view) in enumerate(views):
+                early = early_view.get("episodes", {})
+                if not isinstance(early, Mapping) or identity not in early:
+                    continue
+                early_end_text = str(early.get(identity) or "")
+                if (
+                    early_end_text == final_end_text
+                    or not (confirmation <= early_cutoff < final_end)
+                ):
+                    continue
+                later_candidates = [
+                    (later_cutoff, later_view)
+                    for later_cutoff, later_view in views[index + 1 :]
+                    if later_cutoff >= final_end
+                ]
+                if not later_candidates:
+                    episode_finalization_only.add(identity)
+                    continue
+                episode_opportunities.add(identity)
+                if any(
+                    isinstance(later_view.get("episodes", {}), Mapping)
+                    and str(
+                        later_view.get("episodes", {}).get(identity) or ""
+                    )
+                    == final_end_text
+                    for _, later_view in later_candidates
+                ):
+                    episode_observed.add(identity)
+                break
+
+        for row in _as_rows(final.get("lifecycle", [])):
+            identity = str(row.get("record_id", ""))
+            entry_value = row.get("state_entry_timestamp")
+            final_exit_value = row.get("state_exit_timestamp")
+            if (
+                not identity
+                or entry_value in (None, "")
+                or final_exit_value in (None, "")
+            ):
+                continue
+            entry = parse_timestamp(
+                entry_value,
+                field_name="final lifecycle entry clock",
+            )
+            final_exit = parse_timestamp(
+                final_exit_value,
+                field_name="final lifecycle exit clock",
+            )
+            final_exit_text = str(final_exit_value)
+            for index, (early_cutoff, early_view) in enumerate(views):
+                early = early_view.get("lifecycle", {})
+                if not isinstance(early, Mapping) or identity not in early:
+                    continue
+                early_exit_text = str(early.get(identity) or "")
+                if (
+                    early_exit_text == final_exit_text
+                    or not (entry <= early_cutoff < final_exit)
+                ):
+                    continue
+                later_candidates = [
+                    (later_cutoff, later_view)
+                    for later_cutoff, later_view in views[index + 1 :]
+                    if later_cutoff >= final_exit
+                ]
+                if not later_candidates:
+                    lifecycle_finalization_only.add(identity)
+                    continue
+                lifecycle_opportunities.add(identity)
+                if any(
+                    isinstance(later_view.get("lifecycle", {}), Mapping)
+                    and str(
+                        later_view.get("lifecycle", {}).get(identity) or ""
+                    )
+                    == final_exit_text
+                    for _, later_view in later_candidates
+                ):
+                    lifecycle_observed.add(identity)
+                break
+
+    return {
+        "analytical_refresh_episode_boundary_opportunity_count": len(
+            episode_opportunities
+        ),
+        "analytical_refresh_episode_boundary_observed_count": len(
+            episode_observed
+        ),
+        "analytical_refresh_episode_boundary_opportunity_ids": sorted(
+            episode_opportunities
+        ),
+        "analytical_refresh_episode_boundary_observed_ids": sorted(
+            episode_observed
+        ),
+        "analytical_refresh_episode_boundary_missing_ids": sorted(
+            episode_opportunities - episode_observed
+        ),
+        "analytical_refresh_episode_boundary_finalization_only_ids": sorted(
+            episode_finalization_only
+        ),
+        "analytical_refresh_episode_boundary_status": (
+            "EXERCISED"
+            if episode_opportunities
+            else "NOT_APPLICABLE_NO_CAUSAL_REFRESH_BOUNDARY"
+        ),
+        "analytical_refresh_lifecycle_boundary_opportunity_count": len(
+            lifecycle_opportunities
+        ),
+        "analytical_refresh_lifecycle_boundary_observed_count": len(
+            lifecycle_observed
+        ),
+        "analytical_refresh_lifecycle_boundary_opportunity_ids": sorted(
+            lifecycle_opportunities
+        ),
+        "analytical_refresh_lifecycle_boundary_observed_ids": sorted(
+            lifecycle_observed
+        ),
+        "analytical_refresh_lifecycle_boundary_missing_ids": sorted(
+            lifecycle_opportunities - lifecycle_observed
+        ),
+        "analytical_refresh_lifecycle_boundary_finalization_only_ids": sorted(
+            lifecycle_finalization_only
+        ),
+        "analytical_refresh_lifecycle_boundary_status": (
+            "EXERCISED"
+            if lifecycle_opportunities
+            else "NOT_APPLICABLE_NO_CAUSAL_REFRESH_BOUNDARY"
+        ),
+    }
+
+
 class _AnalyticalBoundaryCrash(RuntimeError):
     """Harness-only simulated crash after a durable analytical append."""
 
@@ -2892,6 +3137,9 @@ def run_schedule(
     analytical_refresh_duplicate_ids = 0
     analytical_refresh_future_joins = 0
     analytical_refresh_tolerance_violations = 0
+    analytical_refresh_trace: list[dict[str, Any]] = []
+    analytical_refresh_closure_views: list[dict[str, Any]] = []
+    analytical_refresh_recomputed_target_sessions: set[str] = set()
     original_source_chunk_count = 0
     original_source_files_staged_before_first_poll = 0
     record_increment_count = 0
@@ -2917,9 +3165,30 @@ def run_schedule(
         _fraction_thresholds(total_records, schedule.empty_poll_events)
     )
     restart_thresholds = list(_fraction_thresholds(total_records, schedule.restart_events))
-    analytical_flush_thresholds = list(
-        _fraction_thresholds(total_records, schedule.analytical_flush_events)
+    local_analytical_refresh_plan = list(
+        _per_session_refresh_thresholds(
+            sources, schedule.analytical_flush_events_per_session
+        )
     )
+    if schedule.analytical_flush_events_per_session:
+        planned_sessions = {
+            str(row["session_date"])
+            for row in local_analytical_refresh_plan
+        }
+        if planned_sessions != set(sessions):
+            raise ValueError(
+                "analytical refresh plan does not cover every evaluation "
+                f"session: planned={sorted(planned_sessions)!r} "
+                f"expected={sorted(sessions)!r}"
+            )
+    analytical_refresh_targets = {
+        (str(row["session_date"]), int(row["session_record_ordinal"])): row
+        for row in local_analytical_refresh_plan
+    }
+    analytical_refresh_plan: list[dict[str, Any]] = []
+    analytical_flush_thresholds: list[int] = []
+    merged_records_by_session: Counter[str] = Counter()
+    merged_record_ordinal = 0
     next_empty_threshold = 0
     next_restart_threshold = 0
     next_analytical_flush_threshold = 0
@@ -2963,7 +3232,7 @@ def run_schedule(
         )
         return result
 
-    def periodic_analytical_flush() -> None:
+    def periodic_analytical_flush(plan: Mapping[str, Any]) -> None:
         """Exercise the production refresh/finalize path during ingestion."""
         nonlocal analytical_refresh_flush_count
         nonlocal analytical_refresh_nonempty_count
@@ -2976,6 +3245,13 @@ def run_schedule(
         nonlocal analytical_refresh_tolerance_violations
         assert context.orchestrator is not None
         orchestrator = context.orchestrator
+        target_session = str(plan["session_date"])
+        target_was_dirty = target_session in set(
+            getattr(orchestrator, "_dirty_sessions", set())
+        )
+        accepted_observation_count = len(
+            getattr(orchestrator, "_sessions", {}).get(target_session, {})
+        )
         # Retain only the two mutable closure annotations under test.  Copying
         # complete snapshots here would transiently duplicate dense resolution
         # and participation tables during the full six-session schedule.
@@ -3044,12 +3320,15 @@ def run_schedule(
                     orchestrator.finalize_session(prior_session)
                 ) or refreshed_nonempty
                 measure_published_counters()
-        refreshed_nonempty = bool(orchestrator.flush()) or refreshed_nonempty
+        flushed = orchestrator.flush()
+        refreshed_nonempty = bool(flushed) or refreshed_nonempty
         measure_published_counters()
         after_annotations = closure_annotations()
         analytical_refresh_flush_count += 1
         analytical_refresh_nonempty_count += int(refreshed_nonempty)
         analytical_refresh_repeat_session_count += len(repeated_sessions)
+        if target_session in repeated_sessions:
+            analytical_refresh_recomputed_target_sessions.add(target_session)
 
         for session in set(before_annotations) & set(after_annotations):
             prior_episodes = before_annotations[session]["episodes"]
@@ -3068,6 +3347,64 @@ def run_schedule(
                     prior_lifecycle[identity] != state_exit
                 ):
                     analytical_refresh_lifecycle_exit_update_count += 1
+
+        output = getattr(orchestrator, "_outputs", {}).get(target_session, {})
+        availability = (
+            output.get("availability", {})
+            if isinstance(output, Mapping)
+            else {}
+        )
+        evidence_cutoff = str(
+            availability.get("evidence_cutoff_timestamp")
+            or availability.get("reference_timestamp")
+            or ""
+        )
+        valid_basis_cutoffs = [
+            str(row.get("basis_timestamp", ""))
+            for row in _as_rows(
+                output.get("basis", {})
+                if isinstance(output, Mapping)
+                else []
+            )
+            if row.get("validity_status") == "VALID"
+            and row.get("basis_timestamp")
+        ]
+        valid_basis_cutoff = max(
+            valid_basis_cutoffs,
+            key=lambda value: parse_timestamp(
+                value,
+                field_name="periodic valid synchronized basis cutoff",
+            ),
+            default="",
+        )
+        analytical_refresh_trace.append(
+            {
+                **dict(plan),
+                "exposed_record_ordinal": exposed_records,
+                "poll_generation": poll_count,
+                "target_was_dirty": target_was_dirty,
+                "flush_returned_target": target_session in flushed,
+                "accepted_observation_count": accepted_observation_count,
+                "evidence_cutoff_timestamp": evidence_cutoff,
+                "valid_basis_cutoff_timestamp": valid_basis_cutoff,
+            }
+        )
+        analytical_refresh_closure_views.append(
+            {
+                "session_date": target_session,
+                "evidence_cutoff_timestamp": evidence_cutoff,
+                "episodes": dict(
+                    after_annotations.get(target_session, {}).get(
+                        "episodes", {}
+                    )
+                ),
+                "lifecycle": dict(
+                    after_annotations.get(target_session, {}).get(
+                        "lifecycle", {}
+                    )
+                ),
+            }
+        )
 
     try:
         groups = schedule.line_groups
@@ -3133,7 +3470,9 @@ def run_schedule(
                 and exposed_records
                 >= analytical_flush_thresholds[next_analytical_flush_threshold]
             ):
-                periodic_analytical_flush()
+                periodic_analytical_flush(
+                    analytical_refresh_plan[next_analytical_flush_threshold]
+                )
                 next_analytical_flush_threshold += 1
             if (
                 schedule.restart_every
@@ -3246,6 +3585,18 @@ def run_schedule(
                 raise RuntimeError("original source chunk drain iteration limit exceeded")
         else:
             for source, line in merged_source_lines(sources):
+                merged_record_ordinal += 1
+                refresh_target = _bind_analytical_refresh_target(
+                    analytical_refresh_targets,
+                    merged_records_by_session,
+                    source_session=str(source.relative.parts[1]),
+                    global_record_ordinal=merged_record_ordinal,
+                )
+                if refresh_target is not None:
+                    analytical_refresh_plan.append(refresh_target)
+                    analytical_flush_thresholds.append(
+                        int(refresh_target["global_record_ordinal"])
+                    )
                 target = groups[group_index % len(groups)]
                 stream_session = source.relative.parts[:2]
                 earlier_same_stream_file = any(
@@ -3273,8 +3624,27 @@ def run_schedule(
                     flush_pending()
                 pending.append((source, line))
                 pending_bytes += len(line)
-                if len(pending) >= groups[group_index % len(groups)]:
+                pending_ordinal = exposed_records + len(pending)
+                exact_refresh_boundary = (
+                    next_analytical_flush_threshold
+                    < len(analytical_flush_thresholds)
+                    and pending_ordinal
+                    == analytical_flush_thresholds[
+                        next_analytical_flush_threshold
+                    ]
+                )
+                if (
+                    exact_refresh_boundary
+                    or len(pending) >= groups[group_index % len(groups)]
+                ):
                     flush_pending()
+            if len(analytical_refresh_plan) != len(
+                local_analytical_refresh_plan
+            ):
+                raise RuntimeError(
+                    "not every per-session analytical refresh cutpoint was "
+                    "bound to the receipt-ordered merge"
+                )
             flush_pending()
         _drain(context, sources, staging_root)
         causal_checkpoint_remainders_after_drain = sum(
@@ -3331,6 +3701,73 @@ def run_schedule(
             if isinstance(raw_ledgers, Mapping)
             else 0
         )
+        closure_coverage = _analytical_refresh_closure_coverage(
+            analytical_refresh_closure_views, snapshot
+        )
+        prior_refresh_by_session: dict[str, dict[str, Any]] = {}
+        observed_poll_generations: set[int] = set()
+        for trace in analytical_refresh_trace:
+            session = str(trace["session_date"])
+            prior = prior_refresh_by_session.get(session)
+            poll_generation = int(trace["poll_generation"])
+            trace["exact_threshold_discharge"] = int(
+                trace["exposed_record_ordinal"]
+            ) == int(trace["global_record_ordinal"])
+            trace["distinct_poll_generation"] = (
+                poll_generation not in observed_poll_generations
+            )
+            observed_poll_generations.add(poll_generation)
+            accepted = int(trace["accepted_observation_count"])
+            trace["accepted_observation_count_advanced"] = (
+                accepted > int(prior["accepted_observation_count"])
+                if prior is not None
+                else accepted > 0
+            )
+            evidence_cutoff = trace.get("evidence_cutoff_timestamp")
+            basis_cutoff = trace.get("valid_basis_cutoff_timestamp")
+            prior_evidence_cutoff = (
+                prior.get("evidence_cutoff_timestamp")
+                if prior is not None
+                else None
+            )
+            prior_basis_cutoff = (
+                prior.get("valid_basis_cutoff_timestamp")
+                if prior is not None
+                else None
+            )
+            trace["causal_evidence_cutoff_advanced"] = (
+                False
+                if evidence_cutoff in (None, "")
+                else True
+                if prior is None
+                else False
+                if prior_evidence_cutoff in (None, "")
+                else parse_timestamp(
+                    evidence_cutoff,
+                    field_name="periodic analytical evidence cutoff",
+                )
+                > parse_timestamp(
+                    prior_evidence_cutoff,
+                    field_name="prior periodic analytical evidence cutoff",
+                )
+            )
+            trace["valid_basis_cutoff_advanced"] = (
+                False
+                if basis_cutoff in (None, "")
+                else True
+                if prior is None
+                else False
+                if prior_basis_cutoff in (None, "")
+                else parse_timestamp(
+                    basis_cutoff,
+                    field_name="periodic synchronized basis cutoff",
+                )
+                > parse_timestamp(
+                    prior_basis_cutoff,
+                    field_name="prior periodic synchronized basis cutoff",
+                )
+            )
+            prior_refresh_by_session[session] = trace
         metrics = {
             "schedule": schedule.name,
             "source_files": len(sources),
@@ -3377,6 +3814,20 @@ def run_schedule(
             "analytical_refresh_synchronization_tolerance_violations": (
                 analytical_refresh_tolerance_violations
             ),
+            "analytical_refresh_events_per_session": (
+                schedule.analytical_flush_events_per_session
+            ),
+            "analytical_refresh_evaluation_session_count": len(sessions),
+            "analytical_refresh_evaluation_sessions": list(sessions),
+            "analytical_refresh_expected_count": len(
+                local_analytical_refresh_plan
+            ),
+            "analytical_refresh_plan": analytical_refresh_plan,
+            "analytical_refresh_trace": analytical_refresh_trace,
+            "analytical_refresh_recomputed_target_sessions": sorted(
+                analytical_refresh_recomputed_target_sessions
+            ),
+            **closure_coverage,
             "original_source_chunk_count": original_source_chunk_count,
             "original_source_files_staged_before_first_poll": (
                 original_source_files_staged_before_first_poll
@@ -4929,29 +5380,186 @@ def schedule_exercise_failures(
         byte_target_reached = byte_limit > 0 and maximum_bytes >= int(byte_limit * 0.75)
         if source_records > 1 and not (record_target_reached or byte_target_reached):
             failures.append("LARGE_CHRONOLOGICAL_TARGET_NOT_MEASURED")
-        expected_refreshes = len(
-            _fraction_thresholds(
-                source_records, SCHEDULES[name].analytical_flush_events
-            )
+        configured_refreshes = int(
+            SCHEDULES[name].analytical_flush_events_per_session
         )
+        evaluation_sessions = int(
+            seal.get("analytical_refresh_evaluation_session_count", 0) or 0
+        )
+        evaluation_session_names = [
+            str(value)
+            for value in seal.get(
+                "analytical_refresh_evaluation_sessions", []
+            )
+        ]
+        expected_refreshes = configured_refreshes * evaluation_sessions
+        if (
+            evaluation_sessions <= 0
+            or len(evaluation_session_names) != evaluation_sessions
+            or len(set(evaluation_session_names)) != evaluation_sessions
+            or int(
+            seal.get("analytical_refresh_events_per_session", 0) or 0
+            ) != configured_refreshes
+            or int(
+            seal.get("analytical_refresh_expected_count", 0) or 0
+            ) != expected_refreshes
+        ):
+            failures.append("PER_SESSION_ANALYTICAL_REFRESH_PLAN_NOT_EXACT")
         if int(seal.get("analytical_refresh_flush_count", 0) or 0) != expected_refreshes:
             failures.append("PERIODIC_ANALYTICAL_REFRESH_COUNT_NOT_EXACT")
-        if expected_refreshes and int(
+        if int(
             seal.get("analytical_refresh_nonempty_count", 0) or 0
-        ) <= 0:
-            failures.append("PERIODIC_ANALYTICAL_REFRESH_NEVER_COMPUTED")
-        if expected_refreshes > 1 and int(
-            seal.get("analytical_refresh_repeat_session_count", 0) or 0
-        ) <= 0:
+        ) != expected_refreshes:
+            failures.append("PERIODIC_ANALYTICAL_REFRESH_TARGET_NOT_COMPUTED")
+        recomputed_targets = {
+            str(value)
+            for value in seal.get(
+                "analytical_refresh_recomputed_target_sessions", []
+            )
+        }
+        if configured_refreshes > 1 and recomputed_targets != set(
+            evaluation_session_names
+        ):
             failures.append("PERIODIC_ANALYTICAL_RECOMPUTATION_NOT_EXERCISED")
-        if expected_refreshes > 1 and int(
-            seal.get("analytical_refresh_episode_end_update_count", 0) or 0
-        ) <= 0:
-            failures.append("PERIODIC_EPISODE_EVOLUTION_NOT_EXERCISED")
-        if expected_refreshes > 1 and int(
-            seal.get("analytical_refresh_lifecycle_exit_update_count", 0) or 0
-        ) <= 0:
-            failures.append("PERIODIC_LIFECYCLE_EVOLUTION_NOT_EXERCISED")
+        trace = [
+            row
+            for row in seal.get("analytical_refresh_trace", [])
+            if isinstance(row, Mapping)
+        ]
+        plan = [
+            row
+            for row in seal.get("analytical_refresh_plan", [])
+            if isinstance(row, Mapping)
+        ]
+        if len(trace) != expected_refreshes or len(plan) != expected_refreshes:
+            failures.append("PERIODIC_ANALYTICAL_REFRESH_TRACE_NOT_EXACT")
+        trace_counts = Counter(str(row.get("session_date", "")) for row in trace)
+        if (
+            set(trace_counts) != set(evaluation_session_names)
+            or any(value != configured_refreshes for value in trace_counts.values())
+        ):
+            failures.append("PER_SESSION_ANALYTICAL_REFRESH_COUNT_NOT_EXACT")
+        plan_by_session: dict[str, list[Mapping[str, Any]]] = {}
+        for row in plan:
+            plan_by_session.setdefault(str(row.get("session_date", "")), []).append(
+                row
+            )
+        plan_structure_exact = set(plan_by_session) == set(
+            evaluation_session_names
+        )
+        session_record_total = 0
+        for session in evaluation_session_names:
+            rows = sorted(
+                plan_by_session.get(session, []),
+                key=lambda row: int(row.get("session_generation", 0) or 0),
+            )
+            counts = {
+                int(row.get("session_record_count", 0) or 0) for row in rows
+            }
+            total = next(iter(counts)) if len(counts) == 1 else 0
+            expected_locals = [
+                (total * generation) // (configured_refreshes + 1)
+                for generation in range(1, configured_refreshes + 1)
+            ] if total > 0 else []
+            plan_structure_exact = plan_structure_exact and (
+                [
+                    int(row.get("session_generation", 0) or 0)
+                    for row in rows
+                ]
+                == list(range(1, configured_refreshes + 1))
+                and [
+                    int(row.get("session_record_ordinal", 0) or 0)
+                    for row in rows
+                ]
+                == expected_locals
+                and len(set(expected_locals)) == configured_refreshes
+            )
+            session_record_total += total
+        global_ordinals = [
+            int(row.get("global_record_ordinal", 0) or 0) for row in plan
+        ]
+        plan_structure_exact = plan_structure_exact and (
+            session_record_total == source_records
+            and global_ordinals == sorted(global_ordinals)
+            and len(set(global_ordinals)) == expected_refreshes
+            and all(0 < value <= source_records for value in global_ordinals)
+        )
+        if not plan_structure_exact:
+            failures.append("PER_SESSION_ANALYTICAL_REFRESH_PLAN_STRUCTURE_INVALID")
+        trace_contract_fields = (
+            "exact_threshold_discharge",
+            "distinct_poll_generation",
+            "target_was_dirty",
+            "flush_returned_target",
+            "accepted_observation_count_advanced",
+            "causal_evidence_cutoff_advanced",
+            "valid_basis_cutoff_advanced",
+        )
+        if any(
+            not all(row.get(field) is True for field in trace_contract_fields)
+            for row in trace
+        ):
+            failures.append("PERIODIC_ANALYTICAL_REFRESH_CAUSAL_TRACE_FAILED")
+        plan_keys = (
+            "session_date",
+            "session_generation",
+            "session_record_ordinal",
+            "session_record_count",
+            "global_record_ordinal",
+        )
+        if [
+            tuple(row.get(key) for key in plan_keys) for row in trace
+        ] != [
+            tuple(row.get(key) for key in plan_keys) for row in plan
+        ]:
+            failures.append("PERIODIC_ANALYTICAL_REFRESH_PLAN_TRACE_MISMATCH")
+        if seal.get(
+            "analytical_refresh_episode_boundary_missing_ids", []
+        ):
+            failures.append("PERIODIC_EPISODE_BOUNDARY_UPDATE_MISSING")
+        if seal.get(
+            "analytical_refresh_lifecycle_boundary_missing_ids", []
+        ):
+            failures.append("PERIODIC_LIFECYCLE_BOUNDARY_UPDATE_MISSING")
+        for family in ("episode", "lifecycle"):
+            opportunities = list(seal.get(
+                f"analytical_refresh_{family}_boundary_opportunity_ids", []
+            ))
+            observed = list(seal.get(
+                f"analytical_refresh_{family}_boundary_observed_ids", []
+            ))
+            missing = list(seal.get(
+                f"analytical_refresh_{family}_boundary_missing_ids", []
+            ))
+            if (
+                set(observed) - set(opportunities)
+                or set(missing) != set(opportunities) - set(observed)
+            ):
+                failures.append(
+                    f"PERIODIC_{family.upper()}_BOUNDARY_SET_INCONSISTENT"
+                )
+            if int(seal.get(
+                f"analytical_refresh_{family}_boundary_opportunity_count", -1
+            )) != len(opportunities) or int(seal.get(
+                f"analytical_refresh_{family}_boundary_observed_count", -1
+            )) != len(observed):
+                failures.append(
+                    f"PERIODIC_{family.upper()}_BOUNDARY_COUNT_INCONSISTENT"
+                )
+            status = str(
+                seal.get(
+                    f"analytical_refresh_{family}_boundary_status", ""
+                )
+            )
+            expected_status = (
+                "EXERCISED"
+                if opportunities
+                else "NOT_APPLICABLE_NO_CAUSAL_REFRESH_BOUNDARY"
+            )
+            if status != expected_status:
+                failures.append(
+                    f"PERIODIC_{family.upper()}_BOUNDARY_STATUS_INCONSISTENT"
+                )
         if int(
             seal.get("analytical_refresh_timestamp_backdating", 0) or 0
         ) != 0:

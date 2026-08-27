@@ -120,3 +120,30 @@ Install on backend `127.0.0.1:18805` and external gateway `8805` only after all
 gates pass. Do not modify ports 8803/8804, collectors, frozen packages, or
 verified tags. Create `r6e1r-live-shadow-verified` only after deployment and all
 acceptance evidence pass.
+
+## Latest repair checkpoint
+
+The current uncommitted repair addresses the focused large-chunk append-only
+failure without changing frozen analytical semantics. Retained evidence proved
+that the whole mismatch was one provisional absence-based lifecycle expiry and
+one linked cross-layer row; later standalone Index response evidence removed the
+expiry from final chronology. Periodic flushes now withhold that provisional
+lifecycle row, all participation transitions for its episode, and cross-layer
+rows linked through either surface. Final seal publishes only the surviving
+canonical identities. A real adversarial test proves one lifecycle, six
+participation-transition, and seven cross-layer candidates can disappear before
+seal without ghost publication, while stable rows remain exactly once.
+
+The equivalence harness now places two interior analytical refreshes per
+evaluation session using actual merged-source coordinates and requires evidence
+between successive periodic generations. Finalization-only changes are recorded
+separately and cannot satisfy the periodic closure gate. Independent review and
+the complete modules pass: orchestrator 112/112 and equivalence harness 38/38.
+The repaired engine and deployment manifests are exact at 38/38 and 47/47.
+
+Two post-repair diagnostics are rejected: one immediate launcher failure from a
+missing `PYTHONPATH`, and one external signal-2 interruption before schedule
+seal. The next operator must commit/push the repair, run a fresh pinned
+large-only diagnostic, then fresh focused all-nine and full-six all-nine gates
+from new roots. Deployment and the verified tag remain prohibited until those
+gates plus fresh regression/browser/security/manifest checks pass.
