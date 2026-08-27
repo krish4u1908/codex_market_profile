@@ -16,6 +16,7 @@ commit; they do not override this status.
 | Sanitized base | `c91df5a660195fa7b4595e0da02488c9db7cb8b1` |
 | Projection/GUI hardening | `9669842054ec74b63b86576e4b5540b1a2c9dd63` |
 | Ledger/harness repair | `a3c20bc2ea1a6251a84f41737d5b21413305bbd6` |
+| Deployment digest/package repair | `bf182fa008a3b477c30a77b01f9a445ac2a8cc4a` |
 | Diagnostic ancestry | `c990b8c` and `0da02be` are deliberately not ancestors of this branch |
 | Verification tag | Not created |
 

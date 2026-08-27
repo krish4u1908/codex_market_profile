@@ -35,7 +35,8 @@ port; never open the range.
 | Item | Required value |
 |---|---|
 | Feature branch | `fix/r6e1r-final-live-shadow-v2` |
-| Exact pushed commit | `PENDING_FINAL_PUSH` |
+| Deployment digest/package repair commit | `bf182fa008a3b477c30a77b01f9a445ac2a8cc4a` |
+| Required tested head | Resolve the exact remote v2 head immediately before testing; it must descend linearly from the repair commit |
 | Clean remote worktree | `PENDING_HOSTINGER_EVIDENCE` |
 | Engine source files | PASS — 38/38 |
 | Engine manifest/companion SHA-256 | `51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7` |
