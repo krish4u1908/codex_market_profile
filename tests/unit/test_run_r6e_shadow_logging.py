@@ -584,7 +584,7 @@ def test_checked_in_runtime_import_closure_loads_from_authenticated_bytes():
     script = repo / SCRIPT
     config = repo / "deploy/r6e1r/r6e1r-runtime-config.json.example"
     dependency_root = (
-        repo / ".venv/lib"
+        Path(sys.prefix) / "lib"
         / f"python{sys.version_info.major}.{sys.version_info.minor}"
         / "site-packages"
     )

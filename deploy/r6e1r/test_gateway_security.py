@@ -292,3 +292,50 @@ def test_backend_redirect_is_refused_without_fetching_location(method: str) -> N
         _stop_server(gateway, gateway_thread)
         _stop_plain_server(redirect, redirect_thread)
         _stop_plain_server(sink, sink_thread)
+
+
+def test_oversized_upstream_response_is_refused_with_sanitized_error() -> None:
+    class Oversized(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            remaining = GATEWAY["MAX_RESPONSE_BYTES"] + 1
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(remaining))
+            self.end_headers()
+            block = b"x" * (64 * 1024)
+            while remaining:
+                chunk = block[:min(remaining, len(block))]
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
+
+        def log_message(self, *_: object) -> None:
+            pass
+
+    upstream, upstream_thread = _plain_server(Oversized)
+    gateway = BoundedThreadingHTTPServer(
+        ("127.0.0.1", 0),
+        handler_for(f"http://127.0.0.1:{upstream.server_address[1]}"),
+    )
+    gateway_thread = threading.Thread(target=gateway.serve_forever)
+    gateway_thread.start()
+    try:
+        request = Request(
+            f"http://127.0.0.1:{gateway.server_address[1]}/api/chart",
+            method="GET",
+        )
+        with pytest.raises(HTTPError) as caught:
+            urlopen(request, timeout=5)
+        error = caught.value
+        try:
+            assert error.code == 502
+            assert error.headers["Content-Type"] == (
+                "application/json; charset=utf-8"
+            )
+            assert json.loads(error.read()) == {
+                "error": "UPSTREAM_RESPONSE_LIMIT",
+            }
+        finally:
+            error.close()
+    finally:
+        _stop_server(gateway, gateway_thread)
+        _stop_plain_server(upstream, upstream_thread)
