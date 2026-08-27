@@ -354,3 +354,17 @@ RESULT: REJECTED before acceptance. V2 omitted required PYTHONPATH and failed im
 2026-08-27 combined repaired callback gate
 COMMAND: /usr/bin/time -v env PYTHONPATH=src /opt/banknifty/research/.venv/bin/python -B -m pytest -q tests/unit/test_r6e1r_ingestion.py tests/unit/test_r6e1r_orchestrator.py tests/unit/test_r6e1r_equivalence_harness.py; git diff --check; sha256sum -c both R6E1R manifest companions
 RESULT: PASS; 277/277 in 28.98s (29.25s wall), peak RSS 145,384 KiB; diff check PASS; engine and deployment companion checks PASS.
+
+2026-08-27 repair milestone publication
+COMMAND: git commit and push feature branch; verify with git ls-remote
+RESULT: PASS; commit and remote branch both bd01b8d3e7ca4670935a4eb1289e6dcfb80c8672; historical verified tags unchanged; no new tag created.
+
+2026-08-27 fresh focused large-chunk repair v4
+COMMAND: persistent linger-enabled user service from clean detached bd01b8d checkout; focused fixture; large_chronological_chunks only; two session-local periodic refreshes; retained variant snapshot
+RESULT: PASS; exit 0; component/ledger/causality/schedule/checkpoint/recovery failures all 0; 1,733 measured runtime opens, prohibited/unmeasured 0; analytical refusals/source mutations 0; semantic SHA-256 68070652aaa24a54b3fb30649e7869731f0c37835d59cc1e315e332502d7cb69; ledger SHA-256 27466e2caaa730b7a4999be7f6b413f418e3fcd45ff5fd3b34a214350d7613a1.
+PERIODIC TRACE: exact targets 15,516 and 31,033; both dirty/returned/discharged, distinct generations, accepted/cutoff/basis advancement true; future joins/backdating/duplicates/tolerance violations 0. No successive-periodic material-boundary opportunity; two lifecycle IDs were finalization-only and excluded from observed closure.
+PERFORMANCE: 8m54.59s wall; 1,568,472 KiB process peak RSS; 900,372 KiB clean-child peak RSS; 2,426,519,552-byte cgroup peak. Summary/seal/time SHA-256 values 4821b9fba0d9940f2020babf5974a104637d2ea1529691cddca80a09945a8387 / a9787906afb3d13f406627f7386f9a570d25171596e0638fe127793e52321142 / 982a63d47faeee32039444a43594c09ef7adadfa4decb576901c5091dc10a5b7.
+
+2026-08-27 post-large diagnostic protected-service gate
+COMMAND: inspect PIDs, proc start ticks, user-service invocation IDs, NRestarts, and listeners
+RESULT: PASS; 8803 remains 380743/46015771/d0df21acd54a440788d89f7cad5b4827/NRestarts0; 8804 remains 465394/51980337/260291b2ae4a4c70a95a0a37722af61e/NRestarts0; 8805 and 18805 free.

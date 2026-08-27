@@ -147,3 +147,11 @@ seal. The next operator must commit/push the repair, run a fresh pinned
 large-only diagnostic, then fresh focused all-nine and full-six all-nine gates
 from new roots. Deployment and the verified tag remain prohibited until those
 gates plus fresh regression/browser/security/manifest checks pass.
+
+The repair was committed and pushed as
+`bd01b8d3e7ca4670935a4eb1289e6dcfb80c8672`. Its fresh pinned large-only gate
+subsequently passed with the canonical semantic/ledger hashes, all failure and
+safety counters zero, and both actual session-local periodic refresh traces
+exact. Wall time was 8m54.59s; process peak RSS was 1,568,472 KiB. The remaining
+mandatory sequence begins with focused all-nine, then full-six all-nine; the
+deployment/tag prohibition still applies.

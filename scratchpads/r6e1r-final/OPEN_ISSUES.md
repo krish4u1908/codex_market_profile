@@ -9,7 +9,8 @@
   at actual session-local merged-source positions. Orchestrator 112/112,
   harness 38/38, manifest/deployment 5/5, and independent review pass.
 
-- Fresh evidence from the repair commit remains mandatory: large-only diagnostic,
+- Fresh evidence from the repair commit now includes a passing large-only
+  diagnostic with both periodic refresh traces exact. Still mandatory are the
   focused August 19 all-nine equivalence, full canonical six-session all-nine
   equivalence, complete regression/browser/security/scans, then isolated
   deployment. Two pre-seal repair diagnostics were rejected (one missing
