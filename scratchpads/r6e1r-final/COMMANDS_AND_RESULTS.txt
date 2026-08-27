@@ -221,3 +221,31 @@ COMMAND: PYTHONPATH=src /usr/bin/time -v -o /tmp/r6e1r_causal_backlog_targeted.t
 RESULT: PASS; 116 passed in 14.31s; wall 14.60s; max RSS 137,536 KiB.
 COMMAND: /opt/banknifty/research/.venv/bin/python -m py_compile scripts/run_r6e1r_equivalence.py tests/unit/test_r6e1r_equivalence_harness.py; git diff --check
 RESULT: PASS.
+
+2026-08-27 full six-session v7 external termination
+COMMAND: full required equivalence command under the interactive unified execution session
+RESULT: EXTERNAL SIGTERM/EXIT 143 at the exact six-hour session boundary during the intentional analytical-transition cut; five schedule seals and exact A/B/reference matrices survive as partial diagnostics, but final runtime-open/checkpoint accounting remained process-local and cannot be reconstructed honestly. V7 is rejected and will not be promoted or stitched.
+
+2026-08-27 full six-session v8 detached launch
+COMMAND: systemd-run --user --unit=r6e1r-v8-equivalence --property=Type=exec --property=WorkingDirectory=/opt/banknifty/repositories/banknifty-market-profiler --property=MemoryMax=28G --property=TimeoutStopSec=60 /tmp/run_r6e1r_six_final_v8.sh
+RESULT: RUNNING in independent user-systemd cgroup from 2026-08-27 14:14:48 IST; exact projection manifest f6a33fcd95dc601ec8f5f2e07b02b4c9ac0c7a25cee2c66a3a2d3a7dbd257a1b; fresh output/work roots; no acceptance claim until exit 0 and full post-run validator pass.
+
+2026-08-27 reused-projection preload consumer repair
+COMMAND: PYTHONPATH=src /opt/banknifty/research/.venv/bin/python -m pytest -q deploy/r6e1r/test_deployment.py -k 'reused_projection or unbound_projection or unverified_equivalence'
+RESULT: PASS; 24/24 targeted exact-binding and fail-closed tests.
+COMMAND: PYTHONPATH=src /opt/banknifty/research/.venv/bin/python -m pytest -q deploy/r6e1r/test_deployment.py -k 'not manifest'
+RESULT: PASS; 74/74 non-manifest deployment tests.
+COMMAND: PYTHONPATH=src /usr/bin/time -v -o /tmp/r6e1r_deployment_consumer_static.time.txt /opt/banknifty/research/.venv/bin/python -m pytest -q deploy/r6e1r/test_deployment.py tests/unit/test_r6e1r_live_gui_api.py; systemd-analyze --user verify deploy/r6e1r/r6e1r-shadow.service deploy/r6e1r/r6e1r-readonly-gateway.service; git diff --check
+RESULT: PASS; 111/111; unit verification and diff check PASS; deployment manifest d27aa61a4bb1a1c3ee631cfa108ef2ee0c9a2515c26636db83ec4239bc5757a4; package hash 529e72dffca3953ff6c7ecb37dc242afb866b6d371dfbc9f7a5458d3c04a65c5; engine/runtime identities unchanged.
+
+2026-08-27 detached-run persistence correction
+COMMAND: loginctl enable-linger codexuser; loginctl show-user codexuser -p Linger
+RESULT: PASS; Linger=yes. V8 had stopped after 4m14s when the non-lingering user manager exited, and its volatile output/work roots were absent; v8 is rejected and supplies no acceptance evidence. Persistent v9 then exited 1 before analytics with the expected harness refusal `staged raw work root must not be under research`.
+
+2026-08-27 full six-session v10 persistent launch
+COMMAND: systemd-run --user --unit=r6e1r-v10-equivalence with persistent research output, persistent /home/codexuser/r6e1r-work staging, MemoryMax=28G, and the existing byte-exact projection manifest
+RESULT: RUNNING from 2026-08-27 14:22:32 IST; Linger=yes; projection manifest f6a33fcd95dc601ec8f5f2e07b02b4c9ac0c7a25cee2c66a3a2d3a7dbd257a1b; no acceptance claim pending exit zero and complete validator pass.
+
+2026-08-27 reused-projection fail-closed hardening
+COMMAND: py_compile; 35-test targeted reused/unverified preload gate; direct validation of the real projection; complete deployment/live-API pytest; systemd-analyze --user verify; both manifest companion checks; git diff --check
+RESULT: PASS; targeted 35/35; complete 122/122 in 20.98s (21.24s wall, 136,992 KiB peak RSS); real 141-source/139-projection/746,890-record reuse contract PASS; unit templates and both 26/34-file manifests PASS. Deployment manifest f0dfd498de4d6cc020517dc99c9c8abb9adfb6118f9fa2f2cf44e7aad3bbf0cc; package hash 8384f8e55f3943c080e579a37c2fe5c7f16be8ebc554872257d564bf016c827a; engine/runtime identities unchanged.

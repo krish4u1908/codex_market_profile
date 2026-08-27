@@ -48,6 +48,19 @@ FROZEN_OUTPUT_COUNTS = {
 }
 
 
+def _exact_reuse_validation(projection: dict) -> dict:
+    return {
+        "status": "PASS",
+        "authoritative_source_hashes_verified": len(projection["source_files"]),
+        "projection_file_hashes_verified": len(projection["projection_files"]),
+        "provenance_verified": True,
+        "provenance_rows_verified": projection["selected_outer_records"],
+        "dynamic_contract_sessions_verified": len(
+            projection["causal_source_sessions"]
+        ),
+    }
+
+
 def _bubblewrap_prefix() -> list[str]:
     return [
         "/usr/bin/bwrap", "--unshare-all", "--unshare-user", "--share-net",
@@ -591,19 +604,37 @@ def _valid_preload_fixture(
         ],
         "august_17_policy": "PRESENT_FOR_CANONICAL_REJECTION_NEVER_FORCED_ACCEPTED",
         "contract_selection": {
-            "2026-08-17": {
+            session: {
                 "futures_symbol": "NSE:BANKNIFTY26AUGFUT",
+                "futures_expiry": "2026-08-25",
+                "option_expiry": "2026-08-25",
                 "selection_authority": "banknifty_profiler.raw_io.reader.select_contracts",
-            },
+            }
+            for session in (
+                "2026-08-10", *EXPECTED_REPLAY_SESSIONS[:3],
+                "2026-08-17", *EXPECTED_REPLAY_SESSIONS[3:],
+            )
         },
         "complete_json_records_only": True,
         "selected_records_byte_exact": True,
         "source_mutations": 0,
         "malformed_candidate_records": 0,
+        "provenance_sha256": "3" * 64,
+        "selected_outer_records": 1,
         "source_files": [{
+            "relative_path": "raw/2026-08-17/events_09.jsonl",
+            "selected_json_records": 1,
             "unchanged_after_projection": True,
             "sha256_before": source_digest,
             "sha256_after": source_digest,
+        }],
+        "projection_files": [{
+            "relative_path": "raw/2026-08-17/events_09.jsonl",
+            "sha256": "2" * 64,
+            "bytes": 1,
+            "physical_rows": 1,
+            "selected_json_records": 1,
+            "ends_with_newline": True,
         }],
     }))
     projection_hash = hashlib.sha256(projection.read_bytes()).hexdigest()
@@ -661,6 +692,7 @@ def _valid_preload_fixture(
         "raw_projection": {
             "used": True,
             "reused_existing": False,
+            "reuse_validation": {},
             "source_mutations": 0,
             "malformed_candidate_records": 0,
             "selected_outer_records": 1,
@@ -671,6 +703,175 @@ def _valid_preload_fixture(
         state, engine_manifest, engine_hash, runtime_config, config_hash,
         summary, projection, state_manifest,
     )
+
+
+def test_preloaded_state_validator_accepts_exact_reused_projection_evidence(
+    tmp_path: Path,
+) -> None:
+    fixture = _valid_preload_fixture(tmp_path)
+    (
+        _state, _engine, _engine_hash, _config, _config_hash, summary_path,
+        projection_path, _state_manifest,
+    ) = fixture
+    summary = json.loads(summary_path.read_text())
+    projection = json.loads(projection_path.read_text())
+    summary["raw_projection"]["reused_existing"] = True
+    summary["raw_projection"]["reuse_validation"] = _exact_reuse_validation(
+        projection
+    )
+    summary_path.write_text(json.dumps(summary))
+
+    module = runpy.run_path(str(ROOT / "validate_preloaded_state.py"))
+    summary_sha, projection_sha, source_count, state_seal = module[
+        "validate_equivalence_evidence"
+    ](summary_path, projection_path, EXPECTED_REPLAY_SESSIONS)
+    assert summary_sha == hashlib.sha256(summary_path.read_bytes()).hexdigest()
+    assert projection_sha == hashlib.sha256(
+        projection_path.read_bytes()
+    ).hexdigest()
+    assert source_count == len(projection["source_files"]) == 1
+    assert state_seal == {
+        "state_manifest_sha256": summary["incremental_a_seal"][
+            "state_manifest_sha256"
+        ],
+        "state_tree_sha256": summary["incremental_a_seal"][
+            "state_tree_sha256"
+        ],
+        "state_file_count": summary["incremental_a_seal"][
+            "state_file_count"
+        ],
+    }
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "fresh_with_nonempty_reuse_validation",
+        "reused_status_not_pass",
+        "reused_missing_field",
+        "reused_extra_field",
+        "reused_source_count_mismatch",
+        "reused_source_count_boolean",
+        "reused_projection_count_mismatch",
+        "reused_provenance_not_verified",
+        "reused_provenance_rows_mismatch",
+        "reused_dynamic_session_count_mismatch",
+        "reused_selected_outer_records_mismatch",
+        "reused_contract_session_missing",
+        "reused_unhashable_causal_session",
+        "reused_malformed_contract_row",
+        "reused_bad_contract_expiry",
+        "reused_bad_provenance_hash",
+        "reused_malformed_projection_row",
+        "reused_bad_projection_hash",
+        "reused_duplicate_projection_path",
+        "reused_unsafe_projection_path",
+        "reused_projection_total_mismatch",
+        "reused_duplicate_source_path",
+        "reused_source_total_mismatch",
+    ),
+)
+def test_preloaded_state_validator_refuses_unbound_projection_reuse_evidence(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    fixture = _valid_preload_fixture(tmp_path)
+    (
+        _state, _engine, _engine_hash, _config, _config_hash, summary_path,
+        projection_path, _state_manifest,
+    ) = fixture
+    summary = json.loads(summary_path.read_text())
+    projection = json.loads(projection_path.read_text())
+    reuse_validation = _exact_reuse_validation(projection)
+    projection_changed = False
+    if mutation == "fresh_with_nonempty_reuse_validation":
+        summary["raw_projection"]["reuse_validation"] = reuse_validation
+    else:
+        summary["raw_projection"]["reused_existing"] = True
+        summary["raw_projection"]["reuse_validation"] = reuse_validation
+        if mutation == "reused_status_not_pass":
+            reuse_validation["status"] = "FAIL"
+        elif mutation == "reused_missing_field":
+            reuse_validation.pop("provenance_rows_verified")
+        elif mutation == "reused_extra_field":
+            reuse_validation["unbound_extra"] = 0
+        elif mutation == "reused_source_count_mismatch":
+            reuse_validation["authoritative_source_hashes_verified"] += 1
+        elif mutation == "reused_source_count_boolean":
+            reuse_validation["authoritative_source_hashes_verified"] = True
+        elif mutation == "reused_projection_count_mismatch":
+            reuse_validation["projection_file_hashes_verified"] += 1
+        elif mutation == "reused_provenance_not_verified":
+            reuse_validation["provenance_verified"] = False
+        elif mutation == "reused_provenance_rows_mismatch":
+            reuse_validation["provenance_rows_verified"] += 1
+        elif mutation == "reused_dynamic_session_count_mismatch":
+            reuse_validation["dynamic_contract_sessions_verified"] += 1
+        elif mutation == "reused_selected_outer_records_mismatch":
+            summary["raw_projection"]["selected_outer_records"] += 1
+        elif mutation == "reused_contract_session_missing":
+            projection["contract_selection"].pop(
+                projection["causal_source_sessions"][0]
+            )
+            projection_changed = True
+        elif mutation == "reused_unhashable_causal_session":
+            projection["causal_source_sessions"].append({"bad": "session"})
+            reuse_validation["dynamic_contract_sessions_verified"] += 1
+            projection_changed = True
+        elif mutation == "reused_malformed_contract_row":
+            projection["contract_selection"]["2026-08-10"] = None
+            projection_changed = True
+        elif mutation == "reused_bad_contract_expiry":
+            projection["contract_selection"]["2026-08-10"][
+                "futures_expiry"
+            ] = "2026-02-30"
+            projection_changed = True
+        elif mutation == "reused_bad_provenance_hash":
+            projection["provenance_sha256"] = "not-a-sha256"
+            projection_changed = True
+        elif mutation == "reused_malformed_projection_row":
+            projection["projection_files"][0] = None
+            projection_changed = True
+        elif mutation == "reused_bad_projection_hash":
+            projection["projection_files"][0]["sha256"] = "bad"
+            projection_changed = True
+        elif mutation == "reused_duplicate_projection_path":
+            projection["projection_files"].append(
+                dict(projection["projection_files"][0])
+            )
+            reuse_validation["projection_file_hashes_verified"] += 1
+            projection_changed = True
+        elif mutation == "reused_unsafe_projection_path":
+            projection["projection_files"][0]["relative_path"] = "../raw.jsonl"
+            projection_changed = True
+        elif mutation == "reused_projection_total_mismatch":
+            projection["projection_files"][0]["selected_json_records"] += 1
+            projection_changed = True
+        elif mutation == "reused_duplicate_source_path":
+            projection["source_files"].append(
+                dict(projection["source_files"][0])
+            )
+            reuse_validation["authoritative_source_hashes_verified"] += 1
+            projection_changed = True
+        elif mutation == "reused_source_total_mismatch":
+            projection["source_files"][0]["selected_json_records"] += 1
+            projection_changed = True
+    if projection_changed:
+        projection_path.write_text(json.dumps(projection))
+        summary["raw_projection"]["manifest_sha256"] = hashlib.sha256(
+            projection_path.read_bytes()
+        ).hexdigest()
+    summary_path.write_text(json.dumps(summary))
+
+    result = _run_existing_validator(fixture)
+    assert result.returncode == 1
+    assert json.loads(result.stdout) == {
+        "schema": "R6E1R_PRELOADED_STATE_VALIDATION_V1",
+        "ok": False,
+        "error_code": "RAW_PROJECTION_REUSE_VALIDATION_FAILED",
+    }
+    assert str(tmp_path) not in result.stdout
+    assert result.stderr == ""
 
 
 def _run_validator(
@@ -1167,7 +1368,7 @@ def test_preloaded_state_validator_refuses_unverified_equivalence_evidence(
             "prefix_blocks": 0,
         }
     elif mutation == "projection_summary":
-        summary["raw_projection"]["reused_existing"] = True
+        summary["raw_projection"]["reused_existing"] = "true"
     elif mutation == "projection_hash":
         projection["receipt_path_session_mismatches"] = 1
     elif mutation == "projection_policy":

@@ -10,6 +10,7 @@ payloads are emitted.
 from __future__ import annotations
 
 import argparse
+from datetime import date
 import hashlib
 import json
 import os
@@ -58,6 +59,14 @@ ZERO_EQUIVALENCE_GATES = (
     "prohibited_a_b_opens",
     "post_run_source_mutations",
 )
+REUSE_VALIDATION_KEYS = frozenset({
+    "status",
+    "authoritative_source_hashes_verified",
+    "projection_file_hashes_verified",
+    "provenance_verified",
+    "provenance_rows_verified",
+    "dynamic_contract_sessions_verified",
+})
 AUGUST_17_POLICY = "PRESENT_FOR_CANONICAL_REJECTION_NEVER_FORCED_ACCEPTED"
 AUTHORITATIVE_SOURCE_ROOT = "/opt/banknifty-collector/data-prod-v4"
 FROZEN_OUTPUT_COUNTS = {
@@ -512,6 +521,167 @@ def _exact_zero(value: Any) -> bool:
     return type(value) is int and value == 0
 
 
+def _valid_iso_date(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        return date.fromisoformat(value).isoformat() == value
+    except ValueError:
+        return False
+
+
+def _safe_raw_relative_path(value: Any) -> bool:
+    if not isinstance(value, str) or not value or "\\" in value:
+        return False
+    relative = Path(value)
+    return (
+        not relative.is_absolute()
+        and value == relative.as_posix()
+        and bool(relative.parts)
+        and relative.parts[0] in {"raw", "oi"}
+        and all(part not in {"", ".", ".."} for part in relative.parts)
+    )
+
+
+def validate_raw_projection_reuse_evidence(
+    raw_projection: dict[str, Any],
+    projection: dict[str, Any],
+) -> None:
+    """Bind projection reuse claims to the exact supplied manifest."""
+    source_files = projection.get("source_files")
+    projection_files = projection.get("projection_files")
+    causal_sessions = projection.get("causal_source_sessions")
+    selected_outer_records = projection.get("selected_outer_records")
+    contracts = projection.get("contract_selection")
+    evaluation_sessions = projection.get("evaluation_sessions")
+    reused_existing = raw_projection.get("reused_existing")
+    if (
+        not isinstance(source_files, list)
+        or not source_files
+        or not isinstance(projection_files, list)
+        or not projection_files
+        or not isinstance(causal_sessions, list)
+        or not causal_sessions
+        or not isinstance(evaluation_sessions, list)
+        or type(selected_outer_records) is not int
+        or selected_outer_records <= 0
+        or raw_projection.get("selected_outer_records") != selected_outer_records
+        or not isinstance(contracts, dict)
+        or type(reused_existing) is not bool
+        or not isinstance(projection.get("provenance_sha256"), str)
+        or HASH_PATTERN.fullmatch(projection["provenance_sha256"]) is None
+    ):
+        refuse("RAW_PROJECTION_REUSE_VALIDATION_FAILED")
+
+    if (
+        any(not _valid_iso_date(session) for session in causal_sessions)
+        or len(set(causal_sessions)) != len(causal_sessions)
+        or causal_sessions != sorted(causal_sessions)
+        or any(session not in causal_sessions for session in evaluation_sessions)
+        or set(contracts) != set(causal_sessions)
+    ):
+        refuse("RAW_PROJECTION_REUSE_VALIDATION_FAILED")
+    for contract in contracts.values():
+        if (
+            not isinstance(contract, dict)
+            or set(contract) != {
+                "futures_expiry",
+                "futures_symbol",
+                "option_expiry",
+                "selection_authority",
+            }
+            or not isinstance(contract.get("futures_symbol"), str)
+            or not contract["futures_symbol"].startswith("NSE:BANKNIFTY")
+            or not contract["futures_symbol"].endswith("FUT")
+            or any(character.isspace() for character in contract["futures_symbol"])
+            or not _valid_iso_date(contract.get("futures_expiry"))
+            or not _valid_iso_date(contract.get("option_expiry"))
+            or contract.get("selection_authority")
+            != "banknifty_profiler.raw_io.reader.select_contracts"
+        ):
+            refuse("RAW_PROJECTION_REUSE_VALIDATION_FAILED")
+
+    source_counts: dict[str, int] = {}
+    for row in source_files:
+        if not isinstance(row, dict):
+            refuse("RAW_PROJECTION_REUSE_VALIDATION_FAILED")
+        relative = row.get("relative_path")
+        selected = row.get("selected_json_records")
+        if (
+            not _safe_raw_relative_path(relative)
+            or relative in source_counts
+            or type(selected) is not int
+            or selected < 0
+        ):
+            refuse("RAW_PROJECTION_REUSE_VALIDATION_FAILED")
+        source_counts[relative] = selected
+
+    projection_counts: dict[str, int] = {}
+    for row in projection_files:
+        if not isinstance(row, dict):
+            refuse("RAW_PROJECTION_REUSE_VALIDATION_FAILED")
+        relative = row.get("relative_path")
+        selected = row.get("selected_json_records")
+        byte_count = row.get("bytes")
+        physical_rows = row.get("physical_rows")
+        digest = row.get("sha256")
+        if (
+            not _safe_raw_relative_path(relative)
+            or relative in projection_counts
+            or type(selected) is not int
+            or selected <= 0
+            or type(byte_count) is not int
+            or byte_count <= 0
+            or type(physical_rows) is not int
+            or physical_rows < selected
+            or row.get("ends_with_newline") is not True
+            or not isinstance(digest, str)
+            or HASH_PATTERN.fullmatch(digest) is None
+        ):
+            refuse("RAW_PROJECTION_REUSE_VALIDATION_FAILED")
+        projection_counts[relative] = selected
+
+    expected_projection_paths = {
+        relative for relative, selected in source_counts.items() if selected > 0
+    }
+    if (
+        sum(source_counts.values()) != selected_outer_records
+        or sum(projection_counts.values()) != selected_outer_records
+        or set(projection_counts) != expected_projection_paths
+        or any(
+            projection_counts[relative] != source_counts[relative]
+            for relative in projection_counts
+        )
+    ):
+        refuse("RAW_PROJECTION_REUSE_VALIDATION_FAILED")
+
+    reuse_validation = raw_projection.get("reuse_validation")
+    if reused_existing is False:
+        if reuse_validation != {}:
+            refuse("RAW_PROJECTION_REUSE_VALIDATION_FAILED")
+        return
+
+    if (
+        not isinstance(reuse_validation, dict)
+        or frozenset(reuse_validation) != REUSE_VALIDATION_KEYS
+        or reuse_validation.get("status") != "PASS"
+        or reuse_validation.get("provenance_verified") is not True
+    ):
+        refuse("RAW_PROJECTION_REUSE_VALIDATION_FAILED")
+    expected_counts = {
+        "authoritative_source_hashes_verified": len(source_files),
+        "projection_file_hashes_verified": len(projection_files),
+        "provenance_rows_verified": selected_outer_records,
+        "dynamic_contract_sessions_verified": len(causal_sessions),
+    }
+    if any(
+        type(reuse_validation.get(field)) is not int
+        or reuse_validation.get(field) != expected
+        for field, expected in expected_counts.items()
+    ):
+        refuse("RAW_PROJECTION_REUSE_VALIDATION_FAILED")
+
+
 def validate_equivalence_evidence(
     summary_path: Path,
     projection_path: Path,
@@ -599,7 +769,7 @@ def validate_equivalence_evidence(
     if (
         not isinstance(raw_projection, dict)
         or raw_projection.get("used") is not True
-        or raw_projection.get("reused_existing") is not False
+        or type(raw_projection.get("reused_existing")) is not bool
         or not _exact_zero(raw_projection.get("source_mutations"))
         or not _exact_zero(raw_projection.get("malformed_candidate_records"))
         or type(raw_projection.get("selected_outer_records")) is not int
@@ -646,6 +816,7 @@ def validate_equivalence_evidence(
     source_files = projection.get("source_files")
     if not isinstance(source_files, list) or not source_files:
         refuse("RAW_PROJECTION_SOURCE_EVIDENCE_MISSING")
+    validate_raw_projection_reuse_evidence(raw_projection, projection)
     for row in source_files:
         if (
             not isinstance(row, dict)
