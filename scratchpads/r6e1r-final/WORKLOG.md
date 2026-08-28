@@ -479,3 +479,38 @@ Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
   `af10b6130ef38ca42c79be8aad0ebef3df4bbb9494ac974321cd315ae94583d0`.
   Incremental A is active; these preflight results do not imply analytical
   acceptance.
+
+- Persistent v9 canonical incremental A sealed successfully after 5,893.937
+  seconds with process peak RSS 6,481,416 KiB. Its seal/snapshot SHA-256 values
+  are `fa62ace6fc2796c0101e1e9da908725d0ca12da364d971fa336a0868f0a83ce7`
+  and `c03d1e3ef195a70df83221897bf7d1e73a63790b46629825ffc3ef3731c5ce87`.
+  The retained 26-file state contains 4,141,835,394 bytes and has manifest/tree
+  SHA-256 `5e205bdbe5d5706325116389b5caf2ba7067b408f58a016ef7ec734111462173` /
+  `f404a5f0bf2d0484318685339c08a978c3bbc9ce7a9f824f2055f38565568cb6`.
+  Checkpoint failures, analytical refusals, future joins, backdating, duplicate
+  IDs, dirty sessions and unexpected sessions are all zero.
+- Persistent v9's independently clean chronological batch B sealed in 741.789
+  seconds with child-process peak RSS 7,153,156 KiB and command return codes
+  0/0/0. Its seal/snapshot SHA-256 values are
+  `99322aa74ad4018400d11cc6336ca695c8f2e190ec279067351ef40ff2faa568` /
+  `285256f5438eaebd86916aabcee7413aa668e1d8d57a1c4fab281f87dffe2526`.
+  A and B have the exact append-only ledger aggregate
+  `4eb8d6920a63821e469843e44e02a6996704b327a37e7f2d3918bee063a8fb65`.
+- Fresh v9 baseline comparisons pass 21/21 canonical components, 8/8 ledgers,
+  and 9/9 causality invariants. Every A-only, B-only, field, identity/content,
+  unexplained, future-join, tolerance, backdating, duplicate, refusal and GUI
+  clock/display/path difference is zero. Matrix SHA-256 values are
+  `fd5fad066510b5fe01f5914f55aa3fa2b7fbac9b27af9a9caa4da76b658cf388`,
+  `e68f5f098b6157160b2a27e51c4bc709a6bc0fc25aa71e7fcb39617c8cb77e48`,
+  and `f5370e1ce6ce067b2ae5a3a090c0215d9c6c7a548348b724f97d2df963164bf2`.
+- Both frozen packages reverified from their verified tags: R6C2R 74/74 files
+  and R6D 40/40 files PASS. The fresh row-level comparisons then passed R6C2R
+  30/30 and R6D GUI 180/180. R6C2R target/reference/unexplained rows are all
+  zero. All 174,080 R6D target-only rows equal the explicitly permitted live
+  extension rows, so unexplained remainder is zero. Verification/comparison
+  SHA-256 values are
+  `ed81708afac9cbb5c30915a56d2f46cf05611a4a12565a37a7a6c3d5d1366c67`,
+  `0e985193a48ede2baf5ad07f5601af90f5471d61f17c8f9da8a694a009de98f8`,
+  and `dc0c5814dbabaafd5d914627b4435038729f4a187a41beb98f385a19b1e6c467`.
+  All nine schedules remain mandatory under the required profile; the one-record
+  schedule is now active and no incomplete marker can be promoted.

@@ -2,6 +2,37 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
+## Current authoritative status — post-repair persistent v9
+
+- The current analytical authority is clean commit
+  `e1d67c534bea5c61b0e3d379db7f599de7e1c445`, with pushed handoff head
+  `a7dabbdb8ed1f8971c2789fe0930cc2f19f08aaf` before this documentation
+  update. Earlier `81b0836` acceptance is superseded by the sparse empty-Index
+  clock repair and is historical evidence only.
+- Focused August 19 acceptance is final for this engine: 21/21 components,
+  8/8 ledgers, 9/9 causality invariants, 9/9 schedules, 72/72 checkpoints,
+  2/2 recovery probes and 8/8 source hashes PASS; summary SHA-256
+  `f83d519226bf7876be5446e16b657bbea9c3624f3ecb7a5e2a724bf35b0954f9`.
+- Persistent v9 has sealed fresh canonical A and independently clean B. Their
+  21/21 component, 8/8 ledger and 9/9 causality matrices pass with every
+  difference/failure zero. Frozen R6C2R 30/30 and R6D 180/180 row-level
+  comparisons pass with zero unexplained remainder.
+- The active remaining analytical gate is all eight alternate full-six
+  schedules plus final recovery, file-open, post-source, storage and terminal
+  summary validation. One-record-per-increment is executing now. No incomplete
+  schedule state or marker may be promoted.
+- After terminal v9 PASS, remaining work is preload validation, isolated local
+  deployment/replay/browser/health tests, final regression and security scans,
+  report refresh, push and clean remote verification. External TCP/8805 remains
+  a likely infrastructure blocker because UFW defaults to INPUT DROP and this
+  account has neither host-firewall nor provider-firewall authority.
+- Do not create `r6e1r-live-shadow-verified` unless the external URL is also
+  independently reachable and every remaining gate passes. If local deployment
+  succeeds but external reachability remains unavailable, close exactly as
+  `R6E1R_ANALYTICS_VERIFIED_DEPLOYMENT_BLOCKED` and do not tag.
+
+## Historical and superseded notes
+
 - The resumable all-nine harness is security-reviewed, test-complete, committed,
   and pushed at `81b0836fe50939246ae210bb62780ac4e163e100`. Resume
   imports still require that exact clean commit, checkout/config/projection/source
