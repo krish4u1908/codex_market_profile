@@ -2,94 +2,143 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT REGRESSION 636/636 — FOCUSED-V3/FULL-SIX-V2 RUNNING — EQUIVALENCE PENDING**
+Status: **POST-REPAIR REGRESSION AND FOCUSED PATH PASS; FRESH SIX-SESSION V9 BASELINE/REFERENCES PASS; TERMINAL SCHEDULE SUITE AND DEPLOYMENT PENDING**
 
-Current pushed repair commit: `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`.
+Evidence lineage:
+
+- Branch snapshot at this refresh: `612d3ebb8fad818386f4b2a6a9b6f519ac837ada`.
+- Repair commit exercised by current evidence: `e1d67c534bea5c61b0e3d379db7f599de7e1c445`.
+- Engine aggregate: `eb3e848d75ef10471d14c641507f44b6f825c4dd63c305e27a803376048f2947`.
+- Engine manifest SHA-256: `866bfd55e434ddacef29a952e3d618a71478463c44a95b44ca31340b3d96a210`.
+- Runtime-config identity: `b4148be9892cc4e19c2a13d52ef68a65239578e6147cb3cdf94fd2d812e48a41`.
 
 ## Production path
 
-The implemented path is:
+The implemented repository-owned path is:
 
 `raw JSONL -> strict normalization -> canonical symbol registry -> durable observation stage -> registered analytical callback -> explicit refresh/finalize -> causal synchronization -> inventory -> divergence -> dependency -> lifecycle/resolution -> participation/views -> cross-layer transitions -> GUI projection -> append-only ledgers`
 
-The ingestor registers the orchestrator as its callback. Polling owns ingestion and callback delivery; callers do not manually pass returned observations into analytics.
+The ingestor registers the orchestrator as its callback. Polling owns ingestion
+and callback delivery; a caller does not manually double-process returned
+observations. `run_r6e_shadow.py` consumes committed observations, flushes
+analytical work at the defined boundaries, persists results, and exposes only
+sealed current state to read-only API consumers.
 
 ## Durability contract
 
-- Complete JSONL lines are checkpointed; partial final lines remain deferred.
-- Normalized observations are staged durably before a source checkpoint can make their bytes unreachable.
-- Callback acknowledgement occurs only after the callback returns successfully and durable analytical staging has succeeded.
-- A callback exception leaves the observation in the durable outbox for replay after restart.
-- Deterministic observation and analytical event IDs provide replay deduplication.
-- Ambiguous failures after a durable ledger append reconcile only the exact,
-  complete attempted suffix before retry; replacement, truncation, partial or
-  concurrent tails fail closed.
-- Divergence-confirmation and lifecycle-entry ledgers contain immutable event
-  fields. Episode-end and state-exit annotations remain in the latest snapshot
-  but cannot make an earlier append-only event schedule-dependent.
-- A repeated deterministic identity is accepted only when its immutable content
-  is identical. Duplicate physical identities fail at startup.
+- Complete JSONL lines are checkpointed; a partial final line remains deferred.
+- Normalized observations are staged before the source checkpoint can make raw
+  bytes unreachable.
+- An observation is acknowledged only after callback processing and durable
+  analytical staging succeed.
+- A callback exception leaves durable replay state for restart.
+- Deterministic observation and analytical event IDs provide replay
+  deduplication; repeated IDs are accepted only for identical immutable content.
+- Ambiguous post-fsync failures reconcile only the exact attempted suffix;
+  replacement, truncation, partial, or concurrent tails fail closed.
 - Normalized, refusal, checkpoint, material, staged-observation, and SQLite
-  outbox authorities validate complete schemas before an identity enters a
-  deduplication index. Same-ID changed content, column/payload mismatch,
-  noncanonical sessions, and unbound legacy outboxes fail closed.
-- Every source represented by trusted checkpoint or normalized-ledger evidence
-  must retain a SQLite checkpoint that covers its row and byte frontier without
-  changing identity. Total deletion, partial multi-source deletion, and
-  same-source rollback fail closed; a replaceable JSON mirror is never trusted
-  to create that authority.
-- Generic append intents retain the exact declared batch through fsync and are
-  acknowledged only after caller state accepts the committed identities. An
-  interrupted same-process acknowledgement reconciles before seen-ID handling.
-- Refusal identities are shared across ingestion and analytics, and persisted
-  analytical sessions/outputs/cross-layer contexts are authenticated for exact
-  key, session, stage, and finalization coherence on restart.
-- Raw polls stage observations without rebuilding a dirty multi-gigabyte session. Analytical rebuild occurs only at an explicit refresh, snapshot, finalize, or session boundary.
-- Read-only API requests use sealed output and do not trigger analytics.
+  authorities validate their complete schemas before deduplication.
+- A JSON mirror cannot bootstrap missing or rolled-back SQLite checkpoint
+  authority.
+- Raw polls stage observations without rebuilding dirty multi-gigabyte history.
+  Analytical rebuild occurs only at refresh, snapshot, finalize, or a session
+  boundary.
+- Read-only API calls consume sealed output and do not trigger analytics.
 
 ## Canonical input and clock contract
 
 - The exact Index identity is `NSE:NIFTYBANK-INDEX`.
-- Futures are selected by repository-owned session contract discovery; no session contract is hard-coded in the runtime template.
-- Receipt, event/exchange, effective, and publication timestamps remain distinct and timezone-aware in `Asia/Kolkata`.
-- Synchronized basis uses a backward Index as-of match from 0 through exactly 2,000 ms. A future Index join is invalid.
-- Frozen BN-reference inventory uses its separate backward Index as-of tolerance through 5,000 ms. A real 3-4 second fixture proves inventory remains eligible while synchronized basis remains unmatched beyond exactly 2,000 ms.
-- Evidence timestamps are not replaced by display or snapshot timestamps.
-- Price, volume, OI, previous OI, delta OI, strike, expiry, option type, bid/ask, source stream, file, byte offset, and source row remain in the normalized envelope when present.
+- Futures and option expiries are discovered through repository-owned contract
+  selection; they are not hard-coded by the runtime.
+- Receipt, event/exchange, effective, and publication timestamps remain
+  distinct, timezone-aware, and normalized to `Asia/Kolkata` without rounding.
+- Synchronized basis uses a backward Index as-of match from 0 through exactly
+  2,000 ms. Future joins are invalid.
+- Frozen BN-reference inventory uses its separate backward Index as-of tolerance
+  through 5,000 ms.
+- Evidence clocks are never replaced with calculation, snapshot, or display
+  timestamps.
+- Price, cumulative volume, OI, previous OI, delta OI, strike, expiry, option
+  type, bid/ask, source stream, raw file, byte offset, and source row remain in
+  the normalized envelope when present.
+
+### Empty-Index aware-clock repair
+
+Commit `e1d67c534bea5c61b0e3d379db7f599de7e1c445` repairs the
+no-eligible-Index branch of `raw_io.reader.backward_join`. That branch now
+constructs `matched_price_timestamp` as an all-missing Series with the same
+timezone-aware dtype as `availability_timestamp`, instead of using a generic
+timezone-naive `pd.NaT`. It also refuses a naive availability clock before any
+join. The two new regression fixtures prove that an empty Index produces an
+unmatched aware clock and that naive input fails closed.
+
+This is a type-safety and refusal repair only. It does not change backward
+matching, either tolerance, synchronization ordering, future-join handling,
+inventory coordinates, detector persistence, lifecycle precedence, thresholds,
+colours, or evidence clocks.
 
 ## Fixed context and incremental work
 
-The fixed 1D/2D/3D context reader uses predecessor raw bytes, excludes the current evaluation session, caches source identities, and avoids hashing or rebuilding unchanged history on every poll. Finalized session observation buckets are compacted after durable publication while output and deterministic stage identities remain restart-safe.
+The fixed 1D/2D/3D context reader uses predecessor raw bytes, excludes the
+current evaluation session, and caches source identities. Finalized session
+observation buckets are compacted after durable publication while canonical
+outputs and deterministic stage identities remain restart-safe. This prevents
+each raw poll from rescanning multi-gigabyte history and keeps dense artifacts
+out of browser memory.
 
-## Recorded targeted and historical evidence
+## Current post-repair evidence
 
-| Evidence | Recorded result | Final standing |
+| Evidence | Recorded result | Standing |
 |---|---|---|
-| Pre-write, post-fsync, partial multi-session, publication exception, continuation, checkpoint-authority, unstable-terminal-group, and runner coverage | Ingestion 127/127; orchestrator 111/111; included in current 636/636 | CURRENT REGRESSION PASS; fresh A/B pending |
-| Production callback registration | Covered by ingestor/orchestrator integration tests | Implemented |
-| API reads do not flush analytics | Covered by live API/state tests | Implemented |
-| One-record unresolved Futures candidate | Earlier probe exposed 668 refusals | Repaired; focused v12 exercised all nine schedules with zero analytical refusals |
-| Historical focused callback path | Earlier v12 passed 21/21 components, 8/8 ledgers, 9/9 schedules, 9/9 invariants, 2/2 recovery probes | Superseded; focused-v3 running from current repair commit |
-| Fresh six-session production callback path | Every required schedule and canonical artifact | Full-six-v2 running since 2026-08-27 15:03:13 IST; `PENDING_FINAL_EVIDENCE` |
-| Current-source complete regression | 636 passed, 0 failed, 0 skipped in 129.36 s | CURRENT REGRESSION PASS; fresh equivalence and deployment pending |
+| Complete repository regression | 660 passed, 0 failed, 0 skipped; 118.03 s; peak RSS 671,340 KiB | PASS |
+| Clean August 19 focused callback path | 21/21 components, 8/8 ledgers, 9/9 causality groups, 9/9 focused schedules, 16/16 storage rows, 72/72 checkpoints, 2/2 recovery, 8/8 sources | PASS |
+| Focused zero gates | Future joins, backdating, duplicate IDs, analytical refusals, prohibited/unmeasured runtime opens, and source mutations all zero | PASS |
+| Fresh v9 raw projection | 141 authoritative sources, 139 projection files, 746,890 byte-exact records; malformed candidates and source mutations zero; August 17 present only for canonical rejection | PASS |
+| Fresh v9 original-chunk incremental A | 543,329 JSON records from 104 evaluation-source files; clean seal; checkpoint failures/refusals/future joins/backdating/duplicate IDs/remainders all zero | PASS |
+| Fresh v9 independent clean batch B | Independent chronological batch over the same selected raw bytes; three child commands returned zero | PASS |
+| Fresh v9 A/B components | 21/21 exact component rows | PASS |
+| Fresh v9 append-only ledgers | 8/8 exact identity/content rows | PASS |
+| Fresh v9 causality | 9/9 invariants | PASS |
+| Frozen analytical reference | R6C2R 30/30 rows; manifest 74/74 | PASS |
+| Frozen GUI reference | R6D 180/180 rows; exactly 174,080 permitted live-extension rows; manifest 40/40 | PASS |
+| Remaining eight six-session schedules and terminal summary | No terminal v9 schedule bundle promoted yet | PENDING |
+| Installed services, browser capture, and public-interface verification | Not current post-repair evidence | PENDING |
 
-Focused merged-v2 reached exact analytical components and all eight ledgers but
-then exposed one clean-B GUI-comparator defect: clean B emitted 11,486 dense
-resolution observations where live A emitted 1,294 material native-mechanism
-transitions. Because full-six-v1 shared that comparator, both units were stopped
-and rejected without promoting partial results. Commit `c42e703...` repairs only
-the independent clean GUI builder, was independently reviewed, and does not
-change the callback path, frozen analytical rules, clocks, IDs, dense artifacts,
-or ledgers. Fresh focused-v3 and full-six-v2 are running from that pinned commit.
+The focused summary SHA-256 is
+`f83d519226bf7876be5446e16b657bbea9c3624f3ecb7a5e2a724bf35b0954f9`.
+The focused run exercised 2,508 file-open audit rows, of which 2,499 were
+runtime rows representing 1,190,240 opens; prohibited and unmeasured opens were
+zero. Its elapsed time was 3,839.101 seconds; parent and child peak RSS were
+1,730,828 and 891,172 KiB.
 
-The detailed stage ownership and evidence requirements are in [R6E1R_CALLBACK_WIRING_MATRIX.md](R6E1R_CALLBACK_WIRING_MATRIX.md).
+The immutable v9 incremental-A and clean-B seal SHA-256 values are
+`fa62ace6fc2796c0101e1e9da908725d0ca12da364d971fa336a0868f0a83ce7`
+and `99322aa74ad4018400d11cc6336ca695c8f2e190ec279067351ef40ff2faa568`.
+Their common analytical-ledger aggregate is
+`4eb8d6920a63821e469843e44e02a6996704b327a37e7f2d3918bee063a8fb65`.
+The exact artifact and reference counts are recorded in
+[R6E1R_ARTIFACT_EQUIVALENCE_MATRIX.md](R6E1R_ARTIFACT_EQUIVALENCE_MATRIX.md).
 
-Focused v12 is retained as historical evidence bound to commits
-`71a868f1339773df06d0932dd72a3c908caa1028` and
-`02594dc222afeff5135ac0404dd24211d09f425f`. Current runtime identity is engine
-manifest SHA-256
-`715a82b48e7bffe68f749f94c29b6d0e098bfe0e55f24d91e00db690e38827b3`
-and engine hash
-`021935bc0722b16a16e3af52deb7a7f26ef1aa6b4983aa3442420596bc00725d`;
-it requires fresh focused-v3 and full-six-v2 runs on the pushed repair commit;
-both units are currently running and their results remain pending.
+## Remaining acceptance boundary
+
+The fresh v9 baseline/reference result is necessary but not sufficient for
+terminal R6E1R equivalence. The one-record, deterministic-variable,
+inside-JSONL-line, empty/repeated-poll, multiple-checkpoint-restart,
+analytical-transition-restart, hourly-rotation, and large-chronological-chunk
+schedules must each publish their immutable result, after which the final
+schedule, checkpoint, storage, recovery, source, and summary matrices must pass.
+Deployment and browser acceptance remain separately pending. No verified tag is
+authorized from the baseline/reference slice alone.
+
+## Historical diagnostics retained as historical
+
+The earlier `81b0836fe50939246ae210bb62780ac4e163e100` evidence is
+pre-repair historical evidence and is not used as the current acceptance
+identity. Earlier focused merged-v2/full-six-v1 clean-GUI compaction failures,
+v6 checkpoint-lag visibility/refusal failures, and interrupted v2-v8 attempts
+remain rejected diagnostics. Their repairs preserved the frozen analytical and
+timestamp contracts; no rejected or pre-repair terminal schedule count is
+substituted for fresh v9 evidence.
+
+The detailed stage ownership is in
+[R6E1R_CALLBACK_WIRING_MATRIX.md](R6E1R_CALLBACK_WIRING_MATRIX.md).

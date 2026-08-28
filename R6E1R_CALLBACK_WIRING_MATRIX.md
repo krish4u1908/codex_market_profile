@@ -2,46 +2,77 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT REGRESSION 636/636; FOCUSED-V3/FULL-SIX-V2 RESULTS PENDING**
+Status: **POST-REPAIR REGRESSION 660/660; FOCUSED ALL-NINE PASS; FRESH V9 BASELINE/REFERENCE PASS; TERMINAL FULL-SIX SCHEDULES AND DEPLOYMENT PENDING**
 
-Current pushed repair commit: `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`.
+Evidence lineage:
 
-| Stage | Repository-owned entry point | Required input/output contract | Draft evidence | Targeted/historical evidence; current final gate |
+- Branch snapshot at this refresh: `612d3ebb8fad818386f4b2a6a9b6f519ac837ada`.
+- Analytical repair under test: `e1d67c534bea5c61b0e3d379db7f599de7e1c445`.
+- Fresh focused summary SHA-256: `f83d519226bf7876be5446e16b657bbea9c3624f3ecb7a5e2a724bf35b0954f9`.
+- Fresh six-session v9 invocation: `ce9595fd18b344ab8ab2765ae509f8fa`.
+
+| Stage | Repository-owned entry point | Required input/output contract | Current post-repair evidence | Remaining final gate |
 |---|---|---|---|---|
-| File discovery | `IncrementalJSONLIngestor.discover` | Bounded cached discovery; detects session/hour rotation | Unit coverage recorded | HISTORICAL/TARGETED — focused v12 plus targeted coverage; current full six pending |
-| Complete-line ingestion | `IncrementalJSONLIngestor.poll` / `_read_file` | Commit complete JSONL only; defer tail; preserve byte/row coordinates | Targeted ingestion coverage recorded | HISTORICAL/TARGETED — focused v12 plus targeted coverage; current full six pending |
-| Symbol classification | `SymbolRegistry` | Exact `NSE:NIFTYBANK-INDEX`; repository-selected Futures; CE/PE grammar | Unit coverage recorded | HISTORICAL/TARGETED — current focused/full-six results pending |
-| Lossless normalization | `_normalize_record` / `TypedObservation` | Preserve clocks, price/volume/OI lineage, strike/expiry/type, quotes, raw coordinates | Field-preservation fixtures recorded | HISTORICAL/TARGETED — current focused/full-six results pending |
-| Durable raw staging | Authenticated SQLite outbox plus normalized event ledger | Full schema, column/payload/content binding; unbound legacy rows fail closed; neither a JSON mirror nor surviving append-only evidence can bootstrap missing/empty SQLite authority; every trusted source must retain monotonic row/offset/identity coverage | Exception/restart/tamper/forged-or-missing-mirror/partial-source/rollback tests recorded | TARGETED — ingestion 127/127 recorded; current focused/full-six results pending |
-| Futures selection barrier | Candidate outbox and receipt watermark | Hold equal/later publication until canonical depth selection | Repair and restart fixture present | HISTORICAL/TARGETED — current focused/full-six results pending |
-| Registered callback | `register_callback(orchestrator)` | Production poll invokes batch callback; no manual double processing | Integration coverage recorded | HISTORICAL/TARGETED — current focused/full-six results pending |
-| Durable analytical stage | `LiveAnalyticalOrchestrator.process_observations` | Retained generic append intent, reconcile before seen-ID, acknowledge only after accepted staging; unstable terminal-group rows remain provisional until causally immutable | Failure-injection coverage recorded | TARGETED — orchestrator 111/111 recorded; current focused/full-six results pending |
-| Fixed context | Orchestrator fixed-context loader/cache | Raw predecessor chain; current session excluded; source-hash cached | Targeted context tests recorded | HISTORICAL/TARGETED — full predecessor-chain gate pending |
-| Causal synchronization | `_divergence` / canonical `causal_basis` | Backward Index as-of, inclusive 0-2,000 ms, no future join | Unit/reference coverage recorded | HISTORICAL/TARGETED — current focused/full-six results pending |
-| Inventory | `_inventory` | BN-reference Price and OI VPOC; frozen backward as-of through 5,000 ms; fixed plus Intraday | Focused fallback comparison recorded | HISTORICAL/TARGETED — frozen-count full-six gate pending |
-| Divergence detector | `_divergence` | Frozen detector and confirmation clock; exact 0-2,000 ms synchronized basis | Unit/reference coverage recorded | HISTORICAL/TARGETED — current focused/full-six results pending |
-| Dependency grouping | `_compute_session` dependency stage | Groups/retriggers without threshold changes | Reference comparison exists | HISTORICAL — current frozen-count gate pending |
-| Lifecycle/resolution | `_compute_session` lifecycle stage | Frozen precedence and evidence clocks | Reference comparison exists | HISTORICAL — current frozen-count gate pending |
-| Participation | `_participation` | Futures/CE/PE constituent clocks and frozen strike/window rules | Unit/reference coverage recorded | HISTORICAL/TARGETED — current focused/full-six results pending |
-| Four views | `_build_participation_views` | Dense, transitions, summaries, compatibility | Reference comparison exists | HISTORICAL — current frozen-count gate pending |
-| Cross-layer state | Cross-layer material transition builder | Deterministic canonical transitions with restart-safe continuation context | Focused Intraday fallback matched diagnostically | HISTORICAL/TARGETED — current 60,659-row gate pending |
-| Availability | `_availability` / `operational_availability` | Per-layer degradation; live wall-clock staleness; replay-safe sealed state | Operational/API tests recorded | HISTORICAL/TARGETED — current full-six result pending |
-| GUI projection | `_gui` | Calculation-free public payload with classification | Current complete regression and fixture-browser coverage | CURRENT SUITE/FIXTURE PASS — fresh A/B and deployed-live results pending |
-| Append-only publication | `_publish`, `_append_once`, `_publish_availability` | Immutable event projection; deterministic IDs with same-content validation; bounded exact-prefix recovery | Post-review failure-injection tests recorded | TARGETED — current focused/full-six results pending |
-| Explicit refresh/finalize | `refresh_dirty`, `finalize_session`, runner interval | No rebuild on raw/API poll; bounded analytical refresh; five measured intermediate refreshes in large schedule | State/API and schedule-predicate tests recorded | TARGETED — current focused/full-six results pending |
-| State/restart | Orchestrator state plus checkpoint/ledger stores | Strict canonical sessions; exact output/context/finalization coherence; persisted rows content-match durable stage | Restart/retention/tamper tests recorded | TARGETED — current full-six result pending |
+| File discovery | `IncrementalJSONLIngestor.discover` | Bounded cached discovery; detects session/hour rotation | Focused hourly rotation 6/6; regression PASS | Fresh six-session rotation schedule pending |
+| Complete-line ingestion | `IncrementalJSONLIngestor.poll` / `_read_file` | Commit complete JSONL only; defer tail; preserve byte/row coordinates | Focused 9/9 schedules and 72/72 checkpoint rows; regression PASS | Fresh six-session inside-line, polling, and restart schedules pending |
+| Symbol classification | `SymbolRegistry` | Exact `NSE:NIFTYBANK-INDEX`; repository-selected Futures; CE/PE grammar | Focused PASS; v9 projection selected contracts through repository authority | Terminal schedule suite pending |
+| Lossless normalization | `_normalize_record` / `TypedObservation` | Preserve clocks, price/volume/OI lineage, strike/expiry/type, quotes, and raw coordinates | Focused field comparison PASS; v9 raw projection is byte-exact | Terminal schedule suite pending |
+| Durable raw staging | Authenticated SQLite outbox plus normalized event ledger | Full schema/content binding and monotonic source coverage; missing or rolled-back authority fails closed | Regression 660/660; focused 2/2 recovery probes | Six-session restart/storage matrices pending |
+| Futures selection barrier | Candidate outbox and receipt watermark | Hold equal/later publication until canonical depth selection | Focused analytical refusals zero; regression barrier/restart tests PASS | Terminal one-record schedule pending |
+| Registered callback | `register_callback(orchestrator)` | Production poll invokes batch callback; no manual double processing | Focused production path PASS; v9 incremental A ran through the registered checkpoint path | Remaining schedules pending |
+| Durable analytical stage | `LiveAnalyticalOrchestrator.process_observations` | Retained append intent; reconcile before seen-ID; acknowledge only after accepted durable staging | Focused 8/8 ledgers and 2/2 recovery; v9 A/B ledger matrix 8/8 PASS | Transition-boundary restart schedules pending |
+| Fixed context | Fixed-context loader/cache | Raw predecessor chain; current session excluded; source-hash cached | V9 baseline/reference PASS across six evaluation and eight causal-source sessions; August 17 not forced accepted | Schedule/restart invariance pending |
+| Causal synchronization | `_divergence` / canonical `causal_basis` | Backward Index as-of, inclusive 0-2,000 ms; no future join | Focused 13,781 rows; v9 A=B at 158,746 rows; future joins zero | Terminal schedule matrix pending |
+| Empty-Index matching | `raw_io.reader.backward_join` | An absent Index row yields an unmatched aware clock; naive availability clocks fail closed | Repair `e1d67c5` uses an aware `NaT` series with the availability-clock dtype; two regression fixtures PASS | No frozen-rule change; terminal schedules pending |
+| Inventory | `_inventory` | `CAUSAL_BANKNIFTY_INDEX_REFERENCE_PRICE_BIN`; BN-reference Price/OI VPOC; separate backward as-of tolerance through 5,000 ms | Focused 25 Intraday rows; v9 canonical 255 plus 118 Intraday and 21 partial-fixed fallback rows, A=B/reference | Terminal schedule matrix pending |
+| Divergence detector | `_divergence` | Frozen detector, thresholds, colours, and confirmation clock | Focused 4 episodes; v9 65 episodes (41 GREEN, 24 RED), A=B/reference | Terminal schedule matrix pending |
+| Dependency grouping | `_compute_session` dependency stage | Groups/retriggers without threshold changes | Focused 4 groups/1 retrigger; v9 65 groups/14 retriggers, A=B/reference | Terminal schedule matrix pending |
+| Lifecycle/resolution | `_compute_session` lifecycle stage | Frozen precedence and evidence clocks | Focused 1,299 lifecycle/11,486 dense rows; v9 14,201/164,668, A=B/reference | Transition-boundary schedule pending |
+| Participation | `_participation` | Futures/CE/PE constituent clocks and frozen strike/window rules | Focused 4,500 dense rows; v9 69,225 dense rows, A=B/reference | Terminal schedules pending |
+| Four views | `_build_participation_views` | Dense, transitions, summaries, compatibility | Focused 2,221 transitions and 4 summaries/snapshots; v9 32,068/65/65, A=B/reference | Terminal schedules pending |
+| Cross-layer state | Cross-layer transition builder | Deterministic transitions with restart-safe continuation context | Focused 4,818 canonical plus 25 Intraday fallback rows; v9 60,659 canonical plus 139 fallback rows, A=B/reference | Transition-boundary schedules pending |
+| Availability | `_availability` / `operational_availability` | Per-layer degradation; live wall-clock staleness; replay-safe sealed state | Focused 4 states; v9 24 availability rows, A=B/reference | Live deployment pending |
+| GUI projection | `_gui` | Calculation-free public payload with classification | Regression PASS; v9 A/B and R6D reference matrix 180/180 PASS with exactly 174,080 permitted live-extension rows | Browser/deployed-live acceptance pending |
+| Append-only publication | `_publish`, `_append_once`, `_publish_availability` | Deterministic IDs; identical-content replay only; bounded exact-prefix recovery | Focused 8/8; v9 8/8, common ledger aggregate `4eb8d6920a63821e469843e44e02a6996704b327a37e7f2d3918bee063a8fb65` | All restart schedules pending |
+| Explicit refresh/finalize | `refresh_dirty`, `finalize_session`, runner interval | No rebuild on raw/API poll; bounded analytical refresh | Regression/focused PASS; v9 original-chunk baseline sealed cleanly | Remaining schedule measurements pending |
+| State/restart | Orchestrator state plus checkpoint/ledger stores | Strict session/output/context/finalization coherence; persisted rows content-match durable stage | Focused 2/2 recovery, 16/16 storage rows, and 40/40 artifacts | Six-session checkpoint/transition restart and preload validation pending |
 
-Final acceptance requires every callback invocation key in each applicable focused fixture and exact A/B artifact equality; a non-qualifying divergence in the small sample does not waive unit exercise of the detector, dependency, lifecycle, participation, cross-layer, or GUI path.
+## Current accepted evidence
 
-The current pushed repair commit passes the complete repository regression
-636/636 with zero failures or skips. Focused merged-v2 then exposed a clean-B
-GUI-only mismatch: 11,486 dense resolution observations were projected instead
-of the live GUI's 1,294 material transitions. Focused merged-v2 and full-six-v1
-were stopped and rejected. The `c42e703...` repair changes only the clean
-comparator, was independently reviewed, and leaves frozen analytics and clocks
-unchanged. Fresh focused-v3 and full-six-v2 have run from the pinned repair
-commit since 2026-08-27 15:03:13 IST; their callback matrices remain pending.
+The post-repair regression passed 660/660 with zero failures or skips in
+118.03 seconds; peak RSS was 671,340 KiB. The clean focused run against
+`e1d67c534bea5c61b0e3d379db7f599de7e1c445` passed 21/21 component rows,
+8/8 analytical ledgers, 9/9 causality groups, 9/9 focused schedules, 16/16
+storage rows, 72/72 checkpoint rows, 2/2 recovery probes, and 8/8 sources.
+Every focused comparison, refusal, future-join, backdating, duplicate-ID,
+runtime-open, and source-mutation counter was zero.
 
-Historical focused-v12 identity: engine manifest SHA-256 `7c13b44c...`, engine hash `980b6af2...`, focused summary SHA-256 `19b6c15f...`. It predates the current repair and is not acceptance evidence. Current engine manifest SHA-256 is `715a82b48e7bffe68f749f94c29b6d0e098bfe0e55f24d91e00db690e38827b3`; current engine hash is `021935bc0722b16a16e3af52deb7a7f26ef1aa6b4983aa3442420596bc00725d`.
+The repair is representational and fail-closed. When the Index frame has no
+eligible row, `backward_join` now creates `matched_price_timestamp` as an aware
+`NaT` series using the timezone-aware availability-clock dtype. It also refuses
+a naive availability clock before joining. The frozen backward direction,
+0-2,000 ms synchronized-basis window, separate inventory tolerance, future-join
+prohibition, detector thresholds, and evidence clocks were not changed.
 
-Current six-session sealed callback matrix: `PENDING_FINAL_EVIDENCE`.
+The fresh v9 original-source-chunk incremental A and independently clean batch
+B are immutable and sealed. Their component matrix passed 21/21, ledger matrix
+8/8, and causality matrix 9/9. Both also matched the verified R6C2R analytical
+reference 30/30 and the R6D GUI reference 180/180, with no unexplained
+remainder. The A and B seal SHA-256 values are
+`fa62ace6fc2796c0101e1e9da908725d0ca12da364d971fa336a0868f0a83ce7`
+and `99322aa74ad4018400d11cc6336ca695c8f2e190ec279067351ef40ff2faa568`.
+
+This baseline/reference slice does **not** close the final six-session gate.
+The one-record, deterministic-variable, inside-line, empty/repeated-poll,
+checkpoint-restart, analytical-transition-restart, hourly-rotation, and
+large-chunk schedules have not yet published a terminal v9 acceptance summary.
+Deployment, browser evidence, and the verified tag are also pending.
+
+## Historical evidence retained as historical
+
+The earlier accepted `81b0836fe50939246ae210bb62780ac4e163e100` run is a
+pre-repair historical result and is not current acceptance evidence. Historical
+focused merged-v2/full-six-v1 GUI-compaction failures and v6 one-record
+visibility/refusal failures remain rejected diagnostics. Their repairs did not
+change frozen analytical or timestamp semantics, and none of their counts is
+promoted into a current terminal schedule result.
