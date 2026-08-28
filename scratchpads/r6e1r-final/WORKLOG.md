@@ -434,3 +434,48 @@ Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
   prefix. Initial process IDs were 1578336/1578337; the projection provenance
   reached 136,636,980 bytes after 33 seconds. No protected service or port was
   changed.
+- Neutral final-v7 completed its fresh projection gate in 117.692 seconds with
+  process peak RSS 191,548 KiB. The manifest contains 141 authoritative source
+  rows, 139 byte-exact projection files, 746,890 selected outer records, all
+  six evaluation sessions and eight causal sessions, zero malformed candidates
+  and zero source mutations. August 17 is explicitly
+  `PRESENT_FOR_CANONICAL_REJECTION_NEVER_FORCED_ACCEPTED`. Projection manifest
+  and provenance SHA-256 are
+  `5c01bff5daee03496b4643ce3ccf9c01228f41abb87ec6675ce75f317efaf2f1` /
+  `ea2430747045621a1a835ce84d9888b5179bdc5c2e14f7a68b73eb78a99507e0`.
+  The schedule-contract file/embedded SHA-256 are
+  `e38f9d9db9e94bbeced0282fc19d59b7d723b1a2cbbad1c8cf895cb85fc3f061` /
+  `2dc7e20ea92234565243464105bb071add1982066068a796ed188da5311b2bc1`.
+  Incremental A then began; no terminal result is claimed before its seal.
+- Direct final-v7 was interrupted by external signal 2 at 17:59:38 IST after
+  exactly 16:44.56 wall time. The traceback is `KeyboardInterrupt` inside
+  timestamp validation, not an analytical exception; peak RSS was 4,982,376
+  KiB, swap was zero, and no A seal or schedule marker existed. Its projection
+  and output roots were subsequently deleted while checkout/work/control
+  remained. The partial work is rejected and not reused.
+- A first persistent v8 unit failed closed in `ExecStartPre` because the deleted
+  projection manifest was absent. Python never started and no v8 analytical
+  root exists; its unit/log remain diagnostic evidence only.
+- Persistent neutral recovery v9 started at 18:03:50 IST under user-manager
+  invocation `ce9595fd18b344ab8ab2765ae509f8fa`, unit SHA-256
+  `48a65a204e2d1ad491f3b0eae7eebee7f6afc7254065fc48d75efbad972f352c`,
+  and initial parent/Python PIDs 1583843/1583845. A new clean detached e1d67c5
+  checkout and both package companions passed before start. V9 owns fresh
+  neutral output/work/projection roots, rebuilds the projection from the
+  authoritative raw root, and runs all nine schedules. It is managed outside
+  the terminal session lifetime with 24/28 GiB high/max memory limits, no swap,
+  no network except AF_UNIX, and fail-closed preflight paths. No protected
+  listener or collector was changed.
+- V9's fresh projection gate sealed in 117.675 seconds with peak process RSS
+  189,924 KiB. All 141 authoritative source rows rehashed unchanged, 139
+  byte-exact projection files contain 746,890 selected records, and malformed
+  candidates/source mutations are zero. Projection manifest/provenance and
+  source-comparison SHA-256 are
+  `4e56160c3e48bc3c1f2d9a50982973fa9cb6701bf076e3c4cdef4df9d7bb4426`,
+  `ea2430747045621a1a835ce84d9888b5179bdc5c2e14f7a68b73eb78a99507e0`,
+  and `3726fbfba76ff4b3cdab50cba4288eca2a34506140f167a6adaba5583d0c5c56`.
+  Contract file/embedded SHA-256 are
+  `9579ec8a4dc5d3b06e3f0caf6005903a83a12804711aff3f8b01d05ce5663020` /
+  `af10b6130ef38ca42c79be8aad0ebef3df4bbb9494ac974321cd315ae94583d0`.
+  Incremental A is active; these preflight results do not imply analytical
+  acceptance.

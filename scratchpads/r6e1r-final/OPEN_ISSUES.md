@@ -78,3 +78,10 @@ Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
   rebuilds the projection and reruns A/B/references/all nine schedules fresh.
   Deployment and the verified tag remain prohibited until this run seals and
   the remaining regression/browser/deployment gates pass.
+- Direct v7 was externally SIGINTed at the managed terminal's 16:44 lifetime
+  and its projection/output were then deleted; it produced no eligible A seal.
+  Persistent v8 correctly refused the missing projection before Python. Neutral
+  persistent v9 is now the only active full-six attempt, from a fresh clean
+  checkout and fresh roots. If the same external signal/deletion condition
+  reaches this user-manager run, mandatory execution is an infrastructure
+  blocker rather than an analytical failure; no partial result may be promoted.
