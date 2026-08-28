@@ -65,3 +65,8 @@ Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
   interrupted root is retained and not accepted. Exact-contract final-v3 is
   active under invocation `d15e42ff1149423e9dbcea606d3d638e`; it will rerun
   A/B/references and every schedule fresh because no partial bundle is eligible.
+- The concurrent cleanup also killed v3-v5 before analytical state creation.
+  That transaction has now exited after explicit final checks; direct managed
+  final-v6 is active from fresh roots. If the same external kill condition
+  recurs after its cleanup has ended, acceptance execution will be genuinely
+  infrastructure-blocked despite the already sealed v2 A/B/reference PASS.

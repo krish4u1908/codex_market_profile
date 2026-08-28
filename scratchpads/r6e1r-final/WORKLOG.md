@@ -402,3 +402,14 @@ Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
   v2 had no complete alternate schedule bundle, no partial output is imported:
   A, B, references, and all schedules run fresh. Recovery unit SHA-256 is
   `69d35b550f6493a2a8018001a4e54358772dd2c311d7bb7c786b478953892deb`.
+
+- The same concurrent cleanup transaction then runtime-masked and SIGKILLed
+  final-v3 after 30 seconds and a neutral-named final-v4 after launch; a direct
+  final-v5 process collided with its continuing post-cleanup verification and
+  exited 137. User-slice OOM counters remained exactly zero. Process inspection
+  showed the external transaction explicitly checking R6E analytics, shadow,
+  browser/gateway processes and masked units. After its final check exited and
+  no cleanup process or systemd job remained, direct managed final-v6 launched
+  from fresh roots. It retains the exact e1d67c5 contract and v2 resume source;
+  it remained alive beyond the prior kill window with parent/Python PIDs
+  1575349/1575354. V3-v5 produced no analytical state or eligible bundle.
