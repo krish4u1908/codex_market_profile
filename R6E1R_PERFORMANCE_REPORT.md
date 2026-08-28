@@ -2,84 +2,130 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT REGRESSION PASSED — FOCUSED GATE FAILED — FULL SIX NOT STARTED**
+Status: **POST-REPAIR REGRESSION/FOCUSED/PROJECTION/A/B MEASURED; TERMINAL
+FULL-SIX AND PRELOAD PERFORMANCE PENDING**
 
-## Current-head host measurement
+Current analytical commit:
+`e1d67c534bea5c61b0e3d379db7f599de7e1c445`.
 
-At commit `19c5489f9845f1325da1e1f6e3d9118b95bd959b`, the complete
-repository regression passed 636/636 in 116.45 seconds (116.82 seconds wall)
-with peak process RSS 673,164 KiB. The separate five-test host-only closure
-passed in 1.34 seconds.
+## Accepted current measurements
 
-The focused all-nine run completed in 3,401.855 seconds (56m42.71s wall).
-Parent peak RSS was 1,763,052 KiB and child peak RSS was 900,908 KiB. Its
-retained diagnostic output is approximately 492 MiB and retained work state
-approximately 32 MiB. The run failed only the large-chronological schedule
-exercise/ledger gate, so it is rejected performance evidence and cannot
-authorize the full-six workload or deployment.
+| Workload | Result | Elapsed | Peak parent/process RSS | Peak child RSS | Other resource evidence |
+|---|---|---:|---:|---:|---|
+| Complete repository regression after sparse-context repair/package reseal | 660 passed; 0 failed/errors/skipped/deselected | 118.03 s pytest; 1m58.43 wall | 671,340 KiB | — | Exit 0 |
+| Focused August 19 all-nine acceptance | PASS | 3,839.101 s harness; 1:04:00 wall | 1,730,828 KiB | 891,172 KiB | 2,965,729,280-byte cgroup peak; swap 0 |
+| Persistent v9 raw projection | PASS | 117.675 s | 189,924 KiB | — | 141 sources; 139 files; 746,890 records |
+| Persistent v9 canonical incremental A, original source chunks | PASS / immutable seal | 5,893.937 s | 6,481,416 KiB | — | 26 files; 4,141,835,394-byte state |
+| Persistent v9 independent clean chronological B | PASS / immutable seal | 741.789 s | — | 7,153,156 KiB | Child command exits 0/0/0 |
 
-Current pushed repair commit: `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`.
+Focused equivalence summary SHA-256:
+`f83d519226bf7876be5446e16b657bbea9c3624f3ecb7a5e2a724bf35b0954f9`.
 
-## Current and prior regression measurements
+The persistent v9 A/B append-only ledger aggregate is exactly
+`4eb8d6920a63821e469843e44e02a6996704b327a37e7f2d3918bee063a8fb65`.
+A's seal/state-manifest/state-tree SHA-256 values are:
 
-| Workload | Result | Elapsed | Peak RSS | Standing |
-|---|---|---:|---:|---|
-| Complete repository regression on `c42e703...` | 636 passed, 0 failed, 0 skipped | 129.36 s pytest; 2m09.72 wall | 685,556 KiB | CURRENT REGRESSION PASS |
-| Chromium/Playwright fixture within complete suite | 1 passed; zero console/page errors | 4.86 s | Not separately recorded | CURRENT FIXTURE PASS; not deployed-live |
-| Ingestion suite | 127 passed | 7.51 s | Not recorded | Targeted local record |
-| Orchestrator suite | 111 passed | 19.98 s | Not recorded | Targeted local record |
-| Prior equivalence harness | 32 passed, 3 ptrace/strace failures | 6.64 s | Not recorded | Historical; superseded by current complete pass |
-| Prior deployment package, gateway security, and runner | 130 passed, 2 user-systemd-bus failures | 42.79 s | Not recorded | Historical; superseded by current complete pass |
-| Pre-final-repair selected functional baseline | 416 passed; 5 host-only tests deliberately deselected | 76.92 s | Not recorded | Historical local baseline only |
-| Prior stabilized full non-browser collection | 545 passed, 20 skipped, 13 failed, 16 errors | 79.30 s | Not recorded | Historical non-pass; superseded by current fully provisioned pass |
+- `fa62ace6fc2796c0101e1e9da908725d0ca12da364d971fa336a0868f0a83ce7`;
+- `5e205bdbe5d5706325116389b5caf2ba7067b408f58a016ef7ec734111462173`;
+- `f404a5f0bf2d0484318685339c08a978c3bbc9ce7a9f824f2055f38565568cb6`.
 
-The current complete-suite log SHA-256 is
-`a1132553080052c44424e8c936a33a8b7f548661b11390460fd0492463050bef`;
-the `/usr/bin/time` evidence SHA-256 is
-`c2127eca2426ccb1a92a48875aa1d8ad2939e2be5ccf99bbaed921de8e175681`.
-These timings describe test execution, not raw-data equivalence throughput. No
-current-source full six-session elapsed time, peak parent/child RSS, output size,
-or filesystem-usage measurement has yet been accepted.
+B's seal SHA-256 is
+`99322aa74ad4018400d11cc6336ca695c8f2e190ec279067351ef40ff2faa568`.
 
-## Required final measurements
+## Persistent v9 resource envelope
 
-| Workload | Elapsed | Peak parent RSS | Peak child RSS | Output/filesystem size | Standing |
-|---|---:|---:|---:|---:|---|
-| Focused-v3 August 19 all-nine schedules | `PENDING_AUTHORIZED_HOST_EVIDENCE` | `PENDING_AUTHORIZED_HOST_EVIDENCE` | `PENDING_AUTHORIZED_HOST_EVIDENCE` | `PENDING_AUTHORIZED_HOST_EVIDENCE` | Running from pinned `c42e703...` since 2026-08-27 15:03:13 IST; result pending |
-| Auxiliary uploaded August 20 diagnostic, pre-fix seal | Large chunks: 700.086 s; original chunks: 478.448 s | Large schedule: 1,132,316 KiB; original schedule: 1,198,476 KiB | Not separately recorded | Combined retained output/log footprint about 1.4 GiB | Failed ledger identity by +12 lifecycle/+24 cross-layer rows; exposed and drove the terminal-group publication repair; not acceptance |
-| Auxiliary uploaded August 20 sample using current seals | `PENDING_AUTHORIZED_HOST_RERUN` | `PENDING_AUTHORIZED_HOST_RERUN` | `PENDING_AUTHORIZED_HOST_RERUN` | `PENDING_AUTHORIZED_HOST_RERUN` | Auxiliary proof of the repair only; cannot replace canonical acceptance |
-| Full-six-v2 original chunks | `PENDING_AUTHORIZED_HOST_EVIDENCE` | `PENDING_AUTHORIZED_HOST_EVIDENCE` | `PENDING_AUTHORIZED_HOST_EVIDENCE` | `PENDING_AUTHORIZED_HOST_EVIDENCE` | Running from pinned `c42e703...` since 2026-08-27 15:03:13 IST; result pending |
-| Full-six-v2 one-record schedule | `PENDING_AUTHORIZED_HOST_EVIDENCE` | `PENDING_AUTHORIZED_HOST_EVIDENCE` | `PENDING_AUTHORIZED_HOST_EVIDENCE` | `PENDING_AUTHORIZED_HOST_EVIDENCE` | Running; result pending |
-| Full-six-v2 complete all-nine schedule set | `PENDING_AUTHORIZED_HOST_EVIDENCE` | `PENDING_AUTHORIZED_HOST_EVIDENCE` | `PENDING_AUTHORIZED_HOST_EVIDENCE` | `PENDING_AUTHORIZED_HOST_EVIDENCE` | Running; result pending |
-| Largest sanitized public chart response | `PENDING_AUTHORIZED_HOST_EVIDENCE` | — | — | Must remain below the 8 MiB per-response gateway cap | Pending |
+The persistent verifier runs as an isolated user service with:
 
-Each accepted host run must record its exact command, source and seal hashes, `/usr/bin/time -v` output, child-process resource measurement, output-tree size, and clean input/output roots. A killed run, an older-seal run, or a comparator-invalid run remains diagnostic only.
+- `MemoryHigh=24G`;
+- `MemoryMax=28G`;
+- `MemorySwapMax=0`;
+- `CPUQuota=600%`;
+- address-family restriction to `AF_UNIX`;
+- fresh checkout, work, projection, and output roots.
 
-## Historical measurements
+Its unit SHA-256 is
+`48a65a204e2d1ad491f3b0eae7eebee7f6afc7254065fc48d75efbad972f352c`
+and invocation identity is `ce9595fd18b344ab8ab2765ae509f8fa`.
+No terminal cgroup peak, total CPU, total wall time, total output size, or final
+memory-event accounting is accepted until the service exits 0.
 
-The following measurements predate the current sealed runtime/package. They explain prior design work but are not current performance acceptance evidence:
+## Full-six schedule measurements still pending
 
-| Historical run | Outcome | Elapsed | Peak RSS | Notes |
-|---|---|---:|---:|---|
-| Inherited focused incremental baseline | Interrupted after defect confirmation | 8m56.43s | 343,064 KiB | Rebuilt the full dirty session per poll; output reached 2,862,368 KiB before interruption |
-| Focused A/B v2 | Repair required | 3m11.34s | 1,063,876 KiB | Core analytics matched; legacy batch omitted Intraday fallback rows |
-| Focused A/B v4 | Rehearsal only | 3m49.54s | 1,113,236 KiB | Running process contained a pre-edit GUI comparator |
-| Focused A/B v8 | Diagnostic only | 3m58.44s | Parent 1,121,076 KiB; child 696,360 KiB | Later audit rejected this comparator as final evidence |
-| Authoritative sample-source rehash | Passed | 1.08s | 3,712 KiB | Eight source identities remained unchanged |
-| Source-hour-preserving sample build/integrity check | Passed | 9.91s | 434,972 KiB | Eight hourly collector paths; manifest `31077f42...`; 46,550/46,550 identities |
-| Frozen reference-manifest verification | Passed | 0.96s | 18,668 KiB | R6C2R 74/74 and R6D 40/40 package files |
-| Correctly provisioned prior complete regression | Passed | 62.29s | 663,256 KiB | 289 passed, zero failed, zero skipped at that checkpoint |
-| Accepted focused all-nine v12 | Passed | 22m09.73s | Parent 1,586,204 KiB; child 803,968 KiB | 21/21 components, 8/8 ledgers, 9/9 schedules, all invariant/open/source gates zero |
-| Full-six v6 before interruption | Rejected diagnostic | 1h22m19s | 12,992,404 KiB | Baselines/references exact; one-record harness visibility defect produced 1,796 refusal rows, so no value is promoted |
-| Focused merged-v2 and full-six-v1 | Stopped and rejected | Not accepted | Not accepted | Clean-B GUI projected 11,486 dense observations instead of 1,294 material transitions; no partial result promoted |
-| Causal-backlog targeted gate | Passed | 14.60s wall | 137,536 KiB | 116/116 ingestion, orchestrator, and equivalence-harness tests |
+Canonical A is the measured original-source-chunk baseline. All alternate
+schedule measurements must come from persistent v9's marker-last bundles;
+historical timings from `81b0836` cannot be copied into current acceptance.
 
-The historical focused v12 accepted-output size was 465,846,934 bytes and its retained work root was 33,365,301 bytes. Its summary, state-manifest, and state-tree hashes belong only to that historical run and must not be presented as current-seal evidence.
+| Schedule | Exercise count | Elapsed | Peak RSS | Atomic bundle identity | Standing |
+|---|---:|---:|---:|---|---|
+| Original source chunks | 543,329 selected outer records; 396,713,521 selected bytes | 5,893.937 s | 6,481,416 KiB | A seal `fa62ace6...` | PASS |
+| One record per increment | PENDING | PENDING | PENDING | PENDING | Await terminal v9 bundle |
+| Deterministic variable chunks | PENDING | PENDING | PENDING | PENDING | Await terminal v9 bundle |
+| Boundaries inside JSONL lines | PENDING | PENDING | PENDING | PENDING | Await terminal v9 bundle |
+| Empty/repeated polls | PENDING | PENDING | PENDING | PENDING | Await terminal v9 bundle |
+| Multiple checkpoint restarts | PENDING | PENDING | PENDING | PENDING | Await terminal v9 bundle |
+| Analytical transition restarts | PENDING | PENDING | PENDING | PENDING | Await terminal v9 bundle |
+| Hourly file rotation | PENDING | PENDING | PENDING | PENDING | Await terminal v9 bundle |
+| Large chronological chunks | PENDING | PENDING | PENDING | PENDING | Await terminal v9 bundle |
 
-## Scaling design and pending conclusion
+The following aggregate measurements are also pending terminal v9 publication:
 
-The implementation reads raw files in bounded chunks, caches discovery and source identities, source-hash caches fixed context, excludes the evaluation session from fixed context, compacts finalized raw buckets after durable publication, retains protected replay outputs independently of the rolling live window, and tail-limits browser responses. These are design properties, not a measured guarantee.
+- all-nine harness elapsed time and wall time;
+- final parent/child/process and cgroup peak memory;
+- final CPU and swap/memory-event accounting;
+- final output file count and byte size;
+- final file-open audit row/open totals;
+- final post-run source comparison time;
+- final full-six summary/run-log/timing SHA-256 values.
 
-The committed but uninstalled backend unit uses `MemoryHigh=8G` and `MemoryMax=10G`. The authorized host must compare those limits with current-seal focused and six-session peaks before installation.
+## State-preload measurement boundary
 
-`20-30 session extension assessment: PENDING_AUTHORIZED_HOST_PERFORMANCE_EVIDENCE`
+The sealed A state contains 26 files and 4,141,835,394 bytes. This is an
+immutable analytical-state measurement only. The state may not be copied into
+the runtime package or used for cold-start performance claims until persistent
+v9 reaches terminal acceptance and the real copied-state validator passes.
+
+Cold preload validation time, cold service-start time, recovery restart time,
+endpoint latency, gateway payload size, deployed browser memory, and externally
+served response latency remain **PENDING**.
+
+## Preliminary scaling assessment
+
+The implementation is architecturally bounded for live extension: raw
+discovery/source identities are cached, checkpoint reads are incremental,
+fixed 1D/2D/3D context is source-hash cached and excludes the current session,
+finalized raw buckets are compacted after durable publication, and browser
+responses are tail-limited rather than shipping dense historical tables.
+Runtime configuration retains a bounded rolling output set while protecting
+the six replay sessions.
+
+That design supports the provisional conclusion that 20-30 sessions can be
+served incrementally without loading all raw data or dense analytics into
+browser memory. It does **not** establish that a fresh all-nine 20-30-session
+equivalence rebuild fits the live service envelope. Even before the eight
+alternate v9 schedules complete, clean B has peaked at 7,153,156 KiB and the
+original-source incremental A at 6,481,416 KiB. Longer historical validation
+should remain an offline bounded job with a separately measured resource
+envelope. This assessment must be revisited after terminal v9 and deployment
+measurements are available.
+
+## Historical and excluded measurements
+
+- The pre-repair `81b0836` terminal full-six run took 49,456.697 harness
+  seconds / 13:46:33 wall, peaked at 19,259,224 KiB process RSS and
+  25,770,590,208 bytes at cgroup scope, and produced about 16.60 GB. Those
+  values are historical only and do not establish post-repair performance.
+- Its per-schedule timings and bundle hashes likewise remain historical and
+  must not fill the pending v9 table.
+- Full-six v2 sealed post-repair A/B/reference evidence but was externally
+  interrupted during the one-record schedule and later deleted. It has no
+  terminal performance standing.
+- Direct v7 was externally interrupted by signal 2 after 16:44.56 wall at
+  4,982,376 KiB peak RSS and zero swap, before A sealed. That timing is a
+  rejected diagnostic, not acceptance evidence.
+- Persistent v8 failed closed in preflight before Python because the referenced
+  projection had been deleted; it contributes no workload measurement.
+- Earlier focused and full-six attempts with incomplete tracing, comparison,
+  or transition-boundary coverage remain excluded.
+
+No rejected timing, peak, output size, or superseded preload measurement is
+used as current acceptance evidence.

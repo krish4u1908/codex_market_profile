@@ -2,92 +2,121 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **CURRENT FILE-OPEN REGRESSION PASS — FRESH A/B RUNTIME AUDIT PENDING**
+Status: **POST-REPAIR FOCUSED AUDIT PASS; CURRENT FULL-SIX TERMINAL AUDIT
+PENDING**
 
-Current pushed repair commit: `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`.
+Current analytical commit:
+`e1d67c534bea5c61b0e3d379db7f599de7e1c445`.
 
 ## Acceptance rule
 
-Incremental A and clean B may read only:
+Incremental A and clean chronological B may read only selected authoritative
+raw/projection roots, their independent state/output roots, verified repository
+code/configuration/manifests, and required operating-system/runtime libraries.
+They may not consume inherited R2-R6 analytical tables, unrelated derived
+CSV/JSONL/Parquet/Feather inputs, secrets, or credentials. Frozen R6C2R/R6D
+packages may be opened only after A and B seal and only as comparators.
 
-- the authorized raw/projection roots selected for the run;
-- their own independent state/output roots;
-- repository code, configuration, and verified manifests;
-- operating-system/runtime libraries required to execute.
+Unknown external data-like paths fail closed. Requested and resolved paths must
+remain distinguishable, descriptor reuse must not collapse provenance, and
+every selected source must have measured coverage. An unmeasured/defaulted
+counter is a failure, not a zero.
 
-They must not open inherited R2-R6 analytical tables, old research outputs, unrelated derived CSV/JSONL/Parquet/Feather inputs, secrets, or credentials. Frozen R6C2R/R6D reference packages may be opened only after A and B are sealed and only for comparison.
+## Accepted focused audit
 
-## Rejected evidence
+The fresh post-repair August 19 all-nine run completed its measured runtime-open
+audit at the current engine commit.
 
-Focused v8 reported prohibited opens zero, but an independent audit rejected that result because:
+| Measure | Current value | Result |
+|---|---:|---|
+| Total audit rows | 2,508 | PASS |
+| Runtime-open rows | 2,499 | PASS |
+| Aggregated observed runtime opens represented | 1,190,240 | PASS |
+| Source-inventory rows | 8 | PASS |
+| Fixture-manifest rows | 1 | PASS |
+| Prohibited runtime opens | 0 | PASS |
+| Unmeasured runtime-open rows | 0 | PASS |
+| Derived analytical input opens | 0 | PASS |
+| Source mutations | 0 | PASS |
 
-- the Python audit hook observed only the parent interpreter, not the three clean-B subprocesses;
-- only self-reported inventory/stack open CSVs were imported, and the layers subprocess lacked equivalent child-open evidence;
-- imported observed counts could be defaulted rather than measured;
-- unknown external paths could fall through to a permitted runtime-library classification;
-- clean B lacked a hard required-every-source-open coverage gate.
+The focused run also passed 21/21 component rows, 8/8 ledger rows, 9/9
+causality groups, 9/9 schedules, 16/16 bundle-storage rows, 72/72 checkpoint
+rows, 2/2 recovery probes, and 8/8 source identities. Its terminal summary
+SHA-256 is
+`f83d519226bf7876be5446e16b657bbea9c3624f3ecb7a5e2a724bf35b0954f9`.
+Those figures are accepted for the focused fixture only; they do not substitute
+for the mandatory full-six runtime audit.
 
-Therefore the v8 zero must not appear as the final file-open result.
+## Persistent v9 full-six standing
 
-## Current regression evidence
+The fresh v9 preflight has independently established:
 
-The pushed repair commit passed the complete repository regression 636/636 with
-zero failures or skips. That fully provisioned invocation includes the host-only
-ptrace/strace, clean-B child observation, required-source, unknown-path
-fail-closed, and package/refusal tests that earlier containers could not run.
-Its log and timing SHA-256 values are
-`a1132553080052c44424e8c936a33a8b7f548661b11390460fd0492463050bef`
-and `c2127eca2426ccb1a92a48875aa1d8ad2939e2be5ccf99bbaed921de8e175681`.
+- 141/141 authoritative source identities rehashed unchanged;
+- 139 byte-exact projection files;
+- 746,890 selected complete records;
+- six evaluation and eight causal sessions;
+- zero malformed selected records and zero projection-time source mutations;
+- projection source-comparison SHA-256
+  `3726fbfba76ff4b3cdab50cba4288eca2a34506140f167a6adaba5583d0c5c56`.
 
-This closes the current regression gate for the instrumentation. It does not
-substitute test-fixture observations for the measured focused/full-six runtime
-audit. Focused-v3 and full-six-v2 have been running from pinned commit
-`c42e703...` since 2026-08-27 15:03:13 IST; all final values below remain
-pending until accepted run seals and traces exist.
+Canonical incremental A and independent clean B are sealed. Their canonical
+components pass 21/21, ledgers pass 8/8, and causality groups pass 9/9 with all
+comparison/safety counters zero. Frozen package reads occurred after the A/B
+seals and their 30/30 R6C2R and 180/180 R6D comparison rows pass.
 
-## Historical focused-v12 result
+These immutable facts confirm source identity and analytical equivalence for
+the original-source baseline. They do **not** yet provide the final aggregated
+runtime-open audit across all eight alternate schedules.
 
-Focused v12 recorded the values below for its historical commit. The earlier
-local container prohibited ptrace, so its three clean-B strace tests could not
-run. Current regression now proves those tests on the authorized host, but these
-historical measurements still do not populate any current-commit final cell;
-the instrumented focused and full-six paths must finish.
+## Current full-six audit gates
 
-| Scope | Audit rows | Summed observed opens | Required-source rows | Prohibited | Unmeasured |
-|---|---:|---:|---:|---:|---:|
-| Incremental A baseline | 88 | 310 | 16 | 0 | 0 |
-| Clean batch B | 1,501 | 1,712 | 8 | 0 | 0 |
-| Required focused schedules and recovery probes | 742 | 378,822 | 128 | 0 | 0 |
-| A/B authorized-source inventory | 8 | 0 | — | 0 | 0 |
-| Same-run exact-copy classification summary | 1 | 0 | — | 0 | 0 |
-| Total | 2,340 | 380,844 | 152 | 0 | 0 |
-
-Focused file-open audit SHA-256: `cdfa9b5a380992a3d49c4d7065e6237a9b90d5608a20f3cdacb11719fb979c48`.
-
-The 2,340 figure is the number of aggregated evidence rows, not the observed-open count. These focused values must not populate the final six-session table below.
-
-## Required final instrumentation
-
-| Requirement | Final evidence |
+| Scope | Measured audit standing |
 |---|---|
-| Parent incremental-A opens observed | Instrumentation regression PASS; fresh A/B observation count pending |
-| Every clean-B child process observed or independently traced | PASS in current 636/636 regression; fresh A/B trace pending |
-| Every required A source opened | Required-source regression PASS; fresh A/B coverage rows pending |
-| Every required B source opened | Required-source regression PASS; fresh A/B coverage rows pending |
-| Unknown external data-like path fails closed | PASS in current 636/636 regression |
-| Same-run B intermediates explicitly classified | Classification regression PASS; fresh A/B rows pending |
-| Post-seal reference opens separately classified | Classification regression PASS; fresh A/B rows pending |
-| Prohibited open count | `PENDING_FINAL_EVIDENCE` — required 0 |
-| Unmeasured required rows | `PENDING_FINAL_EVIDENCE` — required 0 |
-| Audit evidence SHA-256 | `PENDING_FINAL_EVIDENCE` |
+| Incremental A original-source baseline | Sealed analytically; terminal audit aggregation pending |
+| Independent clean B and child processors | Sealed analytically; terminal audit aggregation pending |
+| One record per increment | PENDING terminal v9 bundle |
+| Deterministic variable chunks | PENDING terminal v9 bundle |
+| Boundaries inside JSONL lines | PENDING terminal v9 bundle |
+| Empty/repeated polls | PENDING terminal v9 bundle |
+| Multiple checkpoint restarts | PENDING terminal v9 bundle |
+| Analytical transition restarts | PENDING terminal v9 bundle |
+| Hourly file rotation | PENDING terminal v9 bundle |
+| Large chronological chunks | PENDING terminal v9 bundle |
+| Final source/reference inventory metadata | PENDING terminal v9 aggregation |
+| Final prohibited/unmeasured/failed-source counters | PENDING terminal v9 summary |
 
-The recorder caches path resolution/classification by stable requested path so the one-record schedule does not repeat a realpath walk for every read open. The audit output aggregates counts by scope/requested/resolved path without discarding evidence of child-process or unknown paths.
+No current-engine totals are claimed for full-six audit rows, represented
+opens, required-source rows, schedule scopes, or classification buckets until
+the persistent v9 process exits 0 and its final audit is independently hashed
+and validated.
 
-## Final result
+## Regression closure for the auditor
 
-| Scope | Observed opens | Required source coverage | Prohibited | Unmeasured | Status |
-|---|---:|---:|---:|---:|---|
-| Incremental A | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` |
-| Clean batch B | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` |
-| Required schedules | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` |
-| Post-seal references | `PENDING_FINAL_EVIDENCE` | Not analytical input | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` | `PENDING_FINAL_EVIDENCE` |
+The fully provisioned post-repair repository suite passed 660/660 in 118.03
+seconds (1m58.43 wall), with zero failure, error, skip, or deselection and peak
+RSS 671,340 KiB. It retains auditor coverage for child-process tracing,
+unknown-path refusal, required-source enforcement, package integrity,
+same-descriptor reuse, symlink/tamper defenses, and fail-closed measured-count
+validation. Regression success validates the mechanism; only the terminal v9
+artifact can establish its full-six runtime result.
+
+## Historical results excluded from current acceptance
+
+The `81b0836fe50939246ae210bb62780ac4e163e100` full-six run recorded an
+8,315-row audit representing 14,100,048 opens with zero prohibited/unmeasured
+rows. Those numbers predate the authenticated sparse-context repair and are
+retained only as historical evidence. They must not populate the post-repair
+acceptance table or be quoted as the current full-six result.
+
+Likewise, focused packages with parent-only hooks, defaultable measurement
+counters, incomplete child coverage, or pre-current package seals remain
+rejected. Externally interrupted/deleted v2-v8 full-six attempts did not
+publish a terminal current-engine audit and contribute no accepted totals.
+
+## Remaining boundary
+
+Final file-open acceptance requires persistent v9 to publish all marker-last
+schedule bundles, the final source/reference inventory, and one terminal audit
+whose prohibited opens, unmeasured rows, failed required-source rows, and
+derived analytical inputs are all zero. Preload and deployment activity may
+not be used to fill this pending analytical gate.
