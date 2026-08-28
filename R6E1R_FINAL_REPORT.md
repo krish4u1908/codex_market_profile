@@ -1,217 +1,390 @@
-# R6E1R Final Report
+# R6E1R Final Report — Interim Current Handoff
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **FOCUSED CURRENT-HEAD GATE FAILED — FULL SIX AND DEPLOYMENT NOT STARTED**
+Status: **IN_PROGRESS_NOT_FINAL**
 
-## Authorized-host verification update — commit `19c5489f`
+This is an interim evidence handoff, not final R6E1R acceptance. The current
+post-repair regression, focused fixture, and immutable full-six original-source
+A/B/reference baseline pass. The eight alternate full-six schedules, terminal
+summary and audits, deployment-preload validation, isolated deployment, live
+browser/health/readiness checks, and external reachability remain pending. No
+verified tag is authorized, and the public candidate URL is not deployed.
 
-The isolated detached verification of
-`19c5489f9845f1325da1e1f6e3d9118b95bd959b` passed the exact 38-file
-engine seal, exact 47-file deployment seal, credential scan, reachable-blob
-size scan, `git diff --check`, and the complete repository regression
-(636 passed, zero failed/skipped). The three runtime-open/strace tests and two
-user-systemd/bubblewrap tests also passed in a separate 5/5 host run.
+## Current authority and Git state
 
-The fresh focused August 19 all-nine run failed one mandatory schedule after
-3,401.855 seconds. Eight schedules passed. `large_chronological_chunks`
-produced the same terminal semantic hash as canonical A, but failed the
-append-only ledger/exercise gate with
-`PERIODIC_EPISODE_EVOLUTION_NOT_EXERCISED`: two differences and ledger hash
-`9f72c051becc98e50e7f85a3b7024463ccf9020019309258ddb023bc742753f3`
-instead of
-`27466e2caaa730b7a4999be7f6b413f418e3fcd45ff5fd3b34a214350d7613a1`.
-All 21 analytical components, all eight ledgers in baseline A/B, and all nine
-causality/display invariants otherwise matched exactly. Future joins,
-backdating, duplicate analytical IDs, analytical refusals, checkpoint
-failures, prohibited or unmeasured opens, and source mutations were zero.
-
-Per the authorized failure policy, the full six-session run, deployment,
-service installation, and verification tag were not started. This is current
-failure evidence, not analytical acceptance.
-
-This report is a controlled handoff. `PENDING_FINAL_EVIDENCE` means the value
-must come from a newly completed run on the authorized `/opt/banknifty` host
-over the exact pushed repair commit.
-Earlier diagnostic runs and all stale 26/34-file identities are historical only.
-
-## Current local implementation record — 2026-08-27
-
-- Current pushed repair commit:
-  `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`.
-- Engine closure: 38/38 files; manifest SHA-256
-  `715a82b48e7bffe68f749f94c29b6d0e098bfe0e55f24d91e00db690e38827b3`;
-  engine hash
-  `021935bc0722b16a16e3af52deb7a7f26ef1aa6b4983aa3442420596bc00725d`.
-- Deployment closure: 47/47 files; manifest SHA-256
-  `7dcd1d15b36f4b84f367153f5842bd02a94da75bff06e5aae1ca7466a91c9af1`;
-  package hash
-  `d68f22217f1dfb75817ebb9b7cb6af0d21306cf1081b7d222c6ecca130978380`;
-  runtime configuration hash
-  `5ce1058763ecc47494f9bdf231439117c6a4fb64c2e491d70395b4be0c50b031`.
-- The complete repository regression passed 636/636 with zero failures and zero
-  skips. Pytest reported 129.36 seconds; `/usr/bin/time` reported 2m09.72 wall
-  and 685,556 KiB peak process RSS. Retained log/time SHA-256 values are
-  `a1132553080052c44424e8c936a33a8b7f548661b11390460fd0492463050bef`
-  and `c2127eca2426ccb1a92a48875aa1d8ad2939e2be5ccf99bbaed921de8e175681`.
-  No test was deselected, skipped, weakened, or reclassified.
-- That complete suite closes the current host-only ptrace/file-open,
-  user-systemd/bubblewrap, sealed-reference, API, gateway, and fixture-browser
-  regression gates. It does not supply the final focused/full-six runtime trace
-  or any installed-service evidence.
-- Gateway redirects are refused before following `Location`; focused GET/HEAD
-  regressions recorded that the redirect target received zero requests. The
-  targeted gateway-security record is 14/14 and includes a real
-  8-MiB-plus-one-byte upstream response refused as the sanitized 502
-  `UPSTREAM_RESPONSE_LIMIT`; deployed end-to-end evidence remains pending. The
-  resealed runtime/package closure is exact.
-- The current Chromium/Playwright fixture passed 1/1 in 4.86 seconds with zero
-  console and page errors. The complete suite regenerated the three 1600 x 1915
-  fixture screenshots with SHA-256 values
-  `532c09190f817ddf697445b3a7351220f3be0d5c19083978ea35065a083a4fdc`,
-  `307e33736bd9f9c68c4f6d99fd30a76d5a411352d0b633795f8957db90bb772c`,
-  and `a5e75f678a90ef67567222d2ed87d0bf57aad0d3a197f1b58371ecdaabdec3c2`.
-  The latest/operational image is fixture evidence, not proof of a deployed
-  service; deployed-browser acceptance remains pending.
-- No service was installed, no public URL was deployed, and no verification tag
-  was created in this environment.
-
-Focused merged-v2 reached exact analytical components and all eight ledgers,
-then exposed one clean-B GUI-comparator defect: clean B projected 11,486 dense
-resolution observations where live A correctly projected 1,294 material
-native-mechanism transitions. Full-six-v1 shared that comparator. Both units
-were stopped, preserved, and rejected without promoting partial results.
-Commit `c42e703...` repairs only the independent clean GUI comparator, and an
-independent review found no frozen-rule, clock, dense-artifact, ID, or ledger
-change. Fresh focused-v3 and full-six-v2 have been running from that pinned
-commit since 2026-08-27 15:03:13 IST. Their results remain pending.
-
-The uploaded August 20 archive also served its intended purpose: it exposed a
-real schedule-dependent append-only-ledger defect. Large-chunk refreshes had
-published 12 mutable lifecycle rows and 24 derived cross-layer rows for a
-terminal dependency group that a later confirmation changed. The repair keeps
-provisional GUI/state output available but defers only that unstable group's
-durable publications until finalization. A second independent defect allowed a
-forged checkpoint mirror to seed a missing/empty SQLite authority at EOF; mirror
-bootstrap has now been removed, every source represented by trusted checkpoint
-or normalized-ledger evidence must retain causally covering SQLite authority,
-and missing, partial, or rolled-back authority fails closed. Both
-repairs have dedicated restart/idempotency tests. A fresh August 20 current-seal
-rerun and the canonical authorized-host gates remain required.
-
-## Authorized scope
-
-R6E1R prepares the durable raw-JSONL callback path, six-session
-incremental-versus-clean-batch equivalence harness, live read-only GUI/API, and
-isolated shadow deployment package. Deployment remains gated by authorized-host
-evidence. It does not authorize trading, orders, alerts, collector changes,
-changes to ports 8803/8804, or changes to frozen analytical semantics.
-
-## Git and authority
-
-| Item | Recorded fact |
+| Item | Current fact |
 |---|---|
-| Authorized checkpoint | `065982c2ed49f6e7dad82bf29ed25f62ef78b024` |
+| Authorized preservation checkpoint | `065982c2ed49f6e7dad82bf29ed25f62ef78b024` |
 | Working branch | `fix/r6e1r-final-live-shadow` |
-| Frozen R6C2R tag target | `9cbe46fea6e3a44f3cf574955f21b5b1ebb6aa96` |
-| Frozen R6D tag target | `65ae2c5cb7793ec32a3ae515e3a0aa6365ad2c14` |
-| Public reconstruction base | `f0d6db65bf41357965f76e067569255919cc8031` |
-| Public runtime repair commit | `8038c9fcdf1760f25e9b5ddf2d468e47935f749c` — callback, ledger, GUI, harness, and regression repairs |
-| Public code/package commit | `d6736b0108fb40722d2370da422b42e0425c112d` — portable deployment and exact sealed package bytes |
-| Current pushed repair commit | `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2` |
-| Verified tag | `NOT_CREATED` — do not create unless every gate passes |
+| Current analytical repair | `e1d67c534bea5c61b0e3d379db7f599de7e1c445` — timezone-aware empty-Index backward-join repair |
+| Pushed report head immediately before this edit | `cce61679dfc21ecb2cecd3acc592e8b151c538fe` |
+| Remote state before this edit | `origin/fix/r6e1r-final-live-shadow` exactly matched `cce61679dfc21ecb2cecd3acc592e8b151c538fe` |
+| Frozen R6C2R tag target | `r6c2r-full-stack-equivalence-verified` -> `9cbe46fea6e3a44f3cf574955f21b5b1ebb6aa96` |
+| Frozen R6D tag target | `r6d-offline-gui-verified` -> `65ae2c5cb7793ec32a3ae515e3a0aa6365ad2c14` |
+| Verified R6E1R tag | `NOT_CREATED` |
 
-Published milestone commits already present on the feature branch are:
+The complete implemented commit list is intentionally not duplicated as a
+manually maintained narrative. At final handoff it must be generated from the
+authoritative branch with:
 
-- `43b66024d5a2689ad0855878b4780a1bb3bec56b` — handoff scratchpad initialization.
-- `5c3afcc74f2bd3cd8177ec99959f818cb9f868ea` — durable callback wiring milestone.
-- `ee760c8281340041293a9a2417af1cb6c22558a2` — live GUI/read-only API milestone.
-- `27838f6fc54a914e58a155fb7bec835427dbf4ad` — equivalence and operational gate milestone.
-- `6ea2ba02bcfe4f1ab163f7c7f0a7963c13d831e5` — callback durability and sealed-equivalence wiring.
-- `abb5543572d8b5204d41b8d7ae3cac719c5cabbc` — causal partial-line schedule repair.
-- `f2cebdc4595bd18b2426ba00916cce209a2f35bc` — focused nine-schedule equivalence milestone.
-- `5efe70e9685b98556ae1ad9a860912c7bb1513fc` — R6D parity in the live GUI/API.
-- `a9a28e84ae5999e102a24b64d490a437997088fe` — every material-ledger restart boundary.
-- `85fd16712c2c53d593f4fb22d25d740dbb506b58` — rebuilt operational-availability comparison.
-- `d947b5217b6427644e53edcae57d68a6cb01ac52` — accepted focused nine-schedule milestone.
-- `71a868f1339773df06d0932dd72a3c908caa1028` — six-session incremental identity-continuity repair.
-- `02594dc222afeff5135ac0404dd24211d09f425f` — accepted focused v12 evidence record.
-- `89f135064417ba537dc302027442a110477b5d03` — historical-availability reference equivalence repair.
-- `4d160bcc61bcebd88135ce270c17926830022deb` — isolated deployment startup-gate hardening.
-- `6eec67bf11ad4ae1e88fda33565c3988d1ca2806` — historical R6D availability equivalence repair on the concurrent remote line.
-- `f0d6db65bf41357965f76e067569255919cc8031` — causal-prefix schedule repair on the concurrent remote line.
-- `dcccc723c6584bd929fab1aef531c3aad32eb1a2` — merge of the authorized concurrent feature milestones.
-- `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2` — clean-B GUI resolution-transition comparator repair.
-The pushed repair at `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`
-contains the reviewed runtime, preload binding, tests, and sealed package bytes.
-This report cleanup changes evidence text only. Record the later report commit
-and verify the exact remote head after it is pushed. No verified tag is
-authorized before every gate completes on the authorized host.
+```text
+git log --reverse --format='%H %s' 065982c2ed49f6e7dad82bf29ed25f62ef78b024..HEAD
+```
 
-## Verified foundation
+That range currently includes the callback/ledger/harness/GUI/deployment work,
+repair `e1d67c5...`, and evidence-report commits through `cce6167...`. The
+future report/deployment commit hashes, final remote-head check, clean-worktree
+check, and any tag decision remain pending and must not be guessed here.
 
-The following facts were independently recorded before this draft:
+## Current sealed implementation identities
 
-- The authoritative raw root `/opt/banknifty-collector/data-prod-v4` was readable
-  and contained the required `raw` and `oi` streams.
-- Frozen tag manifests passed before modification: R6C2R 94/94 repository files and R6D 105/105 repository files.
-- The focused August 19 sample retained 46,550/46,550 selected byte identities, comprising 46,210 raw records and 340 OI outer records.
-- The sample selected `NSE:BANKNIFTY26AUGFUT` through repository contract-discovery logic; eight authoritative source files retained identical hashes, sizes, and mtimes.
-- The source-hour-preserving sample manifest SHA-256 is `31077f42ae1bf639f746e5980aba028b1369b8d44ba9a15973b2a517cc8a8382`; the authoritative focused A/B input is its eight-file `collector/` tree.
-- A correctly provisioned historical repository invocation passed 289 tests at
-  its checkpoint; the current pushed repair supersedes it with 636/636, zero
-  failed/skipped, as recorded above.
-- The final local 38-file engine and 47-file deployment closures are recorded in
-  the current implementation record above. Both companion checks, exact
-  per-file inventories, unit digest pins, and package aggregate tests pass.
-  They must be independently rerun on the authorized host before installation.
-
-## Diagnostic evidence that is not final evidence
-
-Focused A/B v8 exited successfully and reported 21/21 component equality, zero causal invariant failures, and zero source mutations. A later independent audit found comparator and runtime-open blind spots, so v8 is explicitly rejected as final acceptance evidence. A one-record probe then exposed 668 out-of-order refusals caused by unresolved Futures candidates. The ingestor and harness were repaired afterward. Neither v8 nor any earlier focused rehearsal may be quoted as final equivalence.
-
-## Historical focused evidence
-
-Focused v12 passed its historical scope on commit `71a868f...`, but predates
-the current durable-authority, authenticated-import, gateway, and manifest
-repairs. It is diagnostic precedent only; the exact pushed commit requires a
-fresh focused all-nine run on the pushed repair commit.
-
-## Final acceptance gates
-
-| Gate | Required final evidence | Status |
-|---|---|---|
-| Current engine allowlist | Checked-in manifest, companion SHA-256, explicit runtime pin, 38/38 identities | PASS — manifest `715a82b4...`, engine `021935bc...` |
-| Deployment closure | Exact per-file package and companion, 47/47 identities | PASS — manifest `7dcd1d15...`, package `d68f2221...` |
-| Focused production-path A/B | Exact component, ledger, availability, GUI, open-audit, and causality equality | Focused-v3 running since 2026-08-27 15:03:13 IST; `PENDING_FINAL_EVIDENCE` |
-| Six-session A/B | All required schedules and frozen canonical counts | Full-six-v2 running since 2026-08-27 15:03:13 IST; `PENDING_FINAL_EVIDENCE` |
-| Causality | Future joins, tolerance violations, backdating, duplicate IDs, refusals all zero | `PENDING_FINAL_EVIDENCE` |
-| Source integrity | Focused pre/post hashes and source mutations zero; final six still required | Historical fixture integrity recorded; current focused/full-six post-run evidence pending |
-| Current complete regression | Passed, failed, skipped, elapsed, peak RSS | PASS — 636/636, zero failed/skipped; 129.36 s pytest; 2m09.72 wall; 685,556 KiB |
-| Browser acceptance | Current screenshots, console/page errors, toggle/degradation checks | FIXTURE PASS — 1/1 in 4.86 s, zero console/page errors; deployed-browser pending |
-| Deployment | Installed units, health/readiness, replay checks, public-interface URL | `PENDING_FINAL_EVIDENCE` |
-| Final Git state | Clean worktree, pushed commits, remote head, annotated tag | `PENDING_FINAL_EVIDENCE` |
-
-## Required final handoff values
-
-| Field | Final value |
+| Closure or template | Result / SHA-256 |
 |---|---|
-| Final status | `IN PROGRESS — NOT VERIFIED` |
-| Branch | `fix/r6e1r-final-live-shadow` |
-| All new commit hashes | Runtime repair `8038c9fcdf1760f25e9b5ddf2d468e47935f749c`; deployment package `d6736b0108fb40722d2370da422b42e0425c112d`; merged implementation `dcccc723c6584bd929fab1aef531c3aad32eb1a2`; clean-comparator repair `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`; later report-only commit pending |
-| Remote push verification | Repair commit `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2` is the recorded remote branch head; verify the later report-only remote head after push; no tag authorized |
-| Test counts | Complete current regression 636/636, zero failed/skipped, including fixture browser 1/1; fresh focused-v3/full-six-v2 results pending |
-| Stream-versus-batch differences | `PENDING_FINAL_EVIDENCE` |
-| Canonical reference mismatches | `PENDING_FINAL_EVIDENCE` |
-| Future joins | `PENDING_FINAL_EVIDENCE` |
-| Timestamp backdating | `PENDING_FINAL_EVIDENCE` |
-| Duplicate analytical IDs | `PENDING_FINAL_EVIDENCE` |
-| Prohibited runtime opens | `PENDING_FINAL_EVIDENCE` |
-| Source mutations | `PENDING_FINAL_EVIDENCE` |
-| Package manifest result | PASS — 47/47 files, companion and package aggregate exact; manifest `7dcd1d15b36f4b84f367153f5842bd02a94da75bff06e5aae1ca7466a91c9af1` |
-| Service status | `NOT_INSTALLED` |
-| Exact deployed URL | `NOT_DEPLOYED` |
-| Remaining limitations | Fresh focused/full-six equivalence, measured run-specific runtime-open/source/performance evidence, installed services, deployed-browser, health/readiness, recovery, and external-interface evidence remain pending |
-| Ports 8803/8804 and collectors unchanged | No deployment action has been taken; mandatory pre/post verification remains pending |
+| Engine allowlist | PASS — 38/38 files |
+| Engine JSON manifest | `866bfd55e434ddacef29a952e3d618a71478463c44a95b44ca31340b3d96a210` |
+| Engine aggregate | `eb3e848d75ef10471d14c641507f44b6f825c4dd63c305e27a803376048f2947` |
+| Deployment allowlist | PASS — 47/47 files |
+| Deployment JSON manifest | `80a439d67f6afb2b24e5e121f71770df5255e23297d06ec7e72a09d7dbd83391` |
+| Deployment package aggregate | `4c2db034cb99a3391346155af708788896a04fa9b8bac6e7225f74bcb3ec5949` |
+| Runtime-configuration identity | `b4148be9892cc4e19c2a13d52ef68a65239578e6147cb3cdf94fd2d812e48a41` |
+| Raw runtime-config template | `cbcf9f43befa4b18b4798240c18d841f1629af7a015c538c8ff254e01b6957ad` |
+| Backend service template | `153a2b493b864f9442fda8d94d0c6c2cececfde87bc9cdbfcb78d99c9aa9e7ac` |
+| Gateway service template | `2b47c302ca3491686cd3b73d77f9190aecd413573676035923945147c49e5542` |
 
-Related evidence is organized in the callback, equivalence, GUI, performance, deployment, readiness, causality, matrix, test, browser, file-open, and source-hash reports at repository root.
+Both checked-in manifest companion checks pass. These identities authorize no
+installation by themselves; the eventual runtime must reproduce them exactly.
+
+## Current regression and focused production-path evidence
+
+The fully provisioned complete repository suite passed **660/660**, with zero
+failures, errors, skips, or deselections. Pytest elapsed was 118.03 seconds;
+wall time was 1m58.43s and peak process RSS was 671,340 KiB. The preceding
+659-pass/1-failure packaging run is a retained non-pass and is not acceptance
+evidence.
+
+The fresh post-repair August 19 focused run passed every required schedule and
+callback surface. Its terminal summary SHA-256 is
+`f83d519226bf7876be5446e16b657bbea9c3624f3ecb7a5e2a724bf35b0954f9`.
+
+| Focused gate | Current result |
+|---|---:|
+| Canonical components | 21/21 PASS |
+| Append-only ledgers | 8/8 PASS |
+| Causality/display groups | 9/9 PASS |
+| Required schedules | 9/9 PASS |
+| Storage rows | 16/16 PASS |
+| Checkpoint-accounting rows | 72/72 PASS |
+| Truncation/replacement recovery probes | 2/2 PASS |
+| Source-integrity rows | 8/8 PASS |
+| Prohibited / unmeasured runtime opens | 0 / 0 |
+
+The focused audit contained 2,508 rows: 2,499 runtime-open rows, eight
+source-inventory rows, and one fixture-manifest row, representing 1,190,240
+opens. Stream/batch differences, future joins, synchronization-tolerance
+violations, timestamp backdating, duplicate analytical IDs, analytical
+refusals, checkpoint failures, source mutations, and prohibited/unmeasured
+opens were all zero. Harness elapsed was 3,839.101 seconds; parent/child peak
+RSS was 1,730,828/891,172 KiB and cgroup peak memory was 2,965,729,280 bytes.
+This focused pass is a prerequisite and does not substitute for terminal
+six-session evidence.
+
+## Authoritative raw source and focused sample
+
+The authoritative read-only root
+`/opt/banknifty-collector/data-prod-v4` was readable with `raw` and `oi`
+streams. The non-Git focused fixture at
+`/opt/banknifty/research/sample_fixtures/r6e1r0_aug19_0915_1205` preserves
+complete original JSONL records for 2026-08-19 09:15–12:05 IST, receipt
+timestamps, and source-hour identity. Incomplete terminal lines were excluded.
+
+Repository contract discovery selected `NSE:BANKNIFTY26AUGFUT`; it was not
+hard-coded. The sample retains 46,550/46,550 selected byte identities: 46,210
+raw records and 340 OI outer records, including BankNifty Index, Futures,
+Futures OI, CE, and PE evidence. All eight relevant authoritative source files
+retained identical pre/post hashes, sizes, and mtimes. The source-hour sample
+manifest SHA-256 is
+`31077f42ae1bf639f746e5980aba028b1369b8d44ba9a15973b2a517cc8a8382`.
+Raw/sample JSONL is outside Git and must remain uncommitted.
+
+## Persistent v9 six-session evidence
+
+The current verifier is `market-profile-history-verifier-v9.service`, pinned
+to a clean detached `e1d67c5...` checkout under invocation
+`ce9595fd18b344ab8ab2765ae509f8fa`. It is an offline analytical verifier, not
+the live API or GUI service. Immutable marker-last baseline artifacts below are
+accepted only for their stated scope; mutable SQLite state is not used as
+acceptance evidence.
+
+### Raw projection and causal scope
+
+The v9 projection was rebuilt read-only from the authoritative raw root. It
+selected 746,890 complete outer JSON records into 139 projection files from 141
+authoritative files, representing 34,709,921 complete physical rows and
+541,091,186 projected bytes. Construction took 117.675 seconds and peaked at
+189,924 KiB RSS. Malformed selected records and observed projection-time source
+mutations were zero.
+
+The evaluation sessions are 2026-08-11, 2026-08-12, 2026-08-13, 2026-08-18,
+2026-08-19, and 2026-08-20. August 10 and August 17 were selected causally as
+context. August 17 remains exactly
+`PRESENT_FOR_CANONICAL_REJECTION_NEVER_FORCED_ACCEPTED`. Contracts were
+selected through repository logic; no derived R2-R6 analytical tables were
+used as A/B inputs.
+
+| Projection artifact | SHA-256 |
+|---|---|
+| Raw projection manifest | `4e56160c3e48bc3c1f2d9a50982973fa9cb6701bf076e3c4cdef4df9d7bb4426` |
+| Projection provenance | `ea2430747045621a1a835ce84d9888b5179bdc5c2e14f7a68b73eb78a99507e0` |
+| Pre-run source comparison | `3726fbfba76ff4b3cdab50cba4288eca2a34506140f167a6adaba5583d0c5c56` |
+| Schedule contract file | `9579ec8a4dc5d3b06e3f0caf6005903a83a12804711aff3f8b01d05ce5663020` |
+| Embedded schedule contract | `af10b6130ef38ca42c79be8aad0ebef3df4bbb9494ac974321cd315ae94583d0` |
+
+All 141 source-comparison rows were unchanged at projection time. The distinct
+terminal post-run rehash remains pending.
+
+### Sealed original-source incremental A / independent clean B
+
+Incremental A exercised the production callback/checkpoint path. Clean B used
+three independently invoked repository-owned chronological processors over the
+same selected bytes and a clean root. Both were sealed before the verified
+reference packages were opened.
+
+| Measure | Incremental A | Clean B |
+|---|---:|---:|
+| Selected source files / JSON records | 104 / 543,329 | Same bytes |
+| Source bytes / complete physical rows | 396,713,521 / 25,293,503 | Same bytes |
+| Elapsed seconds | 5,893.937 | 741.789 |
+| Peak RSS KiB | 6,481,416 | 7,153,156 child-process peak |
+| Seal SHA-256 | `fa62ace6fc2796c0101e1e9da908725d0ca12da364d971fa336a0868f0a83ce7` | `99322aa74ad4018400d11cc6336ca695c8f2e190ec279067351ef40ff2faa568` |
+| Snapshot SHA-256 | `c03d1e3ef195a70df83221897bf7d1e73a63790b46629825ffc3ef3731c5ce87` | `285256f5438eaebd86916aabcee7413aa668e1d8d57a1c4fab281f87dffe2526` |
+| Wrapper semantic SHA-256 | `bd8bdbaaeac3db54c289575d7c0d3f3fca73934f0830ab974656ded3c6175527` | `26d16e78e44b3de3849c7af6b73305a92fd6f1df0565276e980f19a40049d1a7` |
+| Append-only ledger SHA-256 | `4eb8d6920a63821e469843e44e02a6996704b327a37e7f2d3918bee063a8fb65` | `4eb8d6920a63821e469843e44e02a6996704b327a37e7f2d3918bee063a8fb65` |
+
+Incremental A sealed 26 state files. Its state-manifest SHA-256 is
+`5e205bdbe5d5706325116389b5caf2ba7067b408f58a016ef7ec734111462173`
+and state-tree SHA-256 is
+`f404a5f0bf2d0484318685339c08a978c3bbc9ce7a9f824f2055f38565568cb6`.
+Checkpoint failures, analytical refusals, undrained causal remainders, dirty or
+unexpected sessions, future joins, timestamp backdating, and duplicate
+analytical IDs were zero in the sealed A record.
+
+The wrapper semantic hashes differ because the two modes seal different
+orchestration surfaces. Canonical equivalence is established by the independent
+component, ledger, causality, GUI, and reference projections below, not by
+claiming wrapper snapshots are byte-identical.
+
+### Canonical components, ledgers, and causality
+
+The component matrix passes 21/21 with zero A-only rows, B-only rows, field
+mismatches, or unexplained remainders.
+
+| Canonical artifact | Incremental A | Clean B | Difference |
+|---|---:|---:|---:|
+| Synchronized basis | 158,746 | 158,746 | 0 |
+| Frozen inventory | 255 | 255 | 0 |
+| Divergence episodes (GREEN / RED) | 65 (41 / 24) | 65 (41 / 24) | 0 |
+| Dependency groups / dependent retriggers | 65 / 14 | 65 / 14 | 0 |
+| Lifecycle transitions | 14,201 | 14,201 | 0 |
+| Dense resolution observations | 164,668 | 164,668 | 0 |
+| Response observations | 65 | 65 | 0 |
+| Dense participation | 69,225 | 69,225 | 0 |
+| Participation transitions | 32,068 | 32,068 | 0 |
+| Participation summaries / compatibility snapshots | 65 / 65 | 65 / 65 | 0 |
+| Frozen cross-layer material transitions | 60,659 | 60,659 | 0 |
+| Availability states / GUI-visible sessions | 24 / 6 | 24 / 6 | 0 |
+
+Graceful-degradation extensions also match: 118 Intraday inventory plus 118
+linked cross-layer rows, and 21 partial-fixed inventory plus 21 linked
+cross-layer rows. The complete live surface therefore has 394 inventory and
+60,798 cross-layer rows. These 139 permitted live-extension rows do not alter
+the frozen 255/60,659 contract.
+
+The append-only ledger matrix passes 8/8 with zero identity or content
+difference: 65 divergence confirmations, 65 dependency/retrigger records,
+14,201 lifecycle transitions, 394 inventory-winner transitions, 32,068
+participation transitions, 60,798 cross-layer transitions, 72 availability
+transitions, and 39 stale-recovery transitions.
+
+The causality matrix passes 9/9 with zero future joins, synchronization-tolerance
+violations, timestamp backdating, duplicate analytical IDs, valid timestamps
+becoming `NaT`, analytical refusals, GUI clock violations, GUI display-contract
+violations, or GUI path-clock violations.
+
+| Baseline matrix | Pass | SHA-256 |
+|---|---:|---|
+| A/B canonical components | 21/21 | `fd5fad066510b5fe01f5914f55aa3fa2b7fbac9b27af9a9caa4da76b658cf388` |
+| Append-only ledger identities | 8/8 | `e68f5f098b6157160b2a27e51c4bc709a6bc0fc25aa71e7fcb39617c8cb77e48` |
+| Causality invariants | 9/9 | `f5370e1ce6ce067b2ae5a3a090c0215d9c6c7a548348b724f97d2df963164bf2` |
+
+### Frozen reference comparison
+
+The pinned R6C2R 74-file and R6D 40-file reference-package manifests passed
+before comparison. R6C2R passes 30/30 rows with zero target-only,
+reference-only, or unexplained rows. R6D GUI comparison passes 180/180 rows:
+174,080 target-only rows exactly equal the 174,080 permitted live-extension
+rows, with zero reference-only or unexplained rows. Reference-package
+verification SHA-256 is
+`ed81708afac9cbb5c30915a56d2f46cf05611a4a12565a37a7a6c3d5d1366c67`.
+
+| Reference matrix | Pass | SHA-256 |
+|---|---:|---|
+| R6C2R canonical reference | 30/30 | `0e985193a48ede2baf5ad07f5601af90f5471d61f17c8f9da8a694a009de98f8` |
+| R6D GUI reference | 180/180 | `dc0c5814dbabaafd5d914627b4435038729f4a187a41beb98f385a19b1e6c467` |
+
+These sealed original-source results establish current scoped values of zero
+for stream/batch canonical differences, canonical unexplained mismatches,
+ledger identity/content differences, GUI unexplained differences, future
+joins, tolerance violations, timestamp backdating, duplicate IDs, and
+analytical refusals. They do **not** establish terminal all-schedule values.
+
+## Gates still pending
+
+The original-source A/B baseline is sealed, but its marker-last terminal
+schedule bundle and all eight alternate schedule bundles remain unpublished.
+No historical schedule result is imported.
+
+| Schedule | Current v9 status |
+|---|---|
+| Original source chunks | `SEALED_BASELINE_PASS; TERMINAL_SCHEDULE_BUNDLE_PENDING` |
+| One complete JSONL record per increment | `PENDING_V9_EVIDENCE` |
+| Deterministic variable chunks | `PENDING_V9_EVIDENCE` |
+| Chunk boundaries inside JSONL lines | `PENDING_V9_EVIDENCE` |
+| Empty/repeated polls | `PENDING_V9_EVIDENCE` |
+| Multiple checkpoint restarts | `PENDING_V9_EVIDENCE` |
+| Restart at analytical transition boundaries | `PENDING_V9_EVIDENCE` |
+| Hourly file rotation | `PENDING_V9_EVIDENCE` |
+| Large chronological chunks | `PENDING_V9_EVIDENCE` |
+
+The following terminal gates also remain pending: fresh/final bundle-storage
+validation, the complete checkpoint-accounting matrix, truncation/replacement
+recovery, complete full-six runtime file-open audit, post-run hashes for all 141
+authoritative sources, terminal all-gates summary, terminal elapsed/peak/output
+measurements, and validation of incremental A as the deployment preload.
+
+Until those artifacts pass, the final required values for all-schedule
+stream/batch differences, canonical mismatches, future joins, backdating,
+duplicate IDs, prohibited runtime opens, source mutations, and preload identity
+remain `PENDING_FINAL_EVIDENCE`, even though their sealed baseline scope is
+zero.
+
+## GUI, API, and deployment state
+
+Current fixture/browser regression is part of the 660/660 pass and exercises
+the fixed-horizon, Intraday-only degradation, and latest/operational GUI
+surfaces with zero asserted page or console errors. It is not deployed-browser
+evidence.
+
+The package provides only the required read-only `/api/health`,
+`/api/readiness`, `/api/status`, `/api/session`, `/api/chart`, `/api/inventory`,
+`/api/divergence`, `/api/lifecycle`, `/api/participation`, `/api/transitions`,
+`/api/availability`, and `/api/audit` endpoints. It exposes no order, trade,
+alert, or write endpoint.
+
+No current `e1d67c5...` backend or gateway is installed or accepted. The
+standard deployment units are inactive/dead and runtime-masked with stale
+paths. The intended isolated backend is `127.0.0.1:18805`; preferred external
+research port `8805` was free at preflight. The public address
+`http://200.234.39.232:8805/` is a **candidate only — NOT DEPLOYED OR
+VERIFIED**. Local health/readiness, all-six replay, cold-preload RSS, gateway
+recovery, largest-response, deployed-browser, public-interface, and independent
+off-host checks are pending.
+
+Host UFW has default inbound policy `DROP`, and the current account lacks
+firewall/provider authority. If analytics and local isolated deployment pass
+but single-port off-host access cannot be enabled or verified, the authorized
+terminal classification is
+`R6E1R_ANALYTICS_VERIFIED_DEPLOYMENT_BLOCKED`; no verified tag may be created.
+
+## Protected services and collector non-interference
+
+The latest exact refresh retained the protected listeners:
+
+- port 8803: PID `380743`, process start ticks `46015771`, invocation
+  `d0df21acd54a440788d89f7cad5b4827`, last verified `NRestarts=0`;
+- port 8804: PID `465394`, process start ticks `51980337`, invocation
+  `260291b2ae4a4c70a95a0a37722af61e`, last verified `NRestarts=0`.
+
+No R6E operation modified, restarted, or signalled either protected process.
+Ports 18805 and 8805 were still unbound at this report refresh. Deployment must
+repeat the exact PID/start-tick/invocation/restart and listener checks before
+and after installation.
+
+The last historical collector observation was a normal recurring watchdog
+self-exit after market close, with no R6E signal, restart, source edit, or
+collector configuration change. It is not promoted as a final collector
+process identity. **The final collector PID/process/hash/mtime recheck is
+pending** and must be recorded immediately before final handoff; this report
+does not invent a replacement PID.
+
+## Authorized scope and frozen contracts
+
+R6E1R authorizes repair and verification of the durable raw-JSONL callback
+path, six-session incremental-versus-clean chronological equivalence, read-only
+GUI/API, and an isolated research shadow deployment. It does not authorize
+orders, trades, alerts, collector changes, changes to ports 8803/8804, changes
+to `main`, destructive Git operations, verified-tag alteration, or changes to
+frozen analytical thresholds, clocks, coordinates, lifecycle precedence,
+inventory rules, colours, strike selection, elapsed windows, or freshness
+semantics.
+
+The canonical inventory coordinate remains
+`CAUSAL_BANKNIFTY_INDEX_REFERENCE_PRICE_BIN` with label `BN-REF FUT VOL-VPOC`.
+The clock contracts remain frozen: synchronized confirmation, strictly later
+standalone Index response, valid synchronized basis-resolution clocks,
+timezone-aware stalled-extreme duration, and constituent receipt clocks for
+participation. Snapshot/display time never replaces or backdates evidence.
+
+## Rejected and historical evidence
+
+- `81b0836fe50939246ae210bb62780ac4e163e100` completed useful focused and
+  six-session work before the aware empty-Index repair. Its schedules,
+  terminal summary, performance, audits, and preload are historical only and
+  do not establish current `e1d67c5...` acceptance.
+- Earlier focused merged-v2/full-six-v1 runs exposed the clean-B GUI
+  resolution-transition comparator defect. They were stopped and rejected;
+  their partial values are not promoted.
+- The `19c5489f...` line exposed provisional large-chunk analytical publication
+  and forged/missing SQLite-authority defects. Those failures drove dedicated
+  repairs and regression coverage but remain non-pass history.
+- Post-repair full-six v2 reached sealed A/B/reference matrices, then was
+  externally interrupted during the one-record schedule and its evidence tree
+  was removed. Attempts v3 through v6 were interrupted or externally cleaned
+  before terminal publication. None is reused.
+- Direct v7 received an external SIGINT/`KeyboardInterrupt` after 16m44.56s,
+  peak RSS 4,982,376 KiB, and published no A seal. Persistent v8 failed closed
+  in preflight because the required v7 projection had already been removed.
+  Both are rejected diagnostics.
+- Persistent v9 is the only current-repair full-six authority. Only its
+  immutable published artifacts populate current cells; all unsealed schedules
+  and terminal values remain pending.
+
+August 25 and 26 evidence remains operational diagnostic material only. It is
+not prospective or canonical equivalence evidence.
+
+## Current handoff summary
+
+| Required field | Interim value |
+|---|---|
+| Final status | `IN_PROGRESS_NOT_FINAL` |
+| Branch | `fix/r6e1r-final-live-shadow` |
+| Analytical commit | `e1d67c534bea5c61b0e3d379db7f599de7e1c445` |
+| Pushed report head before this edit | `cce61679dfc21ecb2cecd3acc592e8b151c538fe` |
+| Test count | 660/660 complete regression; focused 9/9 schedules |
+| Current exact equivalence | Sealed original-source baseline: components 21/21, ledgers 8/8, causality 9/9, R6C2R 30/30, R6D 180/180; scoped differences/mismatches/safety violations 0 |
+| Terminal six-session equivalence | `PENDING_FINAL_EVIDENCE` — eight alternate schedules and terminal bundle/audits not yet published |
+| Package manifest | Current engine 38/38 and deployment 47/47 companion checks PASS; deployment not installed |
+| Deployment service status | `NOT_INSTALLED_OR_ACCEPTED`; offline v9 analytical verifier active |
+| Exact deployed URL | `NOT_DEPLOYED` |
+| Candidate URL | `http://200.234.39.232:8805/` — not deployed or externally verified |
+| Verified tag | `NOT_CREATED` |
+| Remaining limitations | Terminal schedules, source-posthash, file-open/checkpoint/recovery matrices, final performance, preload, deployment, live browser/API/recovery, external ingress, scans, final commit/push/clean-worktree checks |
+| Protected ports | 8803 and 8804 retain the exact identities recorded above and were not modified or restarted |
+| Collector state | No R6E collector change; final exact process/hash/mtime recheck pending |
+
+Related callback, equivalence, GUI, performance, deployment, readiness,
+causality, artifact-matrix, test, browser, file-open, source-hash, and scratchpad
+reports remain the detailed evidence sources. This report must be refreshed from
+terminal v9 and deployment artifacts before it may claim final acceptance.
+
+Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
