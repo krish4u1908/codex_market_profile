@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from banknifty_profiler.inventory.engine import choose, profile, price_events
+from banknifty_profiler.inventory.engine import choose, oi_events, price_events, profile
 from banknifty_profiler.raw_io.reader import backward_join
 
 
@@ -32,6 +32,75 @@ def test_backward_join_is_causal():
     result = backward_join(oi, market, tolerance_seconds=5).iloc[0]
     assert result.matched_underlying_price == 100.0
     assert result.future_join == False
+
+
+def test_backward_join_empty_index_preserves_aware_timestamp_dtype():
+    availability = pd.Series(
+        pd.to_datetime(
+            ["2026-08-26 09:15:01+05:30", "2026-08-26 09:15:02+05:30"],
+            utc=True,
+        )
+    ).dt.tz_convert("Asia/Kolkata")
+    oi = pd.DataFrame(
+        {
+            "availability_timestamp": availability,
+            "symbol": ["BANKNIFTY-CE", "BANKNIFTY-PE"],
+        }
+    )
+    empty_index = pd.DataFrame(
+        columns=["receipt_timestamp", "last_price", "source_file", "source_row"]
+    )
+
+    result = backward_join(oi, empty_index, tolerance_seconds=5)
+
+    assert result.matched_price_timestamp.dtype == availability.dtype
+    assert result.matched_price_timestamp.isna().all()
+    assert result.matched_underlying_price.isna().all()
+    assert result.join_age_seconds.isna().all()
+    assert not result.future_join.any()
+
+
+def test_oi_events_accepts_valid_aware_oi_when_index_is_unavailable():
+    availability = pd.Series(
+        pd.to_datetime(
+            ["2026-08-26 09:15:01+05:30", "2026-08-26 09:15:02+05:30"],
+            utc=True,
+        )
+    ).dt.tz_convert("Asia/Kolkata")
+    option_expiry = pd.Timestamp("2026-08-27").date()
+    oi = pd.DataFrame(
+        {
+            "availability_timestamp": availability,
+            "instrument_class": ["call", "put"],
+            "symbol": ["BANKNIFTY-CE", "BANKNIFTY-PE"],
+            "expiry_date": [option_expiry, option_expiry],
+            "strike": [59_000.0, 59_000.0],
+            "duplicate_record": [False, False],
+            "delta_oi": [10.0, -5.0],
+        }
+    )
+    market = pd.DataFrame(
+        {
+            "symbol": ["BANKNIFTY-FUT"],
+            "receipt_timestamp": availability.iloc[:1],
+            "last_price": [59_000.0],
+            "source_file": ["events.jsonl"],
+            "source_row": [1],
+        }
+    )
+
+    result = oi_events(
+        oi,
+        market,
+        "2026-08-26",
+        "BANKNIFTY-FUT",
+        option_expiry,
+        "BANKNIFTY-INDEX",
+        5,
+    )
+
+    assert result.empty
+    assert not result.future_join.any()
 
 
 def test_volume_reset_and_first_counter_are_excluded():
