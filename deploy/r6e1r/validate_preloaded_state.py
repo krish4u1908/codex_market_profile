@@ -83,6 +83,13 @@ FROZEN_OUTPUT_COUNTS = {
     "compatibility_snapshots": 65,
     "cross_layer_transitions": 60_659,
 }
+FALLBACK_METRIC_FIELDS = (
+    "intraday_fallback_rows",
+    "partial_fixed_fallback_rows",
+    "intraday_fallback_cross_layer_rows",
+    "partial_fixed_fallback_cross_layer_rows",
+)
+FALLBACK_HORIZONS = frozenset({"ID", "1D", "2D", "3D"})
 OUTPUT_LIST_FIELDS = (
     "basis", "inventory", "episodes", "dependencies", "lifecycle",
     "resolution", "responses", "participation_dense",
@@ -354,13 +361,41 @@ def _is_number(value: Any) -> bool:
 
 
 def validate_analytical_outputs(
-    orchestrator: dict[str, Any], expected_sessions: Sequence[str],
+    orchestrator: dict[str, Any],
+    expected_sessions: Sequence[str],
+    fallback_contract: dict[str, Any] | None = None,
 ) -> dict[str, int]:
     """Recount the bound six-session payload instead of trusting metadata."""
     outputs = orchestrator.get("outputs")
     if not isinstance(outputs, dict):
         refuse("ANALYTICAL_OUTPUT_SHAPE_INVALID")
     aggregate = {key: 0 for key in FROZEN_OUTPUT_COUNTS}
+    fallback = (
+        {
+            "sessions": [],
+            **{field: 0 for field in FALLBACK_METRIC_FIELDS},
+        }
+        if fallback_contract is None
+        else fallback_contract
+    )
+    if (
+        not isinstance(fallback, dict)
+        or set(fallback) != {"sessions", *FALLBACK_METRIC_FIELDS}
+        or not isinstance(fallback.get("sessions"), list)
+        or any(
+            type(fallback.get(field)) is not int or fallback[field] < 0
+            for field in FALLBACK_METRIC_FIELDS
+        )
+    ):
+        refuse("FALLBACK_ANALYTICAL_CONTRACT_INVALID")
+    fallback_sessions = set(fallback["sessions"])
+    if (
+        len(fallback_sessions) != len(fallback["sessions"])
+        or fallback["sessions"] != sorted(fallback["sessions"])
+        or not fallback_sessions.issubset(set(expected_sessions))
+    ):
+        refuse("FALLBACK_ANALYTICAL_CONTRACT_INVALID")
+    observed_fallback = {field: 0 for field in FALLBACK_METRIC_FIELDS}
     valid_basis_total = 0
     basis_total = 0
     for session_date in expected_sessions:
@@ -436,12 +471,46 @@ def validate_analytical_outputs(
             refuse("ANALYTICAL_OUTPUT_CACHED_COUNT_MISMATCH")
 
         for field in (
-            "inventory", "episodes", "lifecycle", "resolution", "responses",
+            "episodes", "lifecycle", "resolution", "responses",
             "participation_dense", "participation_transitions",
             "participation_summaries", "compatibility_snapshots",
-            "cross_layer_transitions",
         ):
             aggregate[field] += len(rows_by_field[field])
+        for row in rows_by_field["inventory"]:
+            if session_date not in fallback_sessions:
+                aggregate["inventory"] += 1
+                continue
+            horizon = str(row.get("horizon", ""))
+            if (
+                row.get("evaluation_date") != session_date
+                or horizon not in FALLBACK_HORIZONS
+            ):
+                refuse("FALLBACK_ANALYTICAL_OUTPUT_SHAPE_INVALID")
+            field = (
+                "intraday_fallback_rows"
+                if horizon == "ID"
+                else "partial_fixed_fallback_rows"
+            )
+            observed_fallback[field] += 1
+        for row in rows_by_field["cross_layer_transitions"]:
+            if (
+                session_date not in fallback_sessions
+                or row.get("component") != "INVENTORY"
+            ):
+                aggregate["cross_layer_transitions"] += 1
+                continue
+            horizon = str(row.get("horizon", ""))
+            if (
+                row.get("evaluation_date") != session_date
+                or horizon not in FALLBACK_HORIZONS
+            ):
+                refuse("FALLBACK_ANALYTICAL_OUTPUT_SHAPE_INVALID")
+            field = (
+                "intraday_fallback_cross_layer_rows"
+                if horizon == "ID"
+                else "partial_fixed_fallback_cross_layer_rows"
+            )
+            observed_fallback[field] += 1
         for episode in rows_by_field["episodes"]:
             colour = str(
                 episode.get("colour", episode.get("episode_type", ""))
@@ -456,10 +525,72 @@ def validate_analytical_outputs(
         )
     if aggregate != FROZEN_OUTPUT_COUNTS:
         refuse("FROZEN_ANALYTICAL_OUTPUT_COUNT_MISMATCH")
+    if any(
+        observed_fallback[field] != fallback[field]
+        for field in FALLBACK_METRIC_FIELDS
+    ):
+        refuse("FALLBACK_ANALYTICAL_OUTPUT_COUNT_MISMATCH")
     return {
         **aggregate,
+        "intraday_fallback_inventory": observed_fallback[
+            "intraday_fallback_rows"
+        ],
+        "partial_fixed_fallback_inventory": observed_fallback[
+            "partial_fixed_fallback_rows"
+        ],
+        "intraday_fallback_cross_layer": observed_fallback[
+            "intraday_fallback_cross_layer_rows"
+        ],
+        "partial_fixed_fallback_cross_layer": observed_fallback[
+            "partial_fixed_fallback_cross_layer_rows"
+        ],
+        "live_inventory_total": (
+            aggregate["inventory"]
+            + observed_fallback["intraday_fallback_rows"]
+            + observed_fallback["partial_fixed_fallback_rows"]
+        ),
+        "live_cross_layer_total": (
+            aggregate["cross_layer_transitions"]
+            + observed_fallback["intraday_fallback_cross_layer_rows"]
+            + observed_fallback["partial_fixed_fallback_cross_layer_rows"]
+        ),
         "basis": basis_total,
         "valid_basis": valid_basis_total,
+    }
+
+
+def validate_fallback_contract(
+    batch_seal: dict[str, Any], expected_sessions: Sequence[str],
+) -> dict[str, Any]:
+    """Bind live degradation rows to the independently rebuilt batch seal."""
+    sessions = batch_seal.get("intraday_fallback_sessions")
+    if (
+        not isinstance(sessions, list)
+        or any(not isinstance(value, str) for value in sessions)
+        or sessions != sorted(sessions)
+        or len(sessions) != len(set(sessions))
+        or not set(sessions).issubset(set(expected_sessions))
+        or any(
+            type(batch_seal.get(field)) is not int
+            or batch_seal[field] < 0
+            for field in FALLBACK_METRIC_FIELDS
+        )
+        or batch_seal.get("intraday_fallback_rows")
+        != batch_seal.get("intraday_fallback_cross_layer_rows")
+        or batch_seal.get("partial_fixed_fallback_rows")
+        != batch_seal.get("partial_fixed_fallback_cross_layer_rows")
+        or (
+            bool(sessions)
+            != bool(
+                batch_seal.get("intraday_fallback_rows")
+                or batch_seal.get("partial_fixed_fallback_rows")
+            )
+        )
+    ):
+        refuse("FALLBACK_SEAL_CONTRACT_INVALID")
+    return {
+        "sessions": list(sessions),
+        **{field: batch_seal[field] for field in FALLBACK_METRIC_FIELDS},
     }
 
 
@@ -702,7 +833,7 @@ def validate_equivalence_evidence(
     projection_path: Path,
     expected_sessions: Sequence[str],
     expected_authoritative_source_root: str,
-) -> tuple[str, str, int, dict[str, Any]]:
+) -> tuple[str, str, int, dict[str, Any], dict[str, Any]]:
     """Require the fresh, full six-session PASS and its August 17 policy."""
     expected_source_root = require_expected_authoritative_source_root(
         expected_authoritative_source_root,
@@ -752,6 +883,7 @@ def validate_equivalence_evidence(
         or any(not _exact_zero(code) for code in batch["command_returncodes"])
     ):
         refuse("EQUIVALENCE_SEAL_GATE_FAILED")
+    fallback_contract = validate_fallback_contract(batch, expected_sessions)
     state_seal = {
         "state_manifest_sha256": incremental.get("state_manifest_sha256"),
         "state_tree_sha256": incremental.get("state_tree_sha256"),
@@ -846,6 +978,7 @@ def validate_equivalence_evidence(
             refuse("RAW_PROJECTION_SOURCE_MUTATION_EVIDENCE_FAILED")
     return (
         sha256_file(summary_path), projection_sha, len(source_files), state_seal,
+        fallback_contract,
     )
 
 
@@ -1131,7 +1264,13 @@ def validate(args: argparse.Namespace) -> dict[str, Any]:
         args.expected_runtime_config_sha256,
         args.expected_configuration_hash,
     )
-    equivalence_sha, projection_sha, source_evidence_count, state_seal = (
+    (
+        equivalence_sha,
+        projection_sha,
+        source_evidence_count,
+        state_seal,
+        fallback_contract,
+    ) = (
         validate_equivalence_evidence(
             Path(args.equivalence_summary),
             Path(args.raw_projection_manifest),
@@ -1177,7 +1316,7 @@ def validate(args: argparse.Namespace) -> dict[str, Any]:
     finally:
         connection.close()
     analytical_output_counts = validate_analytical_outputs(
-        orchestrator, args.expected_session,
+        orchestrator, args.expected_session, fallback_contract,
     )
 
     return {

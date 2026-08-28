@@ -584,6 +584,53 @@ def _frozen_outputs_fixture(
     return outputs
 
 
+def _merged_fallback_outputs_fixture() -> tuple[dict[str, dict], dict[str, object]]:
+    """Model live A's merged degradation rows without changing frozen totals."""
+    outputs = _frozen_outputs_fixture()
+    fallback_sessions = list(EXPECTED_REPLAY_SESSIONS[:2])
+    canonical_target = EXPECTED_REPLAY_SESSIONS[2]
+    for field in ("inventory", "cross_layer_transitions"):
+        moved = []
+        for session in fallback_sessions:
+            moved.extend(outputs[session][field])
+            outputs[session][field] = []
+            outputs[session]["counts"][field] = 0
+        outputs[canonical_target][field].extend(moved)
+        outputs[canonical_target]["counts"][field] = len(
+            outputs[canonical_target][field]
+        )
+
+    for session in fallback_sessions:
+        fallback_inventory = [
+            {"evaluation_date": session, "horizon": horizon}
+            for horizon in ("ID", "1D")
+        ]
+        fallback_cross = [
+            {
+                "evaluation_date": session,
+                "horizon": row["horizon"],
+                "component": "INVENTORY",
+            }
+            for row in fallback_inventory
+        ]
+        outputs[session]["inventory"].extend(fallback_inventory)
+        outputs[session]["cross_layer_transitions"].extend(fallback_cross)
+        outputs[session]["counts"]["inventory"] = len(
+            outputs[session]["inventory"]
+        )
+        outputs[session]["counts"]["cross_layer_transitions"] = len(
+            outputs[session]["cross_layer_transitions"]
+        )
+    contract = {
+        "sessions": fallback_sessions,
+        "intraday_fallback_rows": 2,
+        "partial_fixed_fallback_rows": 2,
+        "intraday_fallback_cross_layer_rows": 2,
+        "partial_fixed_fallback_cross_layer_rows": 2,
+    }
+    return outputs, contract
+
+
 def _write_bound_state_manifest(
     state: Path, manifest_path: Path, summary_path: Path | None = None,
 ) -> dict[str, object]:
@@ -876,6 +923,11 @@ def _valid_preload_fixture(
         "batch_b_seal": {
             "sealed": True,
             "command_returncodes": [0, 0, 0],
+            "intraday_fallback_sessions": [],
+            "intraday_fallback_rows": 0,
+            "partial_fixed_fallback_rows": 0,
+            "intraday_fallback_cross_layer_rows": 0,
+            "partial_fixed_fallback_cross_layer_rows": 0,
         },
         "raw_projection": {
             "used": True,
@@ -910,7 +962,7 @@ def test_preloaded_state_validator_accepts_exact_reused_projection_evidence(
     summary_path.write_text(json.dumps(summary))
 
     module = runpy.run_path(str(ROOT / "validate_preloaded_state.py"))
-    summary_sha, projection_sha, source_count, state_seal = module[
+    summary_sha, projection_sha, source_count, state_seal, fallback = module[
         "validate_equivalence_evidence"
     ](
         summary_path,
@@ -933,6 +985,13 @@ def test_preloaded_state_validator_accepts_exact_reused_projection_evidence(
         "state_file_count": summary["incremental_a_seal"][
             "state_file_count"
         ],
+    }
+    assert fallback == {
+        "sessions": [],
+        "intraday_fallback_rows": 0,
+        "partial_fixed_fallback_rows": 0,
+        "intraday_fallback_cross_layer_rows": 0,
+        "partial_fixed_fallback_cross_layer_rows": 0,
     }
 
 
@@ -1117,6 +1176,14 @@ def test_preloaded_state_validator_accepts_exact_finalized_state(tmp_path: Path)
     )
     assert actual_counts == {
         **FROZEN_OUTPUT_COUNTS,
+        "intraday_fallback_inventory": 0,
+        "partial_fixed_fallback_inventory": 0,
+        "intraday_fallback_cross_layer": 0,
+        "partial_fixed_fallback_cross_layer": 0,
+        "live_inventory_total": FROZEN_OUTPUT_COUNTS["inventory"],
+        "live_cross_layer_total": FROZEN_OUTPUT_COUNTS[
+            "cross_layer_transitions"
+        ],
         "basis": 12,
         "valid_basis": 12,
     }
@@ -1185,9 +1252,60 @@ def test_preloaded_state_validator_accepts_exact_finalized_state(tmp_path: Path)
     assert len(value["state_tree_sha256"]) == 64
     assert value["analytical_output_counts"] == {
         **compact_counts,
+        "intraday_fallback_inventory": 0,
+        "partial_fixed_fallback_inventory": 0,
+        "intraday_fallback_cross_layer": 0,
+        "partial_fixed_fallback_cross_layer": 0,
+        "live_inventory_total": compact_counts["inventory"],
+        "live_cross_layer_total": compact_counts["cross_layer_transitions"],
         "basis": 12,
         "valid_basis": 12,
     }
+
+
+def test_analytical_output_recount_separates_frozen_and_live_fallback() -> None:
+    module = runpy.run_path(str(ROOT / "validate_preloaded_state.py"))
+    outputs, contract = _merged_fallback_outputs_fixture()
+    actual = module["validate_analytical_outputs"](
+        {"outputs": outputs}, EXPECTED_REPLAY_SESSIONS, contract,
+    )
+    assert actual == {
+        **FROZEN_OUTPUT_COUNTS,
+        "intraday_fallback_inventory": 2,
+        "partial_fixed_fallback_inventory": 2,
+        "intraday_fallback_cross_layer": 2,
+        "partial_fixed_fallback_cross_layer": 2,
+        "live_inventory_total": FROZEN_OUTPUT_COUNTS["inventory"] + 4,
+        "live_cross_layer_total": (
+            FROZEN_OUTPUT_COUNTS["cross_layer_transitions"] + 4
+        ),
+        "basis": 12,
+        "valid_basis": 12,
+    }
+
+    outputs[contract["sessions"][0]]["inventory"].pop()
+    outputs[contract["sessions"][0]]["counts"]["inventory"] -= 1
+    with pytest.raises(module["ValidationError"]) as mismatch:
+        module["validate_analytical_outputs"](
+            {"outputs": outputs}, EXPECTED_REPLAY_SESSIONS, contract,
+        )
+    assert mismatch.value.code == "FALLBACK_ANALYTICAL_OUTPUT_COUNT_MISMATCH"
+
+
+def test_fallback_seal_contract_refuses_unbound_or_asymmetric_counts() -> None:
+    module = runpy.run_path(str(ROOT / "validate_preloaded_state.py"))
+    seal = {
+        "intraday_fallback_sessions": list(EXPECTED_REPLAY_SESSIONS[:2]),
+        "intraday_fallback_rows": 2,
+        "partial_fixed_fallback_rows": 2,
+        "intraday_fallback_cross_layer_rows": 2,
+        "partial_fixed_fallback_cross_layer_rows": 1,
+    }
+    with pytest.raises(module["ValidationError"]) as mismatch:
+        module["validate_fallback_contract"](
+            seal, EXPECTED_REPLAY_SESSIONS,
+        )
+    assert mismatch.value.code == "FALLBACK_SEAL_CONTRACT_INVALID"
 
 
 @pytest.mark.parametrize(

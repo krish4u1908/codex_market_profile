@@ -216,7 +216,11 @@ The validator requires the exact state schema, streams every nonempty durable
 ledger to bind the preload to the expected engine and configuration hashes,
 requires both callback outboxes and the durable futures-selection probe table
 to be empty,
-and accepts only the fresh full six-session equivalence PASS. The equivalence
+and accepts only the fresh full six-session equivalence PASS. It recounts the
+255-row frozen inventory and 60,659-row frozen cross-layer surfaces separately
+from the independently sealed live degradation extensions (118 Intraday plus
+21 partial-fixed inventory rows and their 139 linked cross-layer rows), so the
+preload cannot pass by silently dropping either contract. The equivalence
 gate requires all zero-difference, causality, restart, file-open, source-hash,
 reference-manifest, and frozen-count fields; it also binds the copied raw
 projection manifest and its explicit August 17 present-for-rejection policy.
