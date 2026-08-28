@@ -165,6 +165,28 @@ def test_user_units_are_isolated_and_resource_bounded(tmp_path: Path) -> None:
     )
     combined = backend + gateway
 
+    # systemd consumes one escaping layer before /bin/sh sees the command.
+    # Require the parsed command line to retain the inner Python quotes; a
+    # single template backslash passes static checks but produces invalid
+    # Python when the installed unit starts.
+    verify_environment = {**os.environ, "SYSTEMD_LOG_LEVEL": "debug"}
+    verified = subprocess.run(
+        [
+            "/usr/bin/systemd-analyze", "--user", "verify",
+            str(tmp_path / "user-units" / "r6e1r-shadow.service"),
+            str(tmp_path / "user-units" / "r6e1r-readonly-gateway.service"),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=verify_environment,
+    )
+    assert verified.returncode == 0
+    parsed_units = verified.stdout + verified.stderr
+    assert parsed_units.count(
+        r'open(\\\"/proc/self/fd/3\\\",\\\"rb\\\").read()'
+    ) == 4
+
     assert "User=" not in combined and "Group=" not in combined
     assert "WantedBy=default.target" in backend
     assert "WantedBy=default.target" in gateway
@@ -218,7 +240,7 @@ def test_user_units_are_isolated_and_resource_bounded(tmp_path: Path) -> None:
             (ROOT.parent.parent / relative).read_bytes()
         ).hexdigest()
         assert digest in unit
-        assert 'open(\\"/proc/self/fd/3\\",\\"rb\\").read()' in unit
+        assert r'open(\\\"/proc/self/fd/3\\\",\\\"rb\\\").read()' in unit
         assert "hashlib.sha256" in unit
         assert "exec(compile(" in unit
     for descriptor, relative in (
@@ -230,7 +252,7 @@ def test_user_units_are_isolated_and_resource_bounded(tmp_path: Path) -> None:
         ).hexdigest()
         assert digest in backend
         assert (
-            f'open(\\"/proc/self/fd/{descriptor}\\",\\"rb\\").read()'
+            rf'open(\\\"/proc/self/fd/{descriptor}\\\",\\\"rb\\\").read()'
             in backend
         )
     assert "ExecStart=/bin/sh -c '" in backend
