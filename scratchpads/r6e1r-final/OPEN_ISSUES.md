@@ -60,3 +60,8 @@ Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
   PASS at summary SHA-256 `f83d519226bf7876be5446e16b657bbea9c3624f3ecb7a5e2a724bf35b0954f9`.
   The remaining analytical gate is the active fresh full-six all-nine run from
   the same pinned engine commit; deployment remains prohibited until it passes.
+- Full-six final-v2 was externally SIGINT/TERM/KILLed and runtime-masked after
+  its baseline A/B/reference pass but before any alternate bundle sealed. The
+  interrupted root is retained and not accepted. Exact-contract final-v3 is
+  active under invocation `d15e42ff1149423e9dbcea606d3d638e`; it will rerun
+  A/B/references and every schedule fresh because no partial bundle is eligible.

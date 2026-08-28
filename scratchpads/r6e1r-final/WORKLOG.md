@@ -386,3 +386,19 @@ Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
   Harness elapsed was 3,839.101 seconds; wall time 1:04:00; process/child peak
   RSS was 1,730,828/891,172 KiB; systemd cgroup peak was 2,965,729,280 bytes
   with no swap or memory-pressure event. The fresh full-six run remains active.
+
+- Full-six final-v2 was externally interrupted during its one-record schedule,
+  not by an analytical or resource failure. The journal records SIGINT at
+  17:18:05, SIGTERM at 17:18:23, and SIGKILL at 17:18:54, each "on client
+  request"; the unit was runtime-masked. It had used no swap, emitted no OOM,
+  and correctly withheld the incomplete schedule marker. Before interruption,
+  fresh A/B/reference gates had passed (21/21 components, 8/8 ledgers, 9/9
+  causality, 30/30 R6C2R, 180/180 GUI) with exact frozen counts and zeros.
+  The v2 root is preserved unchanged as interrupted evidence.
+- Recovery final-v3 launched under invocation
+  `d15e42ff1149423e9dbcea606d3d638e` from the same clean analytical commit,
+  source projection, references, configs, and all-nine contract. It uses the
+  harness's fail-closed `--resume-schedules-from` interface against v2. Because
+  v2 had no complete alternate schedule bundle, no partial output is imported:
+  A, B, references, and all schedules run fresh. Recovery unit SHA-256 is
+  `69d35b550f6493a2a8018001a4e54358772dd2c311d7bb7c786b478953892deb`.
