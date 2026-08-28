@@ -372,3 +372,17 @@ Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
   tests pass 2/2 and the unchanged complete suite passes 660/660 in 118.03s,
   with zero failures or skips. Because an authenticated engine byte changed,
   focused and full-six all-nine equivalence must now be rerun from fresh state.
+
+- Fresh post-repair focused acceptance completed from clean detached commit
+  `e1d67c534bea5c61b0e3d379db7f599de7e1c445`: 21/21 components,
+  8/8 ledgers, 9/9 causality invariants, and 9/9 schedules passed with every
+  difference and safety counter zero. Eight alternate schedules published
+  marker-last bundles and passed 16/16 publication/final storage gates;
+  checkpoint accounting passed 72/72 and recovery passed 2/2. All 8/8 fixture
+  sources rehashed unchanged. The measured file-open audit contains 2,508 rows,
+  including 2,499 runtime rows representing 1,190,240 opens, with zero
+  prohibited or unmeasured opens. Summary SHA-256 is
+  `f83d519226bf7876be5446e16b657bbea9c3624f3ecb7a5e2a724bf35b0954f9`.
+  Harness elapsed was 3,839.101 seconds; wall time 1:04:00; process/child peak
+  RSS was 1,730,828/891,172 KiB; systemd cgroup peak was 2,965,729,280 bytes
+  with no swap or memory-pressure event. The fresh full-six run remains active.

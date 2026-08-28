@@ -56,3 +56,7 @@ Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
   engine identity. Fresh focused and full-six all-nine equivalence, a new sealed
   incremental-A state, final scans, redeployment, and external reachability are
   still mandatory. Services remain stopped; no verified tag may be created.
+- Fresh post-repair focused all-nine acceptance is now independently verified
+  PASS at summary SHA-256 `f83d519226bf7876be5446e16b657bbea9c3624f3ecb7a5e2a724bf35b0954f9`.
+  The remaining analytical gate is the active fresh full-six all-nine run from
+  the same pinned engine commit; deployment remains prohibited until it passes.
