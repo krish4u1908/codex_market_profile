@@ -1,38 +1,58 @@
 # R6E1R-FINAL Open Issues
 
-- The resumable all-nine harness is now security-reviewed and test-complete,
-  but no bundle produced by an older or uncommitted harness is eligible for
-  reuse. Commit and push the frozen harness first, create a clean detached
-  checkout, then generate fresh focused and full-six evidence. Resume imports
-  require the same checkout path, exact commit/config/projection/source
-  contract and only accept completed marker-last schedule bundles.
+Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-- The large-chunk publication defect is diagnosed and repaired locally. The
-  only retained-snapshot difference was one provisional absence-based expiry
-  and its linked cross-layer row; later raw Index response evidence removed it
-  from final chronology. Periodic publication now defers provisional lifecycle,
-  affected participation-transition, and linked cross-layer rows until seal.
-  The refresh harness now proves closure between successive periodic generations
-  at actual session-local merged-source positions. Orchestrator 112/112,
-  harness 38/38, manifest/deployment 5/5, and independent review pass.
+- The resumable all-nine harness is security-reviewed, test-complete, committed,
+  and pushed at `81b0836fe50939246ae210bb62780ac4e163e100`. Resume
+  imports still require that exact clean commit, checkout/config/projection/source
+  contract, and completed marker-last schedule bundles. No bundle from an older
+  or differently contracted run is eligible.
+
+- Current focused acceptance and the exact-current 656-test regression pass.
+  The canonical `81b0836` full-six run is active from 2026-08-27 23:33:15 IST
+  as invocation `b538f7e58a7c4f8796963ea46e58eeb0`. Its preflight reverified
+  the remote head, clean detached checkout, both manifests, projection identity,
+  fresh roots, protected-service identities, 28.95 GB available memory, and
+  248.80 GB available disk. A separate branch's full-six service remains active
+  in isolated roots. Concurrency was admitted only after measured anonymous
+  memory and reclaimable-cache accounting showed substantial headroom; do not
+  stop, reuse, or treat that other branch's output as `81b0836` evidence.
 
 - Fresh evidence from the repair commit now includes passing large-only and
   focused August 19 all-nine gates. The focused gate has 21/21 components,
   8/8 ledgers, 9/9 invariants, 9/9 schedules, 72/72 checkpoints, 2/2 recovery
   probes and 8/8 source hashes exact, with every failure/safety counter zero.
-  Still mandatory are the full canonical six-session all-nine
-  equivalence, complete regression/browser/security/scans, then isolated
+  Still mandatory are the full canonical six-session all-nine equivalence,
+  final post-change regression/browser/security/scan reruns, then isolated
   deployment. Two pre-seal repair diagnostics were rejected (one missing
   `PYTHONPATH`, one external signal-2 interruption); neither is acceptance
   evidence. Do not deploy or create the verified tag yet.
 
 - The non-destructive merge is complete and pushed as `dcccc723c6584bd929fab1aef531c3aad32eb1a2`; no verified tag exists.
-- The repaired 38-file engine and 47-file deployment manifests are exact and independently verified. Current engine manifest/aggregate are `51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7` / `362474858eda75b18180ad2fce48e50e1d4acdd1b04a0db405eaae199e70b7a7`; deployment manifest/package are `ca505bb67ee46247e5d68d4dfa60d6b82de4dbc126eec3214ebed1b2647c33e4` / `940ef119e7caf4cbc0599fd5bd24f79b5bca352061da67b00541242c33d1435e`. Reseal only if an allowlisted byte changes.
-- The clean-B GUI comparator repair is committed and pushed as `c42e703d76ce0fdd9c16f6ed860d8645b95b57c2`; the security/test/report milestone is pushed as `19c5489f9845f1325da1e1f6e3d9118b95bd959b`. Fresh focused August 19 and canonical six-session all-nine equivalence must complete from the pinned `c42e703` checkout.
+- The repaired 38-file engine and 47-file deployment manifests are exact and independently verified. Current engine manifest/aggregate are `51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7` / `362474858eda75b18180ad2fce48e50e1d4acdd1b04a0db405eaae199e70b7a7`; deployment manifest/package are `aa1e0280613e4418db01bbaed9a14d79468dbbaf8cb98fdee33581c5621b5dd4` / `a73163704cb8131ab0f1a157738bdea358accd5b7985f6b846a95bc3c760127f`. Reseal only if an allowlisted byte changes.
+- The current pushed evidence head is `81b0836fe50939246ae210bb62780ac4e163e100`. Focused August 19 is accepted; canonical six-session all-nine equivalence is the active remaining analytical gate.
 - Require zero stream/batch differences, canonical-reference mismatches, future joins, backdating, duplicate analytical IDs, prohibited or unmeasured opens, checkpoint failures, analytical refusals, and source mutations across every required schedule.
-- The earlier complete regression is 636/636 with zero failures/skips, but the engine and harness have changed since that run. A fresh complete regression is required after the committed equivalence gates. The repaired callback/harness bytes now have targeted and focused acceptance; six-session acceptance remains pending.
+- The current fully provisioned regression is 656/656 with zero failures/skips;
+  harness-only is 53/53 and ingestion/orchestrator/harness is 294/294. A final
+  complete regression and scans are still required after the last report and
+  deployment changes.
 - User lingering is enabled (`Linger=yes`). Isolated installation, cold-preload measurement, health/readiness, restart recovery, public-interface reachability, and final screenshots remain pending.
+- UFW is enabled with default inbound drop, while rule inspection/change and
+  provider-firewall verification require administrator or off-host access.
+  Local isolated deployment can proceed only after analytics pass; external
+  acceptance may become the genuine deployment blocker if TCP 8805 cannot be
+  verified from an independent client.
 - Verify ports 8803/8804 and collectors remain byte/process/restart unchanged. Use only localhost backend 18805 and one selected external research port after every verification gate passes.
 - The collector source and control scripts remain byte/mtime unchanged and no R6E action touched them. The market-hours collector process self-shut down through its recurring near-close watchdog path at 15:40:56 IST, so final evidence must distinguish unchanged code/non-interference from the expected old PID no longer being alive.
 - The auxiliary August 20 material remains diagnostic only and cannot replace the canonical focused or six-session inputs.
 - Do not create `r6e1r-live-shadow-verified` before full equivalence, regression, browser, deployment, public reachability, manifest, and clean-remote-closeout gates all pass.
+
+## 2026-08-28 live-activation supersession
+
+- The first deployment state is rejected and must not be reused: sparse August
+  26 fixed-context construction exposed an empty-Index aware/naive clock defect.
+  The narrow engine repair and 660-test regression now pass, but the prior
+  `81b0836` equivalence seal is not final evidence for the new authenticated
+  engine identity. Fresh focused and full-six all-nine equivalence, a new sealed
+  incremental-A state, final scans, redeployment, and external reachability are
+  still mandatory. Services remain stopped; no verified tag may be created.

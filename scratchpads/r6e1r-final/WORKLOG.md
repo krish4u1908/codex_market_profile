@@ -72,7 +72,7 @@ Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 - Stopped the first post-parity focused rerun before schedule sealing when adversarial traceability showed the production harness restarted at only the first analytical ledger boundary. The 349-MiB output and 32-MiB work root were preserved under the rejected diagnostics directory. Extended the schedule to restart once after a durable append for every nonempty material analytical ledger type, reconcile each identity after process recreation, and prove every one remains exactly once after final seal. Added the missing Index-stale/Futures-fresh asymmetric suspension fixture; targeted proof passes.
 - Focused all-nine v10 completed all nine schedules in 21m52.68s (parent peak RSS 1,587,568 KiB; child peak RSS 802,032 KiB). Every schedule, semantic hash, eight-ledger comparison, causality invariant, source-integrity gate, and file-open gate passed. The analytical-boundary schedule injected seven durable crashes, one for every nonempty material ledger; `stale_recovery_transitions` was truthfully empty. The run was nevertheless rejected because the availability component compared clean-B's retained pre-fallback inventory eligibility row with live-A's independently reconstructed post-fallback public state.
 - Corrected that comparator to use `availability_detail`, the independently reconstructed operational public contract already used to build clean-B's GUI and availability ledger, while retaining the raw eligibility table for audit. A regression proves deliberately contradictory pre-fallback rows cannot override identical public state and that a real public-state mismatch still fails. Harness/orchestrator verification passes 57/57.
-- Fresh focused all-nine v11 on pushed commit `85fd16712c2c53d593f4fb22d25d740dbb506b58` passed every acceptance gate. Independent validation confirmed 21/21 canonical components, 8/8 analytical ledgers, 9/9 causal/GUI invariants, 9/9 schedules, 72/72 checkpoint rows, 2/2 truncation/replacement probes, 8/8 source hashes, and 2,331 measured runtime-open rows. All differences, refusals, future joins, backdating, duplicate IDs, prohibited/unmeasured opens, checkpoint failures, and source mutations were zero.
+- Fresh focused all-nine v11 on pushed commit `85fd16712c2c53d593f4fb22d25d740dbb506b58` passed every acceptance gate. Independent validation confirmed 21/21 canonical components, 8/8 analytical ledgers, 9/9 causal/GUI invariants, 9/9 schedules, 72/72 checkpoint rows, 2/2 truncation/replacement probes, 8/8 source hashes, and 2,331 aggregated audit evidence rows (not a one-row-per-open count). All differences, refusals, future joins, backdating, duplicate IDs, prohibited/unmeasured opens, checkpoint failures, and source mutations were zero.
 - Focused v11 wall time was 21m46.61s; harness elapsed was 1,305.894s; parent peak RSS was 1,584,964 KiB and clean-child peak RSS was 797,432 KiB. Summary SHA-256 is `a855629c0b9988e7ab289e5fef473681e6db3981fe8faabc021325eb4d3b3c4a`; state manifest/tree SHA-256 values are `cfc72427a7c9fb629420b47bb0192571f2f3952ff8ebf09e9f4fd08a1db3d957` and `0c7f9cfcde213996da98de45b809bac234c991dd5a6ac332cd99b0514df25871`. The 477-MiB output/work evidence was promoted from volatile storage to `/opt/banknifty/research/vpoc_oi_price_response_v2/r6e1r_final_evidence/focused_nine_final_v11*`.
 - Full-six v2 completed fresh incremental A and independently clean chronological B baselines, then was deliberately interrupted before schedule execution after the component matrices exposed two real implementation mismatches. Every frozen artifact except Inventory, cross-layer transitions, and their downstream GUI projection was exact; divergence 65, lifecycle 14,201, dense resolution 164,668, dense participation 69,225, participation transitions 32,068, summaries/snapshots 65/65, and synchronized basis 158,746 all matched. This output is diagnostic only.
 - The full-six root causes were reproduced from raw-normalized inputs. Intraday inventory used the 2,000-ms basis synchronization tolerance instead of the frozen inventory engine's independent 5-second join, producing exactly four inventory transition-row mismatches. Cross-layer construction reset call-local source ordinals and inventory prior state once per session, while the clean canonical builder carries them chronologically; that explains every remaining ID and nine boundary-only transition differences. No frozen clock, detector threshold, or evidence timestamp requires alteration.
@@ -146,12 +146,12 @@ Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 - Two repair diagnostics are explicitly rejected: v2 failed at launch because `PYTHONPATH` was omitted; v3 was externally interrupted by signal 2 after 7m36.88s at 1,339,084 KiB peak RSS before schedule seal. Neither is analytical evidence. Fresh committed large-only, focused all-nine, and full-six all-nine gates remain mandatory.
 - The combined repaired ingestion/callback/orchestrator/equivalence gate passes 277/277 in 28.98 seconds (29.25 seconds wall, 145,384 KiB peak RSS). Both manifest companions and `git diff --check` also pass immediately before the repair milestone commit.
 - Committed and pushed the repair milestone as `bd01b8d3e7ca4670935a4eb1289e6dcfb80c8672`; `git ls-remote` returned the identical feature-branch hash. The verified historical tags remain unchanged and no R6E verified tag exists.
-- Fresh focused large-chunk repair v4 passed from a clean detached checkout of `bd01b8d...`: component, ledger, causality, schedule, checkpoint, and recovery failures are all zero; 1,733 runtime opens were measured with zero prohibited/unmeasured opens; analytical refusals and source mutations are zero. Terminal semantic and ledger SHA-256 values are the canonical `68070652aaa24a54b3fb30649e7869731f0c37835d59cc1e315e332502d7cb69` and `27466e2caaa730b7a4999be7f6b413f418e3fcd45ff5fd3b34a214350d7613a1`.
+- Fresh focused large-chunk repair v4 passed from a clean detached checkout of `bd01b8d...`: component, ledger, causality, schedule, checkpoint, and recovery failures are all zero; its 1,733 total audit rows comprise 1,724 runtime-open rows, 8 source-inventory rows, and 1 fixture-manifest row, with zero prohibited/unmeasured opens; analytical refusals and source mutations are zero. Terminal semantic and ledger SHA-256 values are the canonical `68070652aaa24a54b3fb30649e7869731f0c37835d59cc1e315e332502d7cb69` and `27466e2caaa730b7a4999be7f6b413f418e3fcd45ff5fd3b34a214350d7613a1`.
 - Both session-local periodic refreshes were exactly discharged at actual record ordinals 15,516 and 31,033; both advanced accepted counts, causal-evidence cutoffs, and valid-basis cutoffs, returned the dirty target, and used distinct poll generations. Future joins, timestamp backdating, duplicate analytical IDs, and synchronization-tolerance violations are all zero. There was no causal successive-periodic episode/lifecycle closure opportunity; two lifecycle changes were truthfully classified finalization-only and did not satisfy the periodic closure gate.
 - Large-only summary/seal SHA-256 values are `4821b9fba0d9940f2020babf5974a104637d2ea1529691cddca80a09945a8387` / `a9787906afb3d13f406627f7386f9a570d25171596e0638fe127793e52321142`; timing SHA-256 is `982a63d47faeee32039444a43594c09ef7adadfa4decb576901c5091dc10a5b7`. Wall time was 8m54.59s, process peak RSS 1,568,472 KiB, clean-child peak RSS 900,372 KiB, and cgroup peak memory 2,426,519,552 bytes.
 - Protected services were unchanged after the diagnostic: 8803 PID/start ticks `380743/46015771`, invocation `d0df21acd54a440788d89f7cad5b4827`, NRestarts 0; 8804 `465394/51980337`, invocation `260291b2ae4a4c70a95a0a37722af61e`, NRestarts 0. Ports 8805 and 18805 remain free.
 - Pushed the large-only evidence handoff as `e01b5c6f7a6458923f71828c17d23f4afdefb10d`, then ran focused all-nine v13 from a clean detached checkout of that exact commit under non-networked persistent invocation `6c071f67e68649cfad967d23309b8750`.
-- Focused all-nine v13 passed every acceptance surface: 21/21 components, 8/8 analytical ledgers, 9/9 causality invariants, 9/9 schedules, 72/72 checkpoint rows, 2/2 truncation/replacement recovery probes, 8/8 source-hash comparisons, and 9/9 required-feasibility rows. All component/ledger/causality/schedule/checkpoint/recovery differences or failures were zero; 2,508 runtime opens were measured with prohibited/unmeasured opens zero; analytical refusals and source mutations were zero.
+- Focused all-nine v13 passed every acceptance surface: 21/21 components, 8/8 analytical ledgers, 9/9 causality invariants, 9/9 schedules, 72/72 checkpoint rows, 2/2 truncation/replacement recovery probes, 8/8 source-hash comparisons, and 9/9 required-feasibility rows. All component/ledger/causality/schedule/checkpoint/recovery differences or failures were zero; its 2,508 total audit rows comprise 2,499 runtime-open rows, 8 source-inventory rows, and 1 fixture-manifest row, with prohibited/unmeasured opens zero; analytical refusals and source mutations were zero.
 - All schedule seals reproduced semantic SHA-256 `68070652aaa24a54b3fb30649e7869731f0c37835d59cc1e315e332502d7cb69` and ledger SHA-256 `27466e2caaa730b7a4999be7f6b413f418e3fcd45ff5fd3b34a214350d7613a1`. One-record exercised 46,550 polls/records with three required causal peer repolls and zero final remainder. Variable chunks exercised nine group sizes over 6,312 polls. Boundary mode exercised 17 partial-line splits. Empty mode injected 34 explicit empty polls. Checkpoint mode survived seven restarts. Analytical-boundary mode covered all six nonempty material ledgers exactly once; availability/stale-recovery were correctly empty. Hourly rotation exercised 6/6 boundaries. Large chunks discharged both actual periodic refresh targets and retained zero safety violations.
 - Focused v13 harness elapsed was 3,429.450 seconds; `/usr/bin/time` wall was 57m10.47s. Peak parent process RSS was 1,775,736 KiB, clean-child peak RSS 895,316 KiB, and cgroup peak memory 2,408,161,280 bytes. Summary/state-manifest/state-tree SHA-256 values are `82ae10e47c06c7ed5d1a40545982ae2f43aae357654a173783d20be73f6f4576`, `6a0a9e9a4fd0acc4ad108a20051ad47f6b3101fe8cf10df267855bded14c50cc`, and `6c7e595ff66a9b6855329038eafaf18f5d69e282bb265f2d7766c70e11f9b452`; timing SHA-256 is `9c715e3bbbce2c365c40901f76389ea45b6af558a6879448a84d761cd1e247f7`.
 - Post-focused fixture manifest verification passed. Protected services remain exact: 8803 `380743/46015771/d0df21acd54a440788d89f7cad5b4827/NRestarts0`; 8804 `465394/51980337/260291b2ae4a4c70a95a0a37722af61e/NRestarts0`. Ports 8805/18805 are still free. Full six-session all-nine is now the analytical deployment gate.
@@ -172,3 +172,203 @@ Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 - Added a fail-closed, schedule-bundle resume path after three externally interrupted full-six attempts demonstrated that an indivisible 18+ hour all-nine run was operationally fragile. Every resumed invocation still rebuilds fresh incremental A and clean batch B, rechecks both references/counts/source hashes/runtime opens, and imports only marker-last, fully sealed schedule bundles bound to the exact clean Git commit, harness SHA-256, canonical engine identity, configs, projection, raw-source inventory and schedule definitions.
 - Two independent security reviews rejected intermediate resume drafts and drove closure of artifact-publication durability, import-open accounting, path confinement, source/accounting rederivation, final destination revalidation, an identical-byte symlink-swap TOCTOU, and `/proc/self/fd` descriptor-number reuse in audit provenance. The final frozen harness/test SHA-256 values are `d1871428077d21eab52e409a809f885e197c5600cad10279e656da00b53c19f2` and `cc9fedc85883ac7ffa89f2edca5a4883c10c97050f7001157c72727e01001733`; both reviewers approved the final bytes.
 - Exact-current verification passes 53/53 harness tests and 294/294 combined ingestion/orchestrator/harness tests. Descriptor-anchored reads walk ancestors with `O_DIRECTORY|O_NOFOLLOW`, open regular files with `O_RDONLY|O_NOFOLLOW`, stream/hash/copy from the same descriptor, classify resume imports from the resolved target only, and refuse the reproduced external-symlink attack. Existing engine/deployment manifests remain byte-exact because this offline harness is intentionally outside both allowlists; the historical R6E1R0 path-only manifest requires no reseal.
+- Pushed the hardened resume milestone as `81b0836fe50939246ae210bb62780ac4e163e100`; the remote feature branch returned the identical hash. The first post-commit complete-suite invocation ran from a `/home` detached worktree and produced 654 passes plus two systemd/bubblewrap boundary failures because those tests intentionally use `ProtectHome=true`; this invocation is rejected as a launch-location error. The unchanged rerun from an `/opt` detached worktree passed 656/656 in 1m57.77s with 674,080 KiB peak RSS. Passing log/time SHA-256 values are `6eaf04009b8614136bf29a1cd52b04fef693e3e47b1ef851291650ec08ca3eaf` / `27bbb76f950b824eec1cd093dc7cadf69938e69387ee00476069d236b51b0e8f`.
+- Fresh focused post-resume acceptance from clean commit `81b0836` passed: 21/21 components, 8/8 ledgers, 9/9 causality invariants, 9/9 schedules, 16/16 bundle-storage gates, 72/72 checkpoint rows, 2/2 recovery probes and 8/8 source hashes. Its 2,508 total audit rows comprise 2,499 runtime-open rows, 8 source-inventory rows, and 1 fixture-manifest row, with prohibited/unmeasured zero; future joins, backdating, duplicate IDs, refusals, source mutations and every comparison difference were zero. All eight fresh marker-last bundles independently passed fail-closed revalidation (40/40 artifacts). Summary SHA-256 is `c3014578c237b2ea13ff0167b6a520ffb48082897970fbeb4eff5e31a241620e`; contract payload `0e6913f9406504010e7eb24036b0287c238f2e7fd2351d73ac712b1b68f8c8b6`; wall 56m36.55s; parent/child peak RSS 1,784,340/898,880 KiB. This focused run published fresh bundles but intentionally did not exercise import, frozen six-session counts or references.
+- Prepared and independently verified inactive full-six unit `r6e1r-six-81b0836-final-v1.service`, SHA-256 `6684d38c66bb00287d6b16ca80f54260f450dbb43fdddf447f965f371472215e`, with fresh absent roots and expected contract `3b5c467104c78522724169e517c841791e93490933930de0c3d87a0774c31b8f`. Its start preflight correctly aborted before creating any root when it detected the separate pre-existing session's active `r6e1r-v2-six-a12a586-v1.service`. Do not stop or reuse the other session; wait for it to become terminal before starting the authorized unit because concurrent full-six runs can exceed the no-swap host's safe memory envelope.
+- Reassessed the launch hold after measuring the other cgroup rather than using
+  its cache-inclusive peak: host MemAvailable was 28.95 GB, the other run used
+  about 2.2 GB anonymous memory with most cgroup memory in reclaimable inactive
+  file cache, eight CPUs were available, and disk free was 248.80 GB. Two
+  observed acceptance peaks fit with substantial headroom, while the other
+  run's 18.2 GB original-chunk pass was only about 1.9% complete and waiting
+  would defer the authorized gate by well over a day.
+- Repeated every fail-closed launch check and started the isolated canonical
+  full-six unit at 2026-08-27 23:33:15 IST. Invocation is
+  `b538f7e58a7c4f8796963ea46e58eeb0`, main PID at launch `1245008`, unit
+  SHA-256 `6684d38c66bb00287d6b16ca80f54260f450dbb43fdddf447f965f371472215e`,
+  commit/remote head `81b0836fe50939246ae210bb62780ac4e163e100`, and expected
+  contract `3b5c467104c78522724169e517c841791e93490933930de0c3d87a0774c31b8f`.
+  It uses fresh roots, reuses only the fully revalidated raw projection, binds
+  no TCP family, and does not touch the separate run. Protected services remain
+  `380743/46015771/d0df21acd54a440788d89f7cad5b4827/NRestarts0` and
+  `465394/51980337/260291b2ae4a4c70a95a0a37722af61e/NRestarts0`.
+- Independent live contract/isolation audit passed after launch. Contract file
+  SHA-256 is `d50af58c41068d825bebfd420766619ebe6b8ad23136465a882c90ddd767fcd3`
+  and its recomputed inner contract is the expected
+  `3b5c467104c78522724169e517c841791e93490933930de0c3d87a0774c31b8f`.
+  Projection 139/139 files (541,091,186 bytes), 141 authoritative-source rows,
+  both references, frozen-count/reference contracts, commit, harness, engine,
+  configs, dates, schedules, required profile, and source size/mtime identities
+  all matched. Bidirectional live-FD inspection found zero cross-run paths;
+  roots are distinct/non-nested, shared inputs are read-only, and the canonical
+  unit has no network family beyond AF_UNIX. No harness/unit rule prohibits
+  different-root concurrent offline runs. The other process therefore does not
+  invalidate equivalence, but final elapsed time must be labelled conservative
+  and contended rather than an isolated benchmark.
+- Canonical incremental A sealed after the overnight date rollover and clean B
+  began under child `strace` coverage. A seal file SHA-256 is
+  `e8289a90cbad1e491bd3783f2e61574b1e4267870adfebd9d64746f1a2acd176`;
+  snapshot/semantic/ledger hashes are
+  `87e7caa946560191902fa1dff6ab1f839667ec18ccb96c04702f933bfc0b28d1`,
+  `bd8bdbaaeac3db54c289575d7c0d3f3fca73934f0830ab974656ded3c6175527`,
+  and `4eb8d6920a63821e469843e44e02a6996704b327a37e7f2d3918bee063a8fb65`.
+  The 26-file state manifest file/tree identities are
+  `5fd57ead140e18eba6a56cc215569611860e6cc4d816836239a9e69e610cbdc3` /
+  `d9a34d15c60ba98a73853a004a454bbde3288c2d98c0d1677e1f9089fc5eb1f0`
+  over 4,141,836,283 bytes. A measured 104 evaluation sources,
+  396,713,521 bytes, 543,329 JSON records, 25,293,503 expanded complete rows,
+  65 polls, 6,004.836 seconds and 6,496,920 KiB process peak RSS, with zero
+  checkpoint failures, analytical refusals, dirty sessions or unexpected
+  staged sessions. These are baseline facts, not a full equivalence result.
+- Clean B sealed after 786.827 seconds with seal file SHA-256
+  `47d20adf5e0c14cb44dc722c49fe333ae731794d878e0d28ec7303d32c84fbe0`,
+  snapshot `082c5b727ba917196f9d3cf4382fd2c20b81b3a6c0f8e61500cfe08a0ce1aecd`
+  and the same canonical ledger hash as A. Baseline A/B component equivalence
+  then passed 21/21 with every A-only, B-only, field-mismatch and unexplained
+  remainder zero. All frozen counts were exact, including 255 inventory,
+  65 episodes (41 GREEN/24 RED), 14 retriggers, 14,201 lifecycle,
+  164,668 dense resolution, 69,225 dense participation, 32,068 participation
+  transitions and 60,659 cross-layer transitions. Component matrix SHA-256 is
+  `fd5fad066510b5fe01f5914f55aa3fa2b7fbac9b27af9a9caa4da76b658cf388`.
+  All 8 append-only analytical ledgers also passed with zero A/B identity or
+  content differences; ledger matrix SHA-256 is
+  `e68f5f098b6157160b2a27e51c4bc709a6bc0fc25aa71e7fcb39617c8cb77e48`.
+  This closes only baseline A/B; causality, references, alternate schedules,
+  runtime opens, source post-hashes and final summary remain mandatory.
+- Baseline causality passed 9/9 for both A and B with future joins,
+  synchronization-tolerance violations, timestamp backdating, duplicate IDs,
+  valid-to-NaT regressions, analytical refusals and all three GUI clock/display/
+  path violations equal to zero. Matrix SHA-256 is
+  `f5370e1ce6ce067b2ae5a3a090c0215d9c6c7a548348b724f97d2df963164bf2`.
+  The same run reverified the frozen R6C2R reference 74/74 files and R6D
+  reference 40/40 files; verification artifact SHA-256 is
+  `ed81708afac9cbb5c30915a56d2f46cf05611a4a12565a37a7a6c3d5d1366c67`.
+  Row-level reference comparisons, schedules and final gates remain pending.
+- The independent row-level reference gates then passed without unexplained
+  remainder. The R6C2R component matrix is 30/30 PASS with target-only,
+  reference-only and unexplained rows all zero; SHA-256 is
+  `0e985193a48ede2baf5ad07f5601af90f5471d61f17c8f9da8a694a009de98f8`.
+  The R6D GUI matrix is 180/180 PASS with zero reference-only and zero
+  unexplained rows. Its 174,080 target-only live-extension rows are exactly
+  matched by 174,080 explicitly permitted extension rows; SHA-256 is
+  `dc0c5814dbabaafd5d914627b4435038729f4a187a41beb98f385a19b1e6c467`.
+  The nine-schedule feasibility matrix SHA-256 is
+  `8142dbaf073d59719922838bf41b59c1f231d6b32bcd2b08e33f1da943640682`;
+  seven schedules are below the reporting cap and two are above it, but the
+  required profile continues to execute all nine. Alternate schedule,
+  recovery, runtime-open, post-source-hash and final-summary gates remain
+  pending.
+- A fresh read-only deployment preflight at 2026-08-28 01:51:56 IST found
+  `127.0.0.1:18805` and public candidates 8805--8810 free, both R6E1R units
+  uninstalled, `Linger=yes`, user-manager control available, package/engine
+  manifests still 47/47 and 38/38, and an absent writable isolated root at
+  `/opt/banknifty/research/r6e1r_live_shadow_81b0836`. Ports 8803/8804 retained
+  exact PIDs, start ticks, invocation IDs and zero restarts. Local prerequisites
+  pass; UFW is enabled with default input DROP and this account has neither
+  rule-inspection/change authority nor provider-firewall authority. External
+  reachability may therefore be the only genuine deployment blocker after
+  analytics pass. No deployment byte or service state was changed.
+- The full-six `one_record_per_increment` schedule published its atomic bundle
+  at 2026-08-28 05:00:56 IST and an independent revalidation passed. Marker
+  SHA-256 is
+  `013c844625d1b67ff48568e5f3db4ab0859ae6cc2694ad360c14e29e2944dfaa`;
+  it was published 0.700 seconds after the newest of five exact artifacts.
+  Semantic/ledger hashes equal canonical A at `bd8bdbaa...` / `4eb8d692...`;
+  exactly 543,329 one-record increments and polls exercised group size `{1}`.
+  Checkpoint accounting is 104/104 with deferred tails zero; source integrity
+  is 139/139 over 541,091,186 bytes; 616 trusted audit rows measured
+  10,015,056 opens with exact 243-row required coverage and zero prohibited,
+  unmeasured, failed or derived-input rows. Schedule elapsed time was
+  11,835.445 seconds and peak process RSS 17,202,120 KiB. This closes only the
+  first alternate schedule; the variable-chunk schedule then began.
+- The full-six `deterministic_variable_chunks` bundle independently passed.
+  Marker SHA-256 is
+  `58ae34e2190f89254901e13c77c998a60b60f32bada7121a7a9c6b4f81ac75e8`
+  and was marker-last by 0.703 seconds. It exercised exactly 73,672 increments
+  over 543,329 records with group sizes `{1,2,3,5,7,11,13,17}` and the exact
+  sequence SHA-256
+  `446e05431b4b90f66badc41f09992b46391a2b890c21741d6ae523fb3026c584`.
+  Semantic/ledger identities equal canonical A, refusals/differences are zero,
+  checkpoints are 104/104, sources are 139/139, and 616 trusted audit rows
+  cover 1,656,420 opens with no prohibited/unmeasured/derived/failed rows.
+  Elapsed time was 4,005.174 seconds and peak process RSS 17,259,876 KiB.
+  The 90 incidental hourly introductions are non-gating here; the dedicated
+  hourly schedule owns the exact 92-boundary contract.
+- The full-six `boundaries_inside_jsonl_lines` bundle independently passed.
+  Marker SHA-256 is
+  `3ead219a15f766399f7395d12e3f56da7a6e22d59f81db665c1f29a4e451fed2`
+  and was marker-last by 0.721 seconds. Exactly 17 configured/expected/observed
+  inside-line boundaries were exercised; all 543,329 records were exposed
+  through 95 increments and 146 polls, with maximum group size 4,194,302 bytes
+  under the 4,194,304-byte limit. Canonical semantic/ledger identities match;
+  checkpoints are 104/104, sources 139/139, and 616 trusted audit rows cover
+  328,727 opens with all prohibited/unmeasured/derived/failed counters zero.
+  Elapsed time was 3,071.805 seconds and peak process RSS 17,259,876 KiB.
+- The full-six `empty_repeated_polls` bundle independently passed. Marker
+  SHA-256 is
+  `4d95dec0d52bd1f8641cf8d3741bebb2767646c576ec1b8b588b8e8e7eddb7bb`
+  and was marker-last by 0.718 seconds. Independent threshold derivation gives
+  17 events times two repetitions, exactly matching 34 observed empty polls;
+  95 data increments plus 34 empty polls equal 129 polls. Semantic/ledger
+  hashes match A, checkpoints are 104/104, sources 139/139, and 616 trusted
+  audit rows cover 328,173 opens with every prohibited/unmeasured/derived/
+  failed counter zero. Elapsed time was 2,942.253 seconds and peak process RSS
+  17,259,876 KiB.
+- The full-six `multiple_checkpoint_restarts` bundle independently passed.
+  Marker SHA-256 is
+  `7f0d9f9bf168db7ca73117b9d36a27d2f6d625b572e299b276a384105a16a44d`
+  and was marker-last by 0.682 seconds. Configured, independently expected and
+  observed restart counts are exactly 7/7/7; checkpoint failures, maximum
+  causal backlog paths, repolls and final remainders are all zero. Canonical
+  semantic/ledger hashes match; checkpoints are 104/104, sources 139/139, and
+  617 trusted audit rows cover 328,286 opens with all prohibited/unmeasured/
+  derived/failed counters zero. Elapsed time was 3,995.251 seconds and peak
+  process RSS 18,429,628 KiB.
+- The full-six `analytical_boundary_restarts` bundle independently passed.
+  Marker SHA-256 is
+  `e9bdf96d5d2a7d404bd2d2a2077ebc1ea81f397ff73c67ac7b1292f9fe3420fc`
+  and was marker-last by 0.646 seconds. Of eight material ledger types, six
+  were nonempty at the probe and all six were crash-covered exactly once:
+  divergence, dependency, lifecycle, inventory, participation and cross-layer.
+  Availability and stale-recovery were empty at the injection point, so no
+  boundary was manufactured. Every injected event occurs exactly 1/1/1 times
+  before restart, after restart and after retry/seal. Canonical semantic/ledger
+  identities match; checkpoints are 104/104, sources 139/139, and 990 trusted
+  audit rows cover 351,146 opens with prohibited/unmeasured/derived/failed zero.
+  Elapsed time was 7,813.369 seconds and peak process RSS 18,987,460 KiB.
+- The full-six `hourly_file_rotation` bundle independently passed. Marker
+  SHA-256 is
+  `22a6d20302a7a3c4d7ac77181d29bfd0a31111b42fd6c0fd143bba9924be47e4`
+  and was marker-last by 0.676 seconds. Independent reconstruction found 104
+  live files across 12 stream/session chains, so the exact required rotation
+  count is 104 minus 12 = 92; observed rotations were exactly 92, with zero
+  files pre-staged before the first poll. All 543,329 records were exposed in
+  5,484 increments/polls. Canonical semantic/ledger identities match;
+  checkpoints are 104/104, sources 139/139, and 616 trusted audit rows cover
+  425,427 opens with prohibited/unmeasured/derived/failed zero. Elapsed time
+  was 3,209.040 seconds and peak process RSS 19,259,224 KiB.
+
+- The first isolated live activation exposed a sparse-predecessor defect that
+  the historical six sessions did not exercise: August 26 contains qualifying
+  Futures/OI evidence but no in-window Index rows, and the empty Index branch
+  of `backward_join` constructed a timezone-naive `NaT`. Subtracting it from
+  aware Asia/Kolkata availability clocks raised `TypeError` during fixed-context
+  construction. The branch now preserves the aware dtype, yielding unmatched
+  rows and graceful empty OI evidence; naive availability clocks are refused.
+  Frozen eligibility, thresholds, joins, and timestamp semantics are unchanged.
+- The repair changes the authenticated engine identity to
+  `eb3e848d75ef10471d14c641507f44b6f825c4dd63c305e27a803376048f2947`.
+  Engine manifest SHA-256 is
+  `866bfd55e434ddacef29a952e3d618a71478463c44a95b44ca31340b3d96a210`;
+  runtime configuration identity is
+  `b4148be9892cc4e19c2a13d52ef68a65239578e6147cb3cdf94fd2d812e48a41`.
+  The authenticated systemd config pin and 47-file package were resealed;
+  package aggregate/manifest SHA-256 are
+  `4c2db034cb99a3391346155af708788896a04fa9b8bac6e7225f74bcb3ec5949` /
+  `80a439d67f6afb2b24e5e121f71770df5255e23297d06ec7e72a09d7dbd83391`.
+- Targeted aware/empty/refusal tests pass 3/3. The first complete regression was
+  retained at 659 pass / 1 fail because the systemd unit still pinned the old
+  config byte hash; after repairing that packaging defect, the exact failed
+  tests pass 2/2 and the unchanged complete suite passes 660/660 in 118.03s,
+  with zero failures or skips. Because an authenticated engine byte changed,
+  focused and full-six all-nine equivalence must now be rerun from fresh state.

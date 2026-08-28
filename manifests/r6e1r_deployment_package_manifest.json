@@ -49,8 +49,8 @@
     "src/banknifty_profiler/shadow/symbols.py"
   ],
   "classification": "LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL",
-  "engine_hash": "362474858eda75b18180ad2fce48e50e1d4acdd1b04a0db405eaae199e70b7a7",
-  "engine_source_manifest_sha256": "51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7",
+  "engine_hash": "eb3e848d75ef10471d14c641507f44b6f825c4dd63c305e27a803376048f2947",
+  "engine_source_manifest_sha256": "866bfd55e434ddacef29a952e3d618a71478463c44a95b44ca31340b3d96a210",
   "file_count": 47,
   "files": [
     {
@@ -75,12 +75,12 @@
     },
     {
       "path": "deploy/r6e1r/r6e1r-runtime-config.json.example",
-      "sha256": "ecfa9e1a8afb4622f8d4f3128511817bef451f5353ff1998d72e6475c67ebab2",
+      "sha256": "cbcf9f43befa4b18b4798240c18d841f1629af7a015c538c8ff254e01b6957ad",
       "size": 903
     },
     {
       "path": "deploy/r6e1r/r6e1r-shadow.service",
-      "sha256": "e8268e7bac3ddb6ef8c185cd5497d321049424ff1f52d004b9e1408834c912eb",
+      "sha256": "153a2b493b864f9442fda8d94d0c6c2cececfde87bc9cdbfcb78d99c9aa9e7ac",
       "size": 3873
     },
     {
@@ -100,12 +100,12 @@
     },
     {
       "path": "manifests/r6e1r_engine_source_manifest.json",
-      "sha256": "51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7",
+      "sha256": "866bfd55e434ddacef29a952e3d618a71478463c44a95b44ca31340b3d96a210",
       "size": 8851
     },
     {
       "path": "manifests/r6e1r_engine_source_manifest.sha256",
-      "sha256": "a6ef10c91e7f481d422bb36e7c943fe0549c22f047584d5e8c43805d813daa0a",
+      "sha256": "ade7ce0434ecd8e976e3e21343582517ebae4d8773985d56e7cabee01d25d4ba",
       "size": 110
     },
     {
@@ -225,8 +225,8 @@
     },
     {
       "path": "src/banknifty_profiler/raw_io/reader.py",
-      "sha256": "9873d578e4238193067d4d883ae9f279d8a86afcb6d529d6eae182358e949d2e",
-      "size": 6636
+      "sha256": "cbeb81e65589af18ef05a8576c6edfbd1d828e89e19f9d769d12b8ca49a1876b",
+      "size": 6870
     },
     {
       "path": "src/banknifty_profiler/runtime/__init__.py",
@@ -289,7 +289,7 @@
       "size": 10039
     }
   ],
-  "package_hash": "7ab065e7f3958111e43abe9d42c2947cd57820bf93d351c2fb656e8bf0c677a9",
-  "runtime_configuration_hash": "43654758453b2a39209dbe0df6f6d2587c63c2bf5cb77c99d44df07dd54f485b",
+  "package_hash": "4c2db034cb99a3391346155af708788896a04fa9b8bac6e7225f74bcb3ec5949",
+  "runtime_configuration_hash": "b4148be9892cc4e19c2a13d52ef68a65239578e6147cb3cdf94fd2d812e48a41",
   "schema": "R6E1R_DEPLOYMENT_PACKAGE_MANIFEST_V1"
 }

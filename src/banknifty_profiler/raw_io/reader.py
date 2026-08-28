@@ -56,8 +56,16 @@ def select_contracts(o:pd.DataFrame,date:str):
  fe=min(q.expiry_date);f=q[q.expiry_date==fe].groupby('symbol').size().sort_values(ascending=False).index[0];opts=o[o.instrument_class.isin(['call','put']) & o.expiry_date.notna() & (o.expiry_date>=pd.Timestamp(date).date())];oe=min(opts.expiry_date) if len(opts) else None;return f,fe,oe
 
 def backward_join(o:pd.DataFrame,index:pd.DataFrame,tolerance_seconds=None)->pd.DataFrame:
- z=o.sort_values('availability_timestamp').copy();p=index.dropna(subset=['receipt_timestamp','last_price']).sort_values('receipt_timestamp')[['receipt_timestamp','last_price','source_file','source_row']].rename(columns={'receipt_timestamp':'matched_price_timestamp','last_price':'matched_underlying_price','source_file':'matched_price_source_file','source_row':'matched_price_source_row'})
- z=pd.merge_asof(z,p,left_on='availability_timestamp',right_on='matched_price_timestamp',direction='backward') if len(p) else z.assign(matched_price_timestamp=pd.NaT,matched_underlying_price=np.nan,matched_price_source_file='',matched_price_source_row=np.nan);z['join_age_seconds']=(z.availability_timestamp-z.matched_price_timestamp).dt.total_seconds();z['future_join']=z.join_age_seconds.lt(0)
+ z=o.sort_values('availability_timestamp').copy()
+ if not isinstance(z.availability_timestamp.dtype,pd.DatetimeTZDtype):
+  raise ValueError('availability_timestamp must be timezone-aware')
+ p=index.dropna(subset=['receipt_timestamp','last_price']).sort_values('receipt_timestamp')[['receipt_timestamp','last_price','source_file','source_row']].rename(columns={'receipt_timestamp':'matched_price_timestamp','last_price':'matched_underlying_price','source_file':'matched_price_source_file','source_row':'matched_price_source_row'})
+ if len(p):
+  z=pd.merge_asof(z,p,left_on='availability_timestamp',right_on='matched_price_timestamp',direction='backward')
+ else:
+  unmatched=pd.Series(pd.NaT,index=z.index,dtype=z.availability_timestamp.dtype)
+  z=z.assign(matched_price_timestamp=unmatched,matched_underlying_price=np.nan,matched_price_source_file='',matched_price_source_row=np.nan)
+ z['join_age_seconds']=(z.availability_timestamp-z.matched_price_timestamp).dt.total_seconds();z['future_join']=z.join_age_seconds.lt(0)
  if tolerance_seconds is not None:z.loc[z.join_age_seconds.gt(tolerance_seconds)|z.join_age_seconds.isna(),'matched_underlying_price']=np.nan
  return z
 

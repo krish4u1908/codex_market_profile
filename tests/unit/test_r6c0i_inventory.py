@@ -34,6 +34,40 @@ def test_backward_join_is_causal():
     assert result.future_join == False
 
 
+def test_backward_join_empty_index_keeps_unmatched_clock_timezone_aware():
+    oi = pd.DataFrame({
+        "availability_timestamp": pd.to_datetime(
+            ["2026-08-28T09:15:00.100+05:30"]
+        ),
+    })
+    market = pd.DataFrame(columns=[
+        "receipt_timestamp", "last_price", "source_file", "source_row",
+    ])
+
+    result = backward_join(oi, market, tolerance_seconds=5).iloc[0]
+
+    assert pd.isna(result.matched_price_timestamp)
+    assert pd.isna(result.matched_underlying_price)
+    assert pd.isna(result.join_age_seconds)
+    assert result.future_join == False
+    assert isinstance(
+        backward_join(oi, market).matched_price_timestamp.dtype,
+        pd.DatetimeTZDtype,
+    )
+
+
+def test_backward_join_refuses_naive_availability_clock():
+    oi = pd.DataFrame({
+        "availability_timestamp": pd.to_datetime(["2026-08-28T09:15:00.100"]),
+    })
+    market = pd.DataFrame(columns=[
+        "receipt_timestamp", "last_price", "source_file", "source_row",
+    ])
+
+    with pytest.raises(ValueError, match="timezone-aware"):
+        backward_join(oi, market, tolerance_seconds=5)
+
+
 def test_volume_reset_and_first_counter_are_excluded():
     ts = pd.to_datetime(["2026-08-13 09:15:00+05:30", "2026-08-13 09:15:01+05:30", "2026-08-13 09:15:02+05:30"])
     market = pd.DataFrame({
