@@ -1,0 +1,25 @@
+{
+  "allowed_bind": "127.0.0.1",
+  "analytical_refresh_seconds": 30.0,
+  "analytical_threshold_overrides": null,
+  "classification": "LIVE MARKET-PROFILING DIAGNOSTIC \u2014 NOT A BUY/SELL SIGNAL",
+  "engine_source_manifest_path": "manifests/r6e1r_engine_source_manifest.json",
+  "engine_source_manifest_sha256": "51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7",
+  "freshness_seconds": {
+    "ce": 180,
+    "futures": 10,
+    "futures_oi": 180,
+    "index": 10,
+    "pe": 180
+  },
+  "futures_selection_mode": "SESSION_NEAREST_UNEXPIRED_HIGHEST_OI",
+  "index_symbol": "NSE:NIFTYBANK-INDEX",
+  "inventory_join_tolerance_seconds": 5,
+  "max_buffer_bytes_per_file": 1048576,
+  "max_live_sessions": 32,
+  "max_read_bytes_per_file_per_poll": 4194304,
+  "poll_interval_seconds": 1.0,
+  "selected_futures_by_session": {},
+  "synchronization_tolerance_ms": 2000,
+  "timezone": "Asia/Kolkata"
+}

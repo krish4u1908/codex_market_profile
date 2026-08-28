@@ -1,0 +1,308 @@
+{
+  "allowlist": [
+    "deploy/r6e1r/health_readiness_check.py",
+    "deploy/r6e1r/read_only_gateway.py",
+    "deploy/r6e1r_provisional/README.md",
+    "deploy/r6e1r_provisional/r6e1r-activation.json.example",
+    "deploy/r6e1r_provisional/r6e1r-provisional-readonly-gateway.service",
+    "deploy/r6e1r_provisional/r6e1r-provisional-shadow.service",
+    "deploy/r6e1r_provisional/r6e1r-provisional-status.json",
+    "deploy/r6e1r_provisional/r6e1r-runtime-config.json.example",
+    "deploy/r6e1r_provisional/render_service_units.py",
+    "deploy/r6e1r_provisional/validate_clean_start.py",
+    "manifests/r6e1r_engine_source_manifest.json",
+    "manifests/r6e1r_engine_source_manifest.sha256",
+    "scripts/run_r6e_shadow.py",
+    "src/banknifty_profiler/__init__.py",
+    "src/banknifty_profiler/context/__init__.py",
+    "src/banknifty_profiler/context/availability.py",
+    "src/banknifty_profiler/cross_layer/__init__.py",
+    "src/banknifty_profiler/cross_layer/state.py",
+    "src/banknifty_profiler/divergence/__init__.py",
+    "src/banknifty_profiler/divergence/dependency.py",
+    "src/banknifty_profiler/divergence/detector.py",
+    "src/banknifty_profiler/gui/__init__.py",
+    "src/banknifty_profiler/gui/adapter.py",
+    "src/banknifty_profiler/gui/static/live.js",
+    "src/banknifty_profiler/gui/static/live_page.template",
+    "src/banknifty_profiler/gui/static/style.css",
+    "src/banknifty_profiler/inventory/__init__.py",
+    "src/banknifty_profiler/inventory/engine.py",
+    "src/banknifty_profiler/lifecycle/__init__.py",
+    "src/banknifty_profiler/lifecycle/engine.py",
+    "src/banknifty_profiler/lifecycle/raw_engine.py",
+    "src/banknifty_profiler/participation/__init__.py",
+    "src/banknifty_profiler/participation/raw_engine.py",
+    "src/banknifty_profiler/participation/views.py",
+    "src/banknifty_profiler/raw_io/__init__.py",
+    "src/banknifty_profiler/raw_io/reader.py",
+    "src/banknifty_profiler/runtime/__init__.py",
+    "src/banknifty_profiler/runtime/configuration.py",
+    "src/banknifty_profiler/runtime/timestamps.py",
+    "src/banknifty_profiler/shadow/__init__.py",
+    "src/banknifty_profiler/shadow/api.py",
+    "src/banknifty_profiler/shadow/contracts.py",
+    "src/banknifty_profiler/shadow/ingest.py",
+    "src/banknifty_profiler/shadow/ledger.py",
+    "src/banknifty_profiler/shadow/observation.py",
+    "src/banknifty_profiler/shadow/orchestrator.py",
+    "src/banknifty_profiler/shadow/state.py",
+    "src/banknifty_profiler/shadow/symbols.py"
+  ],
+  "classification": "LIVE MARKET-PROFILING DIAGNOSTIC \u2014 NOT A BUY/SELL SIGNAL",
+  "engine_base_commit": "a12a5864cc1cd28cf4b0c1d665d63fa623a1c69a",
+  "engine_hash": "362474858eda75b18180ad2fce48e50e1d4acdd1b04a0db405eaae199e70b7a7",
+  "engine_source_manifest_sha256": "51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7",
+  "file_count": 48,
+  "files": [
+    {
+      "path": "deploy/r6e1r/health_readiness_check.py",
+      "sha256": "42ea7f0312fdca5a542ca99dc4c738d263e0f12f15f0135a02c790bb0b39a67b",
+      "size": 6686
+    },
+    {
+      "path": "deploy/r6e1r/read_only_gateway.py",
+      "sha256": "a875953704ff89045bae47604e68fbcbf472efcf7f650d689151d43aec376279",
+      "size": 15602
+    },
+    {
+      "path": "deploy/r6e1r_provisional/README.md",
+      "sha256": "7b7ad5d4f4dddde99ca0b8e849cd5e403dd919525578b3fd3f607bb03c2d1040",
+      "size": 8323
+    },
+    {
+      "path": "deploy/r6e1r_provisional/r6e1r-activation.json.example",
+      "sha256": "e12ee801eb939b5d1633eda3edcd4123fc7e9a935cf2fa037d6428b57ad9e95f",
+      "size": 251
+    },
+    {
+      "path": "deploy/r6e1r_provisional/r6e1r-provisional-readonly-gateway.service",
+      "sha256": "cb01cf354bad80574b7493084c6396b25ba33847fc42c295a41ebe386ab2744a",
+      "size": 3588
+    },
+    {
+      "path": "deploy/r6e1r_provisional/r6e1r-provisional-shadow.service",
+      "sha256": "e1ff02bdcf8a3a815dbfe82e92acf26433707a13415fc6f61086bd177c4055b3",
+      "size": 4910
+    },
+    {
+      "path": "deploy/r6e1r_provisional/r6e1r-provisional-status.json",
+      "sha256": "f306688a520329923046a1ede9ffed70f818becf15365d71cff23739b0cdd516",
+      "size": 804
+    },
+    {
+      "path": "deploy/r6e1r_provisional/r6e1r-runtime-config.json.example",
+      "sha256": "ecfa9e1a8afb4622f8d4f3128511817bef451f5353ff1998d72e6475c67ebab2",
+      "size": 903
+    },
+    {
+      "path": "deploy/r6e1r_provisional/render_service_units.py",
+      "sha256": "1f3ecd6737208d320f6b6ce2c55bc7d9662f322d9e14129ca233fdee5b3025a9",
+      "size": 6754
+    },
+    {
+      "path": "deploy/r6e1r_provisional/validate_clean_start.py",
+      "sha256": "0940ecb70d97c1d39ad281241105bea070681617910a11632e4cbcede51e9a83",
+      "size": 26773
+    },
+    {
+      "path": "manifests/r6e1r_engine_source_manifest.json",
+      "sha256": "51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7",
+      "size": 8851
+    },
+    {
+      "path": "manifests/r6e1r_engine_source_manifest.sha256",
+      "sha256": "a6ef10c91e7f481d422bb36e7c943fe0549c22f047584d5e8c43805d813daa0a",
+      "size": 110
+    },
+    {
+      "path": "scripts/run_r6e_shadow.py",
+      "sha256": "17f0d6c2f8648f72952d9c02266d575f689b23df21651f6936d93c09e7067d32",
+      "size": 31580
+    },
+    {
+      "path": "src/banknifty_profiler/__init__.py",
+      "sha256": "4ea29453a2ce05ad9bca25838beff21b6df50f55e13c181ce36acf20caf5e72e",
+      "size": 78
+    },
+    {
+      "path": "src/banknifty_profiler/context/__init__.py",
+      "sha256": "1f8db643a8233f71e91fee8e8c6ddb7fe8ec5c84bc72757a418dc6ac9923da46",
+      "size": 188
+    },
+    {
+      "path": "src/banknifty_profiler/context/availability.py",
+      "sha256": "31b6a4108c2059e8b04619079c458db70b30ff102303716401262b4183bf0e36",
+      "size": 2757
+    },
+    {
+      "path": "src/banknifty_profiler/cross_layer/__init__.py",
+      "sha256": "d0d9a414bdb734fa29d2e5bfe395f9d9578c0ec0cdaff0f6c07331c9843e0f88",
+      "size": 140
+    },
+    {
+      "path": "src/banknifty_profiler/cross_layer/state.py",
+      "sha256": "8f2d4b8e96e2dd7982b6c83839216feabd17f38da33e710ce1093d1daea08d81",
+      "size": 9808
+    },
+    {
+      "path": "src/banknifty_profiler/divergence/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "src/banknifty_profiler/divergence/dependency.py",
+      "sha256": "ffbb7f30bcb55701ba603072b93e422bbc2d25d471dbf37669097374a4418939",
+      "size": 2886
+    },
+    {
+      "path": "src/banknifty_profiler/divergence/detector.py",
+      "sha256": "9a9b333add9992dbd7421ffe23d359145d848bcd5951acee4e4672b7c4d4947a",
+      "size": 7444
+    },
+    {
+      "path": "src/banknifty_profiler/gui/__init__.py",
+      "sha256": "d75de792f26f63f2e0673fa081f0c63dd712d7a7b79cead2bd35f725645607f5",
+      "size": 66
+    },
+    {
+      "path": "src/banknifty_profiler/gui/adapter.py",
+      "sha256": "efbb6a06506dc7c60e3012e04136b7ff8e5fb1fc613d4d80b8f3299bf8138b6b",
+      "size": 8626
+    },
+    {
+      "path": "src/banknifty_profiler/gui/static/live.js",
+      "sha256": "84fbc997b52b0e3af354c02aff0f993e067deb84ef909b01d8e372dc14580651",
+      "size": 29932
+    },
+    {
+      "path": "src/banknifty_profiler/gui/static/live_page.template",
+      "sha256": "203f898868dcbe7984587dca8549490b8170fa21ff2dda9da2e6b53bb11694dd",
+      "size": 3958
+    },
+    {
+      "path": "src/banknifty_profiler/gui/static/style.css",
+      "sha256": "760d01b5d9b5dd75911a67402f99b540edc2fc4673ec4956d31d1d5c67067eeb",
+      "size": 3832
+    },
+    {
+      "path": "src/banknifty_profiler/inventory/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "src/banknifty_profiler/inventory/engine.py",
+      "sha256": "543b20e86be6773541f355534a584f70b43a9fe6aa4d4609cc4169e57d33a493",
+      "size": 12721
+    },
+    {
+      "path": "src/banknifty_profiler/lifecycle/__init__.py",
+      "sha256": "14e5e2056e0eb3e990a231040ffc5ebc65135e4a7204bed382219afc4d44228f",
+      "size": 136
+    },
+    {
+      "path": "src/banknifty_profiler/lifecycle/engine.py",
+      "sha256": "15bb3a569592f5769fbf783432ab7fd077cb66437686627c457c5fc57de8601d",
+      "size": 2618
+    },
+    {
+      "path": "src/banknifty_profiler/lifecycle/raw_engine.py",
+      "sha256": "b637fc9b2d4d7e98d038c40feb59ddbd8a406603f44d252aea1be5277500becb",
+      "size": 7331
+    },
+    {
+      "path": "src/banknifty_profiler/participation/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "src/banknifty_profiler/participation/raw_engine.py",
+      "sha256": "1e50183869b72e704adb4c3c1c3431bb6749a35d800b57784f2948065900456f",
+      "size": 17565
+    },
+    {
+      "path": "src/banknifty_profiler/participation/views.py",
+      "sha256": "366330aefaafabdb7f5b74009634ae1320b7db599d7189e8d9efe8ce41993d1d",
+      "size": 16229
+    },
+    {
+      "path": "src/banknifty_profiler/raw_io/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "src/banknifty_profiler/raw_io/reader.py",
+      "sha256": "9873d578e4238193067d4d883ae9f279d8a86afcb6d529d6eae182358e949d2e",
+      "size": 6636
+    },
+    {
+      "path": "src/banknifty_profiler/runtime/__init__.py",
+      "sha256": "32cbb5ec2063778516f9fe57d00c11ecce7fc2931e332acd1251efe3eb8de8ef",
+      "size": 43
+    },
+    {
+      "path": "src/banknifty_profiler/runtime/configuration.py",
+      "sha256": "18ca8649715a4104a8fe804d81fcfff913131504936e8f15e6abb121b8042984",
+      "size": 2120
+    },
+    {
+      "path": "src/banknifty_profiler/runtime/timestamps.py",
+      "sha256": "794b730e0b1f3c8e6bc7714e6524d14eb049057c813f0e377e2a32f9bde352b7",
+      "size": 3256
+    },
+    {
+      "path": "src/banknifty_profiler/shadow/__init__.py",
+      "sha256": "f6a540806aa5f108566d1faff7ecd396885367e01bc9fc2bd2d9d5652215d3c8",
+      "size": 49
+    },
+    {
+      "path": "src/banknifty_profiler/shadow/api.py",
+      "sha256": "340d9cd41644e6d3d86845ee0cbae9620c67f60906a94ef9c7d4eb9f135020a6",
+      "size": 55928
+    },
+    {
+      "path": "src/banknifty_profiler/shadow/contracts.py",
+      "sha256": "a33d7e25b7ad4835ac6d43e9361c5bbf0795cb10db7bf31f31fd677385ea9efd",
+      "size": 12140
+    },
+    {
+      "path": "src/banknifty_profiler/shadow/ingest.py",
+      "sha256": "465c7527010f890a3bcc0dd4aa7279c95f16aed48139ecb00c6f432900e7edf1",
+      "size": 163990
+    },
+    {
+      "path": "src/banknifty_profiler/shadow/ledger.py",
+      "sha256": "54497a5b3f59dc93b2c8d0e0a8dfe7004efa2c905d106472613be9d111f36bdd",
+      "size": 55047
+    },
+    {
+      "path": "src/banknifty_profiler/shadow/observation.py",
+      "sha256": "0d62b319a7ecd4f43511591956694325262499eb9ad4bff2a5e67327e9fd8fa5",
+      "size": 3438
+    },
+    {
+      "path": "src/banknifty_profiler/shadow/orchestrator.py",
+      "sha256": "29d7ed1d15333355fac0388ac12f0ad231df01dac19725f27389342ad3c186a3",
+      "size": 168495
+    },
+    {
+      "path": "src/banknifty_profiler/shadow/state.py",
+      "sha256": "66901cfd6b150ff2322ae85b3c5965d217326676731a77df4fd4e4c84c3a2072",
+      "size": 6647
+    },
+    {
+      "path": "src/banknifty_profiler/shadow/symbols.py",
+      "sha256": "5a04780a74b56472424c333b75304d3e1e9f474a2600c17bd4cf540a739d35fc",
+      "size": 10039
+    }
+  ],
+  "final_equivalence_status": "PENDING_FULL_SIX_ALL_NINE",
+  "final_tag_authorized": false,
+  "historical_replay_certified": false,
+  "package_hash": "5de64c558e5094576fdaa0dc9ab66ff68604180f182d235bc8a18cf8aa47b814",
+  "preloaded_state": false,
+  "provisional_status": "PROVISIONAL_CLEAN_START_FULL_SIX_PENDING",
+  "runtime_configuration_hash": "43654758453b2a39209dbe0df6f6d2587c63c2bf5cb77c99d44df07dd54f485b",
+  "schema": "R6E1R_PROVISIONAL_DEPLOYMENT_PACKAGE_MANIFEST_V1",
+  "state_origin": "EMPTY_AT_PREPARATION"
+}
