@@ -77,13 +77,13 @@
     },
     {
       "path": "deploy/r6e1r_provisional/r6e1r-provisional-readonly-gateway.service",
-      "sha256": "cb01cf354bad80574b7493084c6396b25ba33847fc42c295a41ebe386ab2744a",
-      "size": 3588
+      "sha256": "8ed8afb169daa89edbf81ad5b345247ee0c4b5a4b9a28691733ba5617690a57b",
+      "size": 3407
     },
     {
       "path": "deploy/r6e1r_provisional/r6e1r-provisional-shadow.service",
-      "sha256": "e1ff02bdcf8a3a815dbfe82e92acf26433707a13415fc6f61086bd177c4055b3",
-      "size": 4910
+      "sha256": "c226a2bb4de4d30cfb47a4dff3dadde1e067db329949abffa2d6f2b9faee4730",
+      "size": 4563
     },
     {
       "path": "deploy/r6e1r_provisional/r6e1r-provisional-status.json",
@@ -299,7 +299,7 @@
   "final_equivalence_status": "PENDING_FULL_SIX_ALL_NINE",
   "final_tag_authorized": false,
   "historical_replay_certified": false,
-  "package_hash": "5de64c558e5094576fdaa0dc9ab66ff68604180f182d235bc8a18cf8aa47b814",
+  "package_hash": "28c8c7573b326a694dfea7f355f2549afc12517ff283521d737b65c27753d807",
   "preloaded_state": false,
   "provisional_status": "PROVISIONAL_CLEAN_START_FULL_SIX_PENDING",
   "runtime_configuration_hash": "43654758453b2a39209dbe0df6f6d2587c63c2bf5cb77c99d44df07dd54f485b",

@@ -9,6 +9,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
 
 import pytest
 
@@ -389,6 +390,12 @@ def test_unit_templates_pin_authenticated_bytes_and_isolate_names() -> None:
     assert "127.0.0.1 --port 18805 --mode shadow" in backend
     assert "--require-isolation" in gateway
     assert "--backend http://127.0.0.1:18805" in gateway
+    assert "/bin/sh -c" not in backend + gateway
+    assert "exec 3<" not in backend + gateway
+    assert "exec 4<" not in backend + gateway
+    assert "exec 5<" not in backend + gateway
+    assert "origin=sys.argv[1]" in backend + gateway
+    assert "origin,config_path,activation_path=sys.argv[1:4]" in backend
     assert _sha256(VALIDATOR) in backend
     assert _sha256(ROOT / "scripts/run_r6e_shadow.py") in backend
     assert _sha256(
@@ -444,6 +451,122 @@ def test_renderer_emits_only_distinct_provisional_units(tmp_path: Path) -> None:
     assert b"--port 8806" in (
         tmp_path / "r6e1r-provisional-readonly-gateway.service"
     ).read_bytes()
+
+
+def test_rendered_backend_guard_executes_through_real_user_systemd() -> None:
+    """Exercise the rendered pre-start command through the real unit parser."""
+    runtime_root = Path(
+        os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    )
+    runtime_units = runtime_root / "systemd/user"
+    runtime_units.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory(
+        prefix="r6e1r-provisional-systemd-", dir=ROOT.parent
+    ) as raw_root:
+        test_root = Path(raw_root)
+        collector, deployment, _result = _prepare(test_root)
+        rendered_root = test_root / "rendered"
+        rendered_root.mkdir(mode=0o700)
+        rendered = subprocess.run(
+            [
+                sys.executable,
+                str(RENDERER),
+                "--repository-root",
+                str(ROOT),
+                "--collector-root",
+                str(collector),
+                "--deploy-root",
+                str(deployment),
+                "--python",
+                sys.executable,
+                "--gateway-port",
+                "8805",
+                "--output-dir",
+                str(rendered_root),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert rendered.returncode == 0, rendered.stdout
+
+        source = (
+            rendered_root / "r6e1r-provisional-shadow.service"
+        ).read_text()
+        probe_lines: list[str] = []
+        guarded_line = ""
+        for line in source.splitlines():
+            if line.startswith("Conflicts="):
+                continue
+            if line.startswith("ExecStartPre=") and "start-check" in line:
+                guarded_line = line
+            if line.startswith("ExecStart="):
+                probe_lines.append("ExecStart=/usr/bin/true")
+            elif line.startswith("ExecStartPost="):
+                continue
+            elif line.startswith("Restart="):
+                probe_lines.append("Restart=no")
+            else:
+                probe_lines.append(line)
+        assert guarded_line
+        assert "/bin/sh" not in guarded_line
+
+        suffix = hashlib.sha256(str(test_root).encode()).hexdigest()[:12]
+        unit_name = f"r6e1r-provisional-guard-test-{suffix}.service"
+        unit_path = runtime_units / unit_name
+        assert not unit_path.exists()
+        unit_path.write_text("\n".join(probe_lines) + "\n")
+        unit_path.chmod(0o600)
+        try:
+            reloaded = subprocess.run(
+                ["systemctl", "--user", "daemon-reload"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=15,
+            )
+            assert reloaded.returncode == 0, reloaded.stderr
+            started = subprocess.run(
+                ["systemctl", "--user", "start", unit_name],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=30,
+            )
+            assert started.returncode == 0, started.stderr
+            shown = subprocess.run(
+                [
+                    "systemctl",
+                    "--user",
+                    "show",
+                    unit_name,
+                    "--property=Result",
+                    "--property=ExecMainStatus",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=15,
+            )
+            assert shown.returncode == 0, shown.stderr
+            assert "Result=success" in shown.stdout
+            assert "ExecMainStatus=0" in shown.stdout
+        finally:
+            subprocess.run(
+                ["systemctl", "--user", "stop", unit_name],
+                capture_output=True,
+                check=False,
+                timeout=15,
+            )
+            unit_path.unlink(missing_ok=True)
+            subprocess.run(
+                ["systemctl", "--user", "daemon-reload"],
+                capture_output=True,
+                check=False,
+                timeout=15,
+            )
 
 
 @pytest.mark.parametrize("port", (8803, 8804, 8811))
