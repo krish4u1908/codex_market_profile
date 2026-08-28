@@ -2,7 +2,23 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **POST-REPAIR REGRESSION AND FOCUSED PATH PASS; FRESH SIX-SESSION V9 BASELINE/REFERENCES PASS; TERMINAL SCHEDULE SUITE AND DEPLOYMENT PENDING**
+Status: **R6E1R_FINAL_VERIFICATION_INFRASTRUCTURE_BLOCKED**
+
+## Terminal disposition
+
+The operator stop applied the v9 runtime mask at `20:39:00.999`. Systemd then
+recorded client-requested `SIGINT` and `SIGTERM` events at `20:39:01` and
+`20:39:06`. No OOM kill occurred, swap use remained zero, and the observed
+peak was 14.5 GiB. The v9 evidence, work, and control roots were externally
+deleted after the operator stop; a post-stop search found zero surviving alternate-schedule bundles,
+no bundle marker, and no terminal all-gates summary.
+
+The v9 baseline/reference hashes below are retained independently observed and
+pushed facts, not surviving final all-nine artifacts. They cannot be
+revalidated from the deleted roots and do not establish terminal full-six
+equivalence. A fresh run needs an explicit uninterrupted root-agreed window
+and must not evade an active root operator. Deployment was not performed, and
+no verified tag was created.
 
 Evidence lineage:
 
@@ -101,8 +117,8 @@ out of browser memory.
 | Fresh v9 causality | 9/9 invariants | PASS |
 | Frozen analytical reference | R6C2R 30/30 rows; manifest 74/74 | PASS |
 | Frozen GUI reference | R6D 180/180 rows; exactly 174,080 permitted live-extension rows; manifest 40/40 | PASS |
-| Remaining eight six-session schedules and terminal summary | No terminal v9 schedule bundle promoted yet | PENDING |
-| Installed services, browser capture, and public-interface verification | Not current post-repair evidence | PENDING |
+| Remaining eight six-session schedules and terminal summary | No marker/bundle/terminal summary survived root deletion | BLOCKED |
+| Installed services, browser capture, and public-interface verification | Not performed | BLOCKED |
 
 The focused summary SHA-256 is
 `f83d519226bf7876be5446e16b657bbea9c3624f3ecb7a5e2a724bf35b0954f9`.
@@ -111,7 +127,7 @@ runtime rows representing 1,190,240 opens; prohibited and unmeasured opens were
 zero. Its elapsed time was 3,839.101 seconds; parent and child peak RSS were
 1,730,828 and 891,172 KiB.
 
-The immutable v9 incremental-A and clean-B seal SHA-256 values are
+The independently observed pre-deletion v9 incremental-A and clean-B seal SHA-256 values are
 `fa62ace6fc2796c0101e1e9da908725d0ca12da364d971fa336a0868f0a83ce7`
 and `99322aa74ad4018400d11cc6336ca695c8f2e190ec279067351ef40ff2faa568`.
 Their common analytical-ledger aggregate is
@@ -119,16 +135,16 @@ Their common analytical-ledger aggregate is
 The exact artifact and reference counts are recorded in
 [R6E1R_ARTIFACT_EQUIVALENCE_MATRIX.md](R6E1R_ARTIFACT_EQUIVALENCE_MATRIX.md).
 
-## Remaining acceptance boundary
+## Blocked acceptance boundary
 
-The fresh v9 baseline/reference result is necessary but not sufficient for
+The observed v9 baseline/reference result is necessary but not sufficient for
 terminal R6E1R equivalence. The one-record, deterministic-variable,
 inside-JSONL-line, empty/repeated-poll, multiple-checkpoint-restart,
 analytical-transition-restart, hourly-rotation, and large-chronological-chunk
-schedules must each publish their immutable result, after which the final
+schedules must each publish a fresh marker-last result, after which the final
 schedule, checkpoint, storage, recovery, source, and summary matrices must pass.
-Deployment and browser acceptance remain separately pending. No verified tag is
-authorized from the baseline/reference slice alone.
+None survived v9. Deployment and browser acceptance were not performed. No
+verified tag is authorized from the retained baseline/reference observation.
 
 ## Historical diagnostics retained as historical
 

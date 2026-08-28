@@ -544,3 +544,27 @@ RESULT: PASS BASELINES; SCHEDULE SUITE ACTIVE. A seal/snapshot/state-manifest/tr
 2026-08-28 persistent-v9 baseline equivalence, causality and frozen references
 COMMAND: compare all A/B canonical artifacts and append-only ledger identities; evaluate nine causal/GUI clock invariants; reverify both frozen package manifests/tags; compare A/B rows with R6C2R and R6D reference surfaces
 RESULT: PASS; components 21/21, ledgers 8/8, causality 9/9, R6C2R rows 30/30, R6D GUI rows 180/180. Every canonical A/B difference and causal failure is zero. R6C2R target/reference/unexplained zero; 174,080 R6D target-only rows equal 174,080 permitted live extensions, unexplained zero. Matrix hashes fd5fad066510b5fe01f5914f55aa3fa2b7fbac9b27af9a9caa4da76b658cf388 / e68f5f098b6157160b2a27e51c4bc709a6bc0fc25aa71e7fcb39617c8cb77e48 / f5370e1ce6ce067b2ae5a3a090c0215d9c6c7a548348b724f97d2df963164bf2 / 0e985193a48ede2baf5ad07f5601af90f5471d61f17c8f9da8a694a009de98f8 / dc0c5814dbabaafd5d914627b4435038729f4a187a41beb98f385a19b1e6c467. Frozen package verification ed81708afac9cbb5c30915a56d2f46cf05611a4a12565a37a7a6c3d5d1366c67. One-record-per-increment schedule active; terminal acceptance pending all nine schedules.
+
+2026-08-28 persistent-v9 terminal external interruption
+COMMAND: inspect the user-unit status, journal chronology, CPU/memory/swap/OOM accounting, and one-record schedule progress after v9 became inactive
+RESULT: EXTERNAL INFRASTRUCTURE BLOCK. The unit was runtime-masked at 20:39:00.999 IST; SIGINT followed at 20:39:01 and SIGTERM at 20:39:06, both recorded on client request. CPU usage was 2h15m44.789, cgroup peak was 14.5G, swap was 0, and no OOM event occurred. One-record progress was approximately 96,650/543,329 selected records. No marker-last atomic schedule bundle was published, so the interrupted schedule and the full-six run are not acceptance evidence.
+
+2026-08-28 root-session attribution boundary
+COMMAND: inspect login/session chronology read-only around the v9 stop
+RESULT: root `pts/1` logged in at 20:37:18 IST from 169.254.0.1. Exact attribution for the later service-control and deletion actions is unavailable; the session record is reported as chronology, not proof of actor identity.
+
+2026-08-28 v9 evidence deletion and exhaustive survivor search
+COMMAND: reconcile `/home/codexuser/mp-history-v9`, `/home/codexuser/mp-history-v9-control`, and `/opt/banknifty/research/vpoc_oi_price_response_v2/historical_callback_acceptance_v9`; perform an exhaustive read-only search for equivalence_summary, schedule_resume_contract, and schedule_bundle artifacts
+RESULT: An operator deleted all three v9 roots. Zero surviving terminal summary, resume-contract, or schedule-bundle artifacts were found. This repeats the external stop/deletion pattern across v2-v8. The raw root remains readable, but no deleted or partial analytical output is eligible for reuse or promotion.
+
+2026-08-28 terminal safety and repository closeout
+COMMAND: verify branch/remote head and tag absence; recheck protected PID/start identities, collector script identity, and deployment listeners
+RESULT: Before scratchpad edits, local and remote `fix/r6e1r-final-live-shadow` both resolved to 92673323d3523b3338a39743063299d491ff4d08 with a clean worktree; `r6e1r-live-shadow-verified` was absent. Protected 8803 PID/start 380743/46015771 and 8804 PID/start 465394/51980337 were exact. Collector PID/start 1430352/81242549 and script SHA-256 0dbd270ba3a1fedc63f4ed8c8eff1947a7c14d08e412b3f82a890cb5500a4a4a were exact and untouched. Ports 8805 and 18805 were unbound. Final status is R6E1R_FINAL_VERIFICATION_INFRASTRUCTURE_BLOCKED; safe recovery requires an explicit uninterrupted/root-agreed window and must not evade root controls.
+
+2026-08-28 blocked-handoff Git and package revalidation
+COMMAND: git fetch origin --tags --prune; verify origin/feature/r6e-live-shadow at 065982c2, both required verified tags, branch ancestry, both manifest companions, every allowlisted file byte, diff whitespace, credential patterns, and tracked oversize files
+RESULT: PASS. Origin WIP exact; r6c2r/r6d tags present; branch descends from WIP. Engine companion and 38/38 allowlisted bytes PASS. Deployment companion and 47/47 allowlisted bytes PASS. git diff --check PASS; credential-pattern candidates 0; tracked files over 10 MiB 0. No executable or manifest-listed byte changed after the already-complete 660/660 regression.
+
+2026-08-28 blocked-handoff protected-state recheck
+COMMAND: inspect listeners, /proc start ticks, systemd unit identities/restarts, collector script digest, raw-root readability, deleted-v9 root absence, v9 unit state, and verification-tag absence
+RESULT: PASS. 8803 is PID/start 380743/46015771, invocation d0df21acd54a440788d89f7cad5b4827, restarts0; 8804 is 465394/51980337, invocation 260291b2ae4a4c70a95a0a37722af61e, restarts0. Collector is 1430352/81242549 with script SHA-256 0dbd270ba3a1fedc63f4ed8c8eff1947a7c14d08e412b3f82a890cb5500a4a4a. Raw root readable; 8805/18805 unbound; all three v9 roots absent; v9 unit masked/inactive/dead; verified tag absent as required.

@@ -2,8 +2,7 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **POST-REPAIR FOCUSED PASS; FULL-SIX BASELINE PASS; TERMINAL FULL-SIX,
-PRELOAD, AND DEPLOYMENT GATES PENDING**
+Status: **R6E1R_FINAL_VERIFICATION_INFRASTRUCTURE_BLOCKED**
 
 Current analytical commit:
 `e1d67c534bea5c61b0e3d379db7f599de7e1c445`.
@@ -15,6 +14,21 @@ current engine.
 
 No failing or skipped test has been weakened, deselected, reclassified, or
 omitted to obtain a pass.
+
+## Terminal infrastructure stop
+
+The operator stop applied the v9 runtime mask at `20:39:00.999`; systemd
+recorded a client-requested `SIGINT` at `20:39:01` and client-requested
+`SIGTERM` at `20:39:06`. No OOM kill occurred, swap use was zero, and the
+observed peak was 14.5 GiB. The v9 evidence, work, and control roots were
+externally deleted after the operator stop. A post-stop search found zero surviving alternate-schedule bundles,
+no bundle marker, and no terminal all-gates summary.
+
+The v9 baseline/reference test hashes retained below are independently
+observed and pushed facts only; they are not surviving final all-nine
+artifacts. A fresh rerun requires an explicit uninterrupted root-agreed window
+and must not evade an active root operator. Deployment/preload were not
+performed, and no verified tag was created.
 
 ## Current regression authority
 
@@ -74,11 +88,12 @@ The focused harness completed in 3,839.101 seconds (1:04:00 wall), with
 parent/child peak RSS of 1,730,828/891,172 KiB, a 2,965,729,280-byte cgroup
 peak, and zero swap.
 
-## Persistent v9 full-six evidence sealed so far
+## Observed v9 full-six baseline evidence
 
-Persistent v9 is the only current full-six authority. It uses a fresh clean
-checkout of `e1d67c5`, fresh state/output roots, the authoritative raw root,
-both verified frozen reference packages, and all nine required schedules.
+V9 was pinned to a fresh clean checkout of `e1d67c5`, fresh state/output roots,
+the authoritative raw root, and both verified frozen reference packages. Its
+roots no longer survive, so the facts in this section are retained
+pre-deletion observations and not a current terminal authority.
 
 ### Projection and source preflight
 
@@ -101,9 +116,9 @@ The all-nine contract file/embedded SHA-256 values are
 and
 `af10b6130ef38ca42c79be8aad0ebef3df4bbb9494ac974321cd315ae94583d0`.
 
-### Immutable A/B and comparison seals
+### Observed A/B and comparison seals
 
-Canonical incremental A sealed with:
+Canonical incremental A was observed sealed with:
 
 - seal:
   `fa62ace6fc2796c0101e1e9da908725d0ca12da364d971fa336a0868f0a83ce7`;
@@ -114,7 +129,7 @@ Canonical incremental A sealed with:
 - state tree:
   `f404a5f0bf2d0484318685339c08a978c3bbc9ce7a9f824f2055f38565568cb6`.
 
-Independent clean chronological B sealed with seal/snapshot SHA-256
+Independent clean chronological B was observed sealed with seal/snapshot SHA-256
 `99322aa74ad4018400d11cc6336ca695c8f2e190ec279067351ef40ff2faa568`
 and
 `285256f5438eaebd86916aabcee7413aa668e1d8d57a1c4fab281f87dffe2526`.
@@ -155,32 +170,32 @@ compatibility snapshots, and 60,659 cross-layer transitions. The permitted
 live degradation extension is independently distinguished from these frozen
 counts.
 
-## Full-six gates still pending
+## Full-six gates blocked
 
-The baseline seals above do not constitute terminal all-nine acceptance.
-Until persistent v9 publishes its marker-last schedule bundles and terminal
-summary, the following remain **PENDING** and must not be inferred from the
-historical `81b0836` run:
+The observed baseline seals above do not constitute terminal all-nine
+acceptance. The deleted v9 roots supplied no surviving marker-last alternate
+bundle or terminal summary, so the following are **BLOCKED** and must not be
+inferred from the historical `81b0836` run:
 
 | Required full-six gate | Current standing |
 |---|---|
-| One complete JSONL record per increment | PENDING terminal v9 bundle |
-| Deterministic variable chunks | PENDING terminal v9 bundle |
-| Chunk boundaries inside JSONL lines | PENDING terminal v9 bundle |
-| Empty/repeated polls | PENDING terminal v9 bundle |
-| Multiple checkpoint restarts | PENDING terminal v9 bundle |
-| Restart at analytical transition boundaries | PENDING terminal v9 bundle |
-| Hourly file rotation | PENDING terminal v9 bundle |
-| Large chronological chunks | PENDING terminal v9 bundle |
-| Final 16/16 bundle-storage matrix | PENDING terminal v9 summary |
-| Final 936/936 checkpoint matrix | PENDING terminal v9 summary |
-| Final 2/2 recovery matrix | PENDING terminal v9 summary |
-| Final measured file-open audit | PENDING terminal v9 summary |
-| Final authoritative/projection post-source comparison | PENDING terminal v9 summary |
-| Full-six terminal equivalence summary | PENDING terminal v9 exit 0 |
-| Real copied-state preload validation | PENDING terminal v9 state acceptance |
+| One complete JSONL record per increment | BLOCKED; no surviving bundle |
+| Deterministic variable chunks | BLOCKED; no surviving bundle |
+| Chunk boundaries inside JSONL lines | BLOCKED; no surviving bundle |
+| Empty/repeated polls | BLOCKED; no surviving bundle |
+| Multiple checkpoint restarts | BLOCKED; no surviving bundle |
+| Restart at analytical transition boundaries | BLOCKED; no surviving bundle |
+| Hourly file rotation | BLOCKED; no surviving bundle |
+| Large chronological chunks | BLOCKED; no surviving bundle |
+| Final 16/16 bundle-storage matrix | BLOCKED; no terminal summary |
+| Final 936/936 checkpoint matrix | BLOCKED; no terminal summary |
+| Final 2/2 recovery matrix | BLOCKED; no terminal summary |
+| Final measured file-open audit | BLOCKED; no terminal summary |
+| Final authoritative/projection post-source comparison | BLOCKED; no terminal summary |
+| Full-six terminal equivalence summary | BLOCKED; no terminal summary/exit 0 |
+| Real copied-state preload validation | BLOCKED; accepted state root deleted |
 
-Consequently no current-engine claim is made yet for 9/9 full-six schedules,
+Consequently no current-engine claim is made for 9/9 full-six schedules,
 936/936 checkpoints, a terminal full-six open count, a terminal post-source
 count, a full-six summary hash, preload success, or total full-six
 elapsed/peak/output measurements.
@@ -199,7 +214,7 @@ projection-only analytics, sanitized payloads, and harness tamper defenses.
 
 Where the acceptance requirement specifically calls for a full-six alternate
 schedule or full-six terminal aggregate, the current regression/focused result
-does not substitute for the pending v9 artifact.
+does not substitute for a fresh terminal artifact.
 
 ## Historical and rejected evidence
 
@@ -219,10 +234,11 @@ does not substitute for the pending v9 artifact.
   comparison surfaces, or incomplete transition-boundary coverage remain
   rejected and are not relabelled.
 
-## Remaining boundary
+## Blocked boundary
 
-The current engine's complete regression, focused all-nine acceptance, and
-fresh full-six projection/A/B/reference baselines pass. Terminal full-six
-alternate schedules, final open/source/storage/checkpoint/recovery aggregation,
-preload validation, isolated live deployment, deployed browser checks, health
-and readiness checks, and public-interface reachability remain open gates.
+The current engine's complete regression and focused all-nine acceptance pass;
+fresh full-six projection/A/B/reference facts were observed before deletion.
+Terminal full-six alternate schedules, final open/source/storage/checkpoint/
+recovery aggregation, and preload validation remain blocked. Isolated live
+deployment, deployed browser checks, health/readiness checks, and
+public-interface reachability were not performed.

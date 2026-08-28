@@ -2,7 +2,7 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **POST-REPAIR FIXTURE BROWSER PASS — TERMINAL FULL-SIX AND DEPLOYED-LIVE EVIDENCE PENDING**
+Status: **R6E1R_FINAL_VERIFICATION_INFRASTRUCTURE_BLOCKED — FIXTURE BROWSER PASS; TERMINAL AND DEPLOYED-LIVE NOT VERIFIED**
 
 Code-under-test repair commit: `e1d67c534bea5c61b0e3d379db7f599de7e1c445`.
 
@@ -12,6 +12,12 @@ This closes current fixture rendering only. Fresh installed-service browser
 checks, screenshots, public reachability, and response-size evidence remain
 pending.
 
+At 20:39 IST an external root/operator transaction runtime-masked and stopped
+the persistent-v9 verifier on client request, then deleted its evidence, work,
+and control roots. No alternate-schedule marker or terminal summary survived.
+The independently recorded baseline observations below are provenance only;
+they do not authorize deployment.
+
 ## Current fixture and analytical evidence
 
 | Check | Result | Scope |
@@ -19,9 +25,9 @@ pending.
 | Complete repository regression | 660/660, zero failed/skipped | Current `e1d67c5...` code; includes host-only and fixture-browser coverage |
 | Current Playwright/Chromium fixture | PASS within the complete suite | Current fixtures; not an installed service |
 | Focused all-nine GUI projection | Exact across all nine focused schedules; summary SHA-256 `f83d519226bf7876be5446e16b657bbea9c3624f3ecb7a5e2a724bf35b0954f9` | Post-repair checkpoint/callback fixture evidence |
-| Fresh persistent-v9 R6D baseline | 180/180 rows PASS; 174,080 permitted live extensions; zero unexplained | Fresh full-six A/B baseline; terminal schedule suite pending |
+| Deleted persistent-v9 R6D baseline observation | 180/180 rows PASS; 174,080 permitted live extensions; zero unexplained | Independently recorded before external deletion; not terminal evidence |
 | Console errors / page errors | 0 / 0 | Current fixture-browser evidence |
-| External URL result | PENDING | No fresh post-repair externally reached browser result may yet be claimed |
+| External URL result | NOT DEPLOYED | Analytics did not pass the terminal gate, so deployment was prohibited |
 
 The earlier `81b0836fe50939246ae210bb62780ac4e163e100` browser and
 deployment artifacts are historical only. They must not be used as evidence
@@ -64,13 +70,16 @@ external service exists. All previously captured deployed screenshots from the
 historical `81b0836...` state are explicitly rejected for final acceptance.
 The final deployment must produce fresh screenshots from the repaired runtime.
 
-## Fresh v9 baseline and terminal boundary
+## Deleted v9 baseline observations and terminal boundary
 
 Persistent v9's sealed incremental A and independent clean chronological B
 passed the R6D GUI reference comparison 180/180. Its 174,080 target-only rows
 exactly equal the 174,080 independently permitted live-extension rows, leaving
 zero reference-only or unexplained rows. The comparison matrix SHA-256 is
 `dc0c5814dbabaafd5d914627b4435038729f4a187a41beb98f385a19b1e6c467`.
+
+The underlying evidence files were later externally deleted. The recorded
+hash remains provenance, not a surviving terminal bundle.
 
 That evidence establishes the fresh baseline GUI-visible as-of state. It is not
 terminal full-six browser acceptance: all nine incremental schedules,
@@ -92,4 +101,4 @@ mandatory and pending.
 - Verify the public interface from an off-host client; a localhost-only pass is
   not external acceptance.
 
-`CURRENT_BROWSER_ACCEPTANCE: POST_REPAIR_FIXTURE_AND_V9_BASELINE_PASS_TERMINAL_AND_DEPLOYED_LIVE_PENDING`
+`CURRENT_BROWSER_ACCEPTANCE: R6E1R_FINAL_VERIFICATION_INFRASTRUCTURE_BLOCKED_FIXTURE_ONLY_NOT_DEPLOYED`

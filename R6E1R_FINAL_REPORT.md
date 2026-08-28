@@ -1,15 +1,26 @@
-# R6E1R Final Report — Interim Current Handoff
+# R6E1R Final Report — Infrastructure-Blocked Handoff
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **IN_PROGRESS_NOT_FINAL**
+Status: **R6E1R_FINAL_VERIFICATION_INFRASTRUCTURE_BLOCKED**
 
-This is an interim evidence handoff, not final R6E1R acceptance. The current
-post-repair regression, focused fixture, and immutable full-six original-source
-A/B/reference baseline pass. The eight alternate full-six schedules, terminal
-summary and audits, deployment-preload validation, isolated deployment, live
-browser/health/readiness checks, and external reachability remain pending. No
-verified tag is authorized, and the public candidate URL is not deployed.
+This is a blocked handoff, not R6E1R acceptance. The post-repair regression and
+focused fixture passed, and persistent v9 independently published a passing
+full-six original-source A/B/reference baseline. At 20:39:00.999 IST an
+external root/operator transaction runtime-masked the v9 unit, sent
+SIGINT/SIGTERM on client request, and then deleted its evidence, work, and
+control roots before any alternate-schedule marker or terminal summary existed.
+A read-only survivor search found zero `equivalence_summary.json`,
+`schedule_resume_contract.json`, or `schedule_bundle.json` files under the
+authorized research/home roots.
+
+This repeated the earlier external v2-v8 stop/deletion condition. Continuing
+safely requires an explicit root-agreed uninterrupted verification window and
+a protected evidence-retention location. Evading the active root operator with
+a hidden or renamed high-memory process is not a safe recovery. Terminal
+all-nine verification, preload, deployment, live browser/health/readiness, and
+external reachability remain unverified. No tag is authorized and no URL was
+deployed.
 
 ## Current authority and Git state
 
@@ -107,14 +118,14 @@ manifest SHA-256 is
 `31077f42ae1bf639f746e5980aba028b1369b8d44ba9a15973b2a517cc8a8382`.
 Raw/sample JSONL is outside Git and must remain uncommitted.
 
-## Persistent v9 six-session evidence
+## Persistent v9 six-session observations retained in the pushed handoff
 
-The current verifier is `market-profile-history-verifier-v9.service`, pinned
-to a clean detached `e1d67c5...` checkout under invocation
-`ce9595fd18b344ab8ab2765ae509f8fa`. It is an offline analytical verifier, not
-the live API or GUI service. Immutable marker-last baseline artifacts below are
-accepted only for their stated scope; mutable SQLite state is not used as
-acceptance evidence.
+The interrupted verifier was `market-profile-history-verifier-v9.service`,
+pinned to a clean detached `e1d67c5...` checkout under invocation
+`ce9595fd18b344ab8ab2765ae509f8fa`. It was an offline analytical verifier, not
+the live API or GUI service. The baseline values below were independently
+hashed and pushed before deletion. Their files no longer survive for final
+review and they cannot substitute for an all-nine terminal bundle.
 
 ### Raw projection and causal scope
 
@@ -246,15 +257,15 @@ No historical schedule result is imported.
 
 | Schedule | Current v9 status |
 |---|---|
-| Original source chunks | `SEALED_BASELINE_PASS; TERMINAL_SCHEDULE_BUNDLE_PENDING` |
-| One complete JSONL record per increment | `PENDING_V9_EVIDENCE` |
-| Deterministic variable chunks | `PENDING_V9_EVIDENCE` |
-| Chunk boundaries inside JSONL lines | `PENDING_V9_EVIDENCE` |
-| Empty/repeated polls | `PENDING_V9_EVIDENCE` |
-| Multiple checkpoint restarts | `PENDING_V9_EVIDENCE` |
-| Restart at analytical transition boundaries | `PENDING_V9_EVIDENCE` |
-| Hourly file rotation | `PENDING_V9_EVIDENCE` |
-| Large chronological chunks | `PENDING_V9_EVIDENCE` |
+| Original source chunks | `OBSERVED_BASELINE_PASS; FILES_EXTERNALLY_DELETED` |
+| One complete JSONL record per increment | `EXTERNALLY_INTERRUPTED_NO_MARKER` |
+| Deterministic variable chunks | `NOT_RUN_AFTER_EXTERNAL_STOP` |
+| Chunk boundaries inside JSONL lines | `NOT_RUN_AFTER_EXTERNAL_STOP` |
+| Empty/repeated polls | `NOT_RUN_AFTER_EXTERNAL_STOP` |
+| Multiple checkpoint restarts | `NOT_RUN_AFTER_EXTERNAL_STOP` |
+| Restart at analytical transition boundaries | `NOT_RUN_AFTER_EXTERNAL_STOP` |
+| Hourly file rotation | `NOT_RUN_AFTER_EXTERNAL_STOP` |
+| Large chronological chunks | `NOT_RUN_AFTER_EXTERNAL_STOP` |
 
 The following terminal gates also remain pending: fresh/final bundle-storage
 validation, the complete checkpoint-accounting matrix, truncation/replacement
@@ -310,12 +321,12 @@ Ports 18805 and 8805 were still unbound at this report refresh. Deployment must
 repeat the exact PID/start-tick/invocation/restart and listener checks before
 and after installation.
 
-The last historical collector observation was a normal recurring watchdog
-self-exit after market close, with no R6E signal, restart, source edit, or
-collector configuration change. It is not promoted as a final collector
-process identity. **The final collector PID/process/hash/mtime recheck is
-pending** and must be recorded immediately before final handoff; this report
-does not invent a replacement PID.
+The blocked-state recheck found the collector still running as PID `1430352`,
+start ticks `81242549`, with command line rooted at
+`/opt/banknifty-collector/app/fyers_banknifty_collector_v4.py`. That script's
+SHA-256 remains
+`0dbd270ba3a1fedc63f4ed8c8eff1947a7c14d08e412b3f82a890cb5500a4a4a`.
+No R6E operation signalled, restarted, reconfigured, or modified it.
 
 ## Authorized scope and frozen contracts
 
@@ -355,9 +366,10 @@ participation. Snapshot/display time never replaces or backdates evidence.
   peak RSS 4,982,376 KiB, and published no A seal. Persistent v8 failed closed
   in preflight because the required v7 projection had already been removed.
   Both are rejected diagnostics.
-- Persistent v9 is the only current-repair full-six authority. Only its
-  immutable published artifacts populate current cells; all unsealed schedules
-  and terminal values remain pending.
+- Persistent v9 was the only current-repair attempt to publish a full-six
+  baseline. The external operator stopped it before an alternate marker and
+  deleted all v9 roots. Recorded hashes remain provenance, not terminal
+  evidence.
 
 August 25 and 26 evidence remains operational diagnostic material only. It is
 not prospective or canonical equivalence evidence.
@@ -366,21 +378,21 @@ not prospective or canonical equivalence evidence.
 
 | Required field | Interim value |
 |---|---|
-| Final status | `IN_PROGRESS_NOT_FINAL` |
+| Final status | `R6E1R_FINAL_VERIFICATION_INFRASTRUCTURE_BLOCKED` |
 | Branch | `fix/r6e1r-final-live-shadow` |
 | Analytical commit | `e1d67c534bea5c61b0e3d379db7f599de7e1c445` |
 | Pushed report head before this edit | `cce61679dfc21ecb2cecd3acc592e8b151c538fe` |
 | Test count | 660/660 complete regression; focused 9/9 schedules |
 | Current exact equivalence | Sealed original-source baseline: components 21/21, ledgers 8/8, causality 9/9, R6C2R 30/30, R6D 180/180; scoped differences/mismatches/safety violations 0 |
-| Terminal six-session equivalence | `PENDING_FINAL_EVIDENCE` — eight alternate schedules and terminal bundle/audits not yet published |
+| Terminal six-session equivalence | `NOT_VERIFIED` — externally stopped during one-record processing; all roots deleted; no alternate marker/terminal bundle survived |
 | Package manifest | Current engine 38/38 and deployment 47/47 companion checks PASS; deployment not installed |
-| Deployment service status | `NOT_INSTALLED_OR_ACCEPTED`; offline v9 analytical verifier active |
+| Deployment service status | `NOT_INSTALLED_OR_ACCEPTED`; v9 verifier stopped/masked and its roots deleted |
 | Exact deployed URL | `NOT_DEPLOYED` |
 | Candidate URL | `http://200.234.39.232:8805/` — not deployed or externally verified |
 | Verified tag | `NOT_CREATED` |
-| Remaining limitations | Terminal schedules, source-posthash, file-open/checkpoint/recovery matrices, final performance, preload, deployment, live browser/API/recovery, external ingress, scans, final commit/push/clean-worktree checks |
+| Remaining limitations | Requires a root-agreed uninterrupted window to rerun full six-session all-nine verification; terminal source/open/checkpoint/recovery/performance/preload, deployment, live browser/API/recovery, and external ingress remain unverified |
 | Protected ports | 8803 and 8804 retain the exact identities recorded above and were not modified or restarted |
-| Collector state | No R6E collector change; final exact process/hash/mtime recheck pending |
+| Collector state | PID/start `1430352/81242549`, script SHA-256 `0dbd270b...`; unchanged by R6E |
 
 Related callback, equivalence, GUI, performance, deployment, readiness,
 causality, artifact-matrix, test, browser, file-open, source-hash, and scratchpad

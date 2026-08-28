@@ -2,7 +2,25 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **FRESH V9 ORIGINAL-CHUNK A/B AND FROZEN REFERENCES PASS; TERMINAL FULL-SIX SCHEDULE EQUIVALENCE AND DEPLOYMENT PENDING**
+Status: **R6E1R_FINAL_VERIFICATION_INFRASTRUCTURE_BLOCKED**
+
+## Terminal disposition
+
+The v9 verifier was stopped before terminal all-nine publication. The operator
+stop applied the runtime mask at `20:39:00.999`; systemd recorded a
+client-requested `SIGINT` at `20:39:01` and client-requested `SIGTERM` at
+`20:39:06`. This was not memory exhaustion: no OOM kill occurred, swap use was
+zero, and the observed peak was 14.5 GiB. The v9 evidence, work, and control
+roots were externally deleted after the operator stop. A post-stop search found zero surviving
+alternate-schedule bundles, no bundle marker, and no terminal all-gates
+summary.
+
+The A/B and reference matrices below are retained independently observed and
+pushed baseline observations. Their hashes are not backed by surviving v9
+artifacts and therefore cannot be promoted into a final all-nine equivalence
+claim. A fresh run requires an explicit uninterrupted root-agreed window and
+must not evade an active root operator. No deployment was performed and no
+verified tag was created.
 
 Evidence lineage:
 
@@ -17,9 +35,9 @@ comparisons are exact canonical multiset/identity comparisons; no floating
 tolerance, count-only inference, derived R2-R6 tables, or inherited R6C2R A/B
 output was accepted as stream/batch equivalence.
 
-This document distinguishes the immutable original-chunk A/B and reference
-slice, which has passed, from the eight remaining full-six schedules and the
-terminal summary, which remain pending.
+This document distinguishes the observed original-chunk A/B and reference
+slice from the final all-nine gate. The former facts were retained before root
+deletion; the latter was never published and is infrastructure-blocked.
 
 ## Fresh v9 canonical component matrix
 
@@ -119,7 +137,7 @@ live extensions exactly. Both frozen package manifests were verified before
 comparison: R6C2R 74/74 and R6D 40/40. Reference-manifest verification SHA-256:
 `ed81708afac9cbb5c30915a56d2f46cf05611a4a12565a37a7a6c3d5d1366c67`.
 
-## Fresh v9 source and immutable baseline identities
+## Observed v9 source and baseline identities
 
 The raw projection contains 141 authoritative source files, 139 projection
 files, and 746,890 byte-exact selected records across six evaluation sessions
@@ -146,29 +164,29 @@ remainders, dirty sessions, and unexpected sessions were all zero. Its elapsed
 time was 5,893.937 seconds with process peak RSS 6,481,416 KiB. Clean B elapsed
 741.789 seconds with child-process peak RSS 7,153,156 KiB.
 
-## Terminal schedules, storage, recovery, and preload
+## Blocked terminal schedules, storage, recovery, and preload
 
 | Matrix or gate | Fresh v9 result |
 |---|---|
-| Original source chunks | Immutable A/B and references PASS as recorded above |
-| One record per increment | `PENDING_FINAL_EVIDENCE` |
-| Deterministic variable chunks | `PENDING_FINAL_EVIDENCE` |
-| Boundaries inside JSONL lines | `PENDING_FINAL_EVIDENCE` |
-| Empty/repeated polls | `PENDING_FINAL_EVIDENCE` |
-| Multiple checkpoint restarts | `PENDING_FINAL_EVIDENCE` |
-| Restart at analytical transition boundaries | `PENDING_FINAL_EVIDENCE` |
-| Hourly file rotation | `PENDING_FINAL_EVIDENCE` |
-| Large chronological chunks | `PENDING_FINAL_EVIDENCE` |
-| Terminal checkpoint accounting | `PENDING_FINAL_EVIDENCE` |
-| Terminal bundle-storage matrix | `PENDING_FINAL_EVIDENCE` |
-| Terminal truncation/replacement recovery matrix | `PENDING_FINAL_EVIDENCE` |
-| Real preload validation of final accepted state | `PENDING_FINAL_EVIDENCE` |
-| Terminal equivalence summary and SHA-256 | `PENDING_FINAL_EVIDENCE` |
+| Original source chunks | Observed A/B and reference baseline PASS; underlying v9 roots deleted |
+| One record per increment | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Deterministic variable chunks | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Boundaries inside JSONL lines | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Empty/repeated polls | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Multiple checkpoint restarts | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Restart at analytical transition boundaries | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Hourly file rotation | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Large chronological chunks | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Terminal checkpoint accounting | `BLOCKED_NO_TERMINAL_SUMMARY` |
+| Terminal bundle-storage matrix | `BLOCKED_NO_TERMINAL_SUMMARY` |
+| Terminal truncation/replacement recovery matrix | `BLOCKED_NO_TERMINAL_SUMMARY` |
+| Real preload validation of final accepted state | `BLOCKED_NO_ACCEPTED_STATE_ROOT` |
+| Terminal equivalence summary and SHA-256 | `BLOCKED_NO_TERMINAL_SUMMARY` |
 
 No pre-repair schedule, checkpoint, storage, recovery, summary, or preload hash
-is relabelled as fresh v9 evidence. Until every row above passes and the final
-bundle is sealed, the required result “stream versus batch differences: 0” is
-proven only for the original-chunk baseline, not for all nine full-six
+is relabelled as fresh v9 evidence. Because no final bundle survived, the
+required result “stream versus batch differences: 0” is established only in
+the retained original-chunk baseline observation, not for all nine full-six
 schedules.
 
 ## Focused prerequisite
@@ -178,7 +196,7 @@ components, 8/8 ledgers, 9/9 causality groups, 9/9 focused schedules, 16/16
 storage rows, 72/72 checkpoint rows, 2/2 recovery probes, and 8/8 source rows.
 Every comparison and safety counter was zero. Its summary SHA-256 is
 `f83d519226bf7876be5446e16b657bbea9c3624f3ecb7a5e2a724bf35b0954f9`.
-This is prerequisite evidence, not a substitute for the pending full-six
+This is prerequisite evidence, not a substitute for the blocked full-six
 schedule matrix.
 
 ## Historical evidence retained as historical
@@ -187,5 +205,5 @@ The earlier `81b0836fe50939246ae210bb62780ac4e163e100` full-six result is
 pre-repair historical evidence and is not the current terminal result.
 Historical focused merged-v2/full-six-v1 GUI-compaction failures, v6 one-record
 visibility/refusal failure, and interrupted v2-v8 attempts remain rejected
-diagnostics. Their counts and hashes are not reused in any fresh v9 pending
+diagnostics. Their counts and hashes are not reused in any future fresh-run
 cell.

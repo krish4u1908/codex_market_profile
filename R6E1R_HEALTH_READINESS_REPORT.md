@@ -2,8 +2,7 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **POST-REPAIR REGRESSION 660/660 AND FOCUSED PASS — V9 BASELINE PASS;
-TERMINAL FULL-SIX SCHEDULES, PRELOAD, AND DEPLOYMENT PENDING**
+Status: **R6E1R_FINAL_VERIFICATION_INFRASTRUCTURE_BLOCKED — NO TERMINAL PRELOAD OR DEPLOYMENT**
 
 Current analytical commit:
 `e1d67c534bea5c61b0e3d379db7f599de7e1c445`.
@@ -15,7 +14,10 @@ No current `e1d67c5` R6E1R deployment backend or gateway has been installed or
 accepted. The standard service names are inactive/dead and runtime-masked; their
 stale definitions must not be started. No local endpoint or external URL has
 been accepted, and no verification tag has been created. The separate v9
-full-six analytical unit is an offline verifier, not the deployment API or GUI.
+full-six analytical unit was an offline verifier, not the deployment API or GUI.
+At 20:39 IST an external root/operator transaction runtime-masked and stopped
+that verifier on client request, then deleted its evidence, work, and control
+roots before any alternate-schedule marker or terminal summary existed.
 The earlier `81b0836fe50939246ae210bb62780ac4e163e100` service package and
 full-six result are retained as historical evidence only because the current
 authenticated engine changed after the sparse empty-Index repair.
@@ -98,14 +100,13 @@ all zero. Summary SHA-256:
 `f83d519226bf7876be5446e16b657bbea9c3624f3ecb7a5e2a724bf35b0954f9`.
 This focused evidence does not satisfy the full six-session preload requirement.
 
-Persistent v9 runs from a clean detached `e1d67c5` checkout under invocation
-`ce9595fd18b344ab8ab2765ae509f8fa`. Its immutable incremental-A,
-independently clean chronological-B, canonical component, ledger, causality,
-R6C2R, and R6D GUI baseline matrices are sealed PASS. All alternate schedules,
-the terminal source rehash/final summary, and terminal state validation are
-still pending. Therefore v9 incremental-A state is not yet authorized as a
-deployment preload. Cold-start RSS, installed-service health/readiness, and
-public evidence also remain pending.
+Persistent v9 ran from a clean detached `e1d67c5` checkout under invocation
+`ce9595fd18b344ab8ab2765ae509f8fa`. Its independently recorded incremental-A,
+clean chronological-B, component, ledger, causality, R6C2R, and R6D baseline
+matrices were PASS before the stop. Their files no longer survive for terminal
+review. No alternate schedule, terminal source rehash/final summary, terminal
+state validation, or eligible preload survived. Cold-start RSS,
+installed-service health/readiness, and public evidence were not measured.
 
 ## Prior targeted/local evidence
 
@@ -162,7 +163,7 @@ does not authorize deployment code to modify those paths.
 | `/api/audit` | Measured zero causal violations and verified manifest | `PENDING_AUTHORIZED_HOST_LIVE_EVIDENCE` |
 | Six `/api/session?date=...` checks | Nonempty `HISTORICAL_REPLAY` | `PENDING_AUTHORIZED_HOST_LIVE_EVIDENCE` |
 | Absent verified replay date | Non-200 unavailable | `PENDING_AUTHORIZED_HOST_LIVE_EVIDENCE` |
-| Full-six preload validation | Exact finalized incremental-A state and bound manifest | `PENDING_FULL_SIX_ACCEPTANCE` |
+| Full-six preload validation | Exact finalized incremental-A state and bound manifest | `BLOCKED_NO_TERMINAL_STATE_SURVIVED` |
 | Cold-preload backend RSS | Below configured hard limit without analytical truncation | `PENDING_AUTHORIZED_HOST_LIVE_EVIDENCE` |
 | Largest public chart response | Less than the gateway's 8 MiB per-response ceiling | `PENDING_AUTHORIZED_HOST_LIVE_EVIDENCE` |
 | Backend SIGKILL recovery | Gateway remains active; backend recovers automatically without a manual gateway restart | `PENDING_AUTHORIZED_HOST_LIVE_EVIDENCE` |

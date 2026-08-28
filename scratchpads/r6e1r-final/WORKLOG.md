@@ -514,3 +514,43 @@ Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
   and `dc0c5814dbabaafd5d914627b4435038729f4a187a41beb98f385a19b1e6c467`.
   All nine schedules remain mandatory under the required profile; the one-record
   schedule is now active and no incomplete marker can be promoted.
+- Persistent v9 was runtime-masked at 20:39:00.999 IST. The journal then
+  records SIGINT at 20:39:01 and SIGTERM at 20:39:06, both on client request.
+  The terminated unit had consumed 2h15m44.789 CPU, reached a 14.5G cgroup
+  peak, used zero swap, and had no OOM event. It was interrupted during the
+  one-record-per-increment schedule at approximately 96,650 of 543,329
+  selected records; that schedule published no atomic completion marker.
+- A root login on `pts/1` from `169.254.0.1` was recorded at 20:37:18 IST.
+  Exact attribution for the subsequent service-control and deletion actions is
+  unavailable, so no causal identity is asserted from that login record.
+- An operator subsequently deleted `/home/codexuser/mp-history-v9`,
+  `/home/codexuser/mp-history-v9-control`, and
+  `/opt/banknifty/research/vpoc_oi_price_response_v2/historical_callback_acceptance_v9`.
+  An exhaustive read-only filesystem search found zero surviving
+  `equivalence_summary`, `schedule_resume_contract`, or `schedule_bundle`
+  artifacts. Previously observed v9 A/B/reference seals and partial progress
+  therefore cannot be promoted or resumed as terminal full-six evidence.
+- This repeats the external stop/deletion condition seen across v2-v8. The
+  terminal status is `R6E1R_FINAL_VERIFICATION_INFRASTRUCTURE_BLOCKED`, not
+  analytics verified. Safe recovery requires an explicit uninterrupted,
+  root-agreed execution window; it must not attempt to evade root controls.
+- At closeout, the authoritative raw root remains readable. Branch and remote
+  head were both `92673323d3523b3338a39743063299d491ff4d08` before these
+  scratchpad edits, with no verification tag. Protected 8803, 8804, and
+  collector identities remained exact and untouched; 8805 and 18805 were
+  unbound. Deployment was not performed.
+- Refreshed every required R6E1R report to the exact blocked disposition and
+  removed current-tense claims that persistent v9 was active or eligible for
+  preload. Baseline hashes are explicitly retained as independently observed
+  provenance without surviving terminal artifacts.
+- Re-fetched origin with tags/pruning and revalidated the authorized WIP
+  checkpoint, both frozen verification tags, and branch ancestry. Revalidated
+  both manifest companions plus every allowlisted byte (38/38 engine and 47/47
+  deployment), `git diff --check`, zero credential-pattern candidates, and
+  zero tracked files over 10 MiB. Only Markdown reports/scratchpads changed
+  after the already-complete 660/660 regression.
+- Rechecked protected services and collector immediately before the blocked
+  handoff commit. Ports 8803/8804 retained their exact PID/start/invocation and
+  zero-restart identities; the collector PID/start/script digest stayed exact;
+  8805/18805 remained unbound; v9 remained masked/inactive/dead; all deleted
+  v9 roots remained absent.

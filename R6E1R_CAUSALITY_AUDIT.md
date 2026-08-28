@@ -2,7 +2,25 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **POST-REPAIR REGRESSION/FOCUSED CAUSALITY PASS; FRESH V9 BASELINE/REFERENCE CAUSALITY PASS; TERMINAL FULL-SIX SCHEDULE INVARIANCE PENDING**
+Status: **R6E1R_FINAL_VERIFICATION_INFRASTRUCTURE_BLOCKED**
+
+## Terminal disposition
+
+The v9 run was externally stopped before all-nine publication. The operator
+stop applied its runtime mask at `20:39:00.999`; systemd recorded a
+client-requested `SIGINT` at `20:39:01` and client-requested `SIGTERM` at
+`20:39:06`. There was no OOM kill, swap use was zero, and the observed peak was
+14.5 GiB. The v9 evidence, work, and control roots were externally deleted
+after the operator stop. A post-stop
+search found zero surviving alternate-schedule bundles, no bundle marker, and
+no terminal all-gates summary.
+
+The v9 causality and reference hashes retained below are independently
+observed and pushed baseline facts only. They are not surviving final all-nine
+artifacts and cannot support terminal schedule-invariance or six-session
+equivalence claims. A fresh run requires an explicit uninterrupted root-agreed
+window and must not evade an active root operator. Deployment and the verified
+tag were not performed.
 
 Evidence lineage:
 
@@ -105,11 +123,11 @@ The fresh focused run passed 9/9 causality groups, 9/9 focused schedules,
 72/72 checkpoint rows, 2/2 recovery probes, and 8/8 source rows. This closes
 the focused gate only; it is not a substitute for all six-session schedules.
 
-## Fresh v9 six-session baseline/reference invariants
+## Observed v9 six-session baseline/reference invariants
 
 Incremental A used original source chunks through the production checkpoint
 path. Clean B was an independently clean chronological batch over the same
-selected raw bytes. Both immutable baselines passed:
+selected raw bytes. Before deletion, both baselines were observed to pass:
 
 | Invariant | Required | Incremental A | Clean B | Result |
 |---|---:|---:|---:|---|
@@ -134,42 +152,42 @@ and `3726fbfba76ff4b3cdab50cba4288eca2a34506140f167a6adaba5583d0c5c56`.
 
 The v9 analytical components matched A to B 21/21, append-only ledgers
 matched 8/8, the R6C2R analytical reference matched 30/30, and the R6D GUI
-reference matched 180/180 with no unexplained remainder. These immutable
+reference matched 180/180 with no unexplained remainder. These retained
 baseline/reference facts show the repaired empty-Index representation did not
 alter canonical analytical or display semantics.
 
-## Pending terminal six-session invariants
+## Blocked terminal six-session invariants
 
 | Requirement | Current value |
 |---|---|
-| One-record-per-increment causality result | `PENDING_FINAL_EVIDENCE` |
-| Deterministic-variable-chunk causality result | `PENDING_FINAL_EVIDENCE` |
-| Inside-line and empty/repeated-poll causality results | `PENDING_FINAL_EVIDENCE` |
-| Multiple-checkpoint and transition-boundary restart invariance | `PENDING_FINAL_EVIDENCE` |
-| Hourly-rotation and large-chunk invariance | `PENDING_FINAL_EVIDENCE` |
-| Terminal schedule/checkpoint/storage summary | `PENDING_FINAL_EVIDENCE` |
+| One-record-per-increment causality result | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Deterministic-variable-chunk causality result | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Inside-line and empty/repeated-poll causality results | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Multiple-checkpoint and transition-boundary restart invariance | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Hourly-rotation and large-chunk invariance | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Terminal schedule/checkpoint/storage summary | `BLOCKED_NO_TERMINAL_SUMMARY` |
 
-No partial schedule count is promoted. The immutable original-chunk A/B and
-reference matrices do not, by themselves, establish all-nine full-six schedule
-equivalence.
+No partial schedule count is promoted. The retained original-chunk A/B and
+reference observations do not, by themselves, establish all-nine full-six
+schedule equivalence.
 
 ## Adversarial evidence checklist
 
 | Case | Current evidence; remaining boundary |
 |---|---|
-| Partial final line deferral/retry | Regression/focused PASS; full-six inside-line schedule pending |
+| Partial final line deferral/retry | Regression/focused PASS; full-six inside-line proof blocked |
 | Malformed complete record refusal | Regression PASS; v9 projection malformed candidates zero |
-| Truncation and same-inode replacement | Regression/focused 2/2 PASS; terminal six-session recovery matrix pending |
+| Truncation and same-inode replacement | Regression/focused 2/2 PASS; terminal six-session recovery matrix blocked |
 | Duplicate replay | Regression/focused PASS; v9 baseline ledger differences zero |
-| Callback exception before acknowledgement | Regression PASS; full-six restart schedules pending |
-| Failure after durable append | Regression/focused PASS; full-six transition-boundary schedule pending |
-| Restart after ingestion before analytical flush | Regression/focused PASS; full-six checkpoint restart pending |
-| Out-of-order visibility and candidate barrier | Regression/focused PASS with refusals zero; full-six one-record schedule pending |
+| Callback exception before acknowledgement | Regression PASS; full-six restart schedules blocked |
+| Failure after durable append | Regression/focused PASS; full-six transition-boundary proof blocked |
+| Restart after ingestion before analytical flush | Regression/focused PASS; full-six checkpoint restart blocked |
+| Out-of-order visibility and candidate barrier | Regression/focused PASS with refusals zero; full-six one-record proof blocked |
 | Exact-second/fractional timestamps | Regression strict-parser fixtures PASS |
 | Naive/future timestamp refusal | Regression fixtures PASS, including the new naive availability-clock refusal |
 | Empty Index matching | New aware-`NaT` regression fixture PASS; v9 baseline causality 9/9 PASS |
-| Stale market suspension | Engine/API regression fixtures PASS; deployed-live check pending |
-| Missing options/fixed context isolation | Engine/API regression fixtures PASS; deployed-live check pending |
+| Stale market suspension | Engine/API regression fixtures PASS; deployed-live check not performed |
+| Missing options/fixed context isolation | Engine/API regression fixtures PASS; deployed-live check not performed |
 
 ## Historical evidence retained as historical
 

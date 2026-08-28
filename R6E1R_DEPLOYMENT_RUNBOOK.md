@@ -2,14 +2,21 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **POST-REPAIR REGRESSION 660/660 AND FOCUSED PASS — V9 BASELINE PASS;
-TERMINAL FULL-SIX SCHEDULES, PRELOAD, AND DEPLOYMENT PENDING**
+Status: **R6E1R_FINAL_VERIFICATION_INFRASTRUCTURE_BLOCKED — DEPLOYMENT PROHIBITED**
 
 The authoritative package guide is
 [deploy/r6e1r/README.md](deploy/r6e1r/README.md). This root-level runbook records
 the acceptance order and unfilled deployment evidence. It does not authorize
 installation before equivalence, regression, source-integrity, browser,
 runtime-file-open, systemd, and package gates pass.
+
+At 20:39 IST an external root/operator transaction runtime-masked and stopped
+the persistent-v9 verifier on client request, then deleted its evidence, work,
+and control roots before an alternate-schedule marker or terminal summary was
+published. This repeated the earlier external v2-v8 stop/deletion condition.
+Recovery requires an explicit root-agreed uninterrupted verification window
+and a protected evidence-retention location; no current state is eligible for
+preload.
 
 No current `e1d67c5` deployment backend or gateway is installed or accepted,
 no local endpoint or external URL is verified, and no R6E1R verification tag
@@ -129,16 +136,15 @@ evidence.
 
 The complete regression, focused equivalence, current fixture-browser, package,
 and static service-template portions of these gates are closed for `e1d67c5`.
-Persistent v9 runs from a clean detached checkout under invocation
-`ce9595fd18b344ab8ab2765ae509f8fa`. Its immutable incremental-A,
-independently clean chronological-B, canonical component, append-only ledger,
-causality, R6C2R, and R6D GUI baseline matrices are sealed PASS. The alternate
-schedules, terminal source rehash/final summary, and terminal state validation
-are not yet complete. V9 state must not be copied or promoted until that final
-terminal validation passes. This is the offline acceptance harness, not an
-installed deployment backend or gateway, and no deployed URL exists.
-Cold-preload RSS, public chart sizes, installed-service behavior, and every
-deployed-live gate therefore remain pending. The user-supplied August 20 archive
+Persistent v9 ran from a clean detached checkout under invocation
+`ce9595fd18b344ab8ab2765ae509f8fa`. Its independently recorded incremental-A,
+clean chronological-B, component, append-only-ledger, causality, R6C2R, and R6D
+baseline matrices were PASS before the external stop and deletion. Their files
+do not survive, no alternate schedule or terminal validation completed, and no
+v9 state may be copied or promoted. The verifier was an offline acceptance
+harness, not an installed deployment backend or gateway; no deployed URL
+exists. Cold-preload RSS, public chart sizes, installed-service behavior, and
+every deployed-live gate remain unverified. The user-supplied August 20 archive
 is an auxiliary parser/replay diagnostic only and must not replace the
 canonical full-six collector inputs.
 
@@ -214,13 +220,13 @@ require:
 - both services stopped;
 - a sorted SHA-256 manifest that passes after copy.
 
-The only eligible candidate is persistent v9 `runs/incremental_a/state`, along
-with its root terminal summary, projection manifest, and immutable state
-manifest. It becomes eligible only after all nine schedules and terminal source
-and state validations publish PASS. A sealed A baseline by itself is not preload
-authorization.
+No eligible candidate currently exists. Persistent v9's
+`runs/incremental_a/state`, root summary, projection manifest, and immutable
+state manifest were externally deleted before terminal validation. A fresh
+full-six all-nine run must complete and publish terminal PASS in a root-agreed
+protected location before any preload is authorized.
 
-Verified preload source and manifest: `PENDING_TERMINAL_V9_VALIDATION`
+Verified preload source and manifest: `BLOCKED_NO_TERMINAL_STATE_SURVIVED`
 
 ## Install user services
 
@@ -365,12 +371,12 @@ browser replay all pass.
 | Final report-only pushed commit | `PENDING_FINAL_PUSH` |
 | Verification tag | `NOT_CREATED` |
 | Candidate external port | `8805` (free at static audit; selection pending immediate pre-install recheck) |
-| Analytical acceptance unit | Persistent v9 invocation `ce9595fd18b344ab8ab2765ae509f8fa`; baseline/reference matrices PASS; terminal schedules/result pending |
+| Analytical acceptance unit | Persistent v9 invocation `ce9595fd18b344ab8ab2765ae509f8fa`; externally stopped/masked and evidence roots deleted; terminal result not verified |
 | Backend service active/enabled | `INACTIVE_DEAD_RUNTIME_MASKED_STALE_NOT_ACCEPTED` |
 | Gateway service active/enabled | `INACTIVE_DEAD_RUNTIME_MASKED_STALE_NOT_ACCEPTED` |
 | Preferred runtime worktree | `/opt/banknifty/repositories/r6e1r-runtime-e1d67c5` — final clean/identity verification pending |
 | Isolated deployment root | `/opt/banknifty/research/r6e1r_live_shadow_e1d67c5_final` — not provisioned or accepted |
-| Full-six preload source/manifest | `PENDING_TERMINAL_V9_VALIDATION` |
+| Full-six preload source/manifest | `BLOCKED_NO_TERMINAL_STATE_SURVIVED` |
 | Health | `PENDING_AUTHORIZED_HOST_EVIDENCE` |
 | Readiness | `PENDING_AUTHORIZED_HOST_EVIDENCE` |
 | Six replay checks | `PENDING_AUTHORIZED_HOST_EVIDENCE` |
@@ -378,8 +384,8 @@ browser replay all pass.
 | Public-interface probe | `PENDING_AUTHORIZED_HOST_EVIDENCE` |
 | External browser check | `PENDING_AUTHORIZED_HOST_EVIDENCE` |
 | Candidate URL | `http://200.234.39.232:8805/` — `NOT_DEPLOYED_OR_VERIFIED` |
-| Ports 8803/8804 unchanged | Static preflight PASS at PIDs `380743` / `465394`; post-deployment recheck pending |
-| Collectors unchanged | No deployment operation performed; final source-hash/process-identity and post-deployment recheck pending |
+| Ports 8803/8804 unchanged | Blocked-state recheck PASS at PIDs `380743` / `465394`; no R6E modification or restart |
+| Collectors unchanged | PID/start `1430352/81242549`, script SHA-256 `0dbd270ba3a1fedc63f4ed8c8eff1947a7c14d08e412b3f82a890cb5500a4a4a`; no R6E modification or restart |
 
 Create and push `r6e1r-live-shadow-verified` only after every analytical,
 regression, browser, runtime, service, recovery, and external probe passes.

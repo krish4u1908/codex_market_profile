@@ -2,8 +2,7 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **FOCUSED SOURCE INTEGRITY PASS; FULL-SIX PROJECTION INTEGRITY PASS;
-TERMINAL FULL-SIX POST-RUN COMPARISON PENDING**
+Status: **R6E1R_FINAL_VERIFICATION_INFRASTRUCTURE_BLOCKED**
 
 Current analytical commit:
 `e1d67c534bea5c61b0e3d379db7f599de7e1c445`.
@@ -12,9 +11,24 @@ This report records authorized roots and aggregate identities without exposing
 raw filenames, receipt-level records, credentials, or source payloads.
 Raw/sample JSONL remains outside Git.
 
-## Persistent v9 full-six projection authority
+## Terminal infrastructure stop
 
-Persistent v9 rebuilt its byte-exact projection from the authoritative
+The operator stop applied the v9 runtime mask at `20:39:00.999`; systemd
+recorded a client-requested `SIGINT` at `20:39:01` and client-requested
+`SIGTERM` at `20:39:06`. No OOM kill occurred, swap use was zero, and the
+observed peak was 14.5 GiB. The v9 evidence, work, and control roots were
+externally deleted after the operator stop. A post-stop search found zero surviving alternate-schedule bundles,
+no bundle marker, and no terminal all-gates summary.
+
+The v9 source/projection hashes below are independently observed and pushed
+pre-deletion facts, not surviving final all-nine artifacts. They cannot replace
+the absent terminal post-run rehash. A fresh run requires an explicit
+uninterrupted root-agreed window and must not evade an active root operator.
+Deployment/preload were not performed, and no verified tag was created.
+
+## Observed v9 full-six projection baseline
+
+Before deletion, persistent v9 rebuilt its byte-exact projection from the authoritative
 read-only root `/opt/banknifty-collector/data-prod-v4`. Evaluation sessions are
 August 11, 12, 13, 18, 19, and 20. Causal predecessor chains were discovered
 from repository logic and raw bytes. August 17 remains present only for
@@ -32,7 +46,7 @@ canonical rejection and was never forced accepted.
 | August 17 policy | `PRESENT_FOR_CANONICAL_REJECTION_NEVER_FORCED_ACCEPTED` | PASS |
 
 The projection sealed in 117.675 seconds at 189,924 KiB peak process RSS.
-Its immutable identities are:
+Its independently observed identities were:
 
 | Evidence | SHA-256 |
 |---|---|
@@ -47,22 +61,24 @@ over these projected bytes. A's 26-file state manifest/tree SHA-256 values are
 `5e205bdbe5d5706325116389b5caf2ba7067b408f58a016ef7ec734111462173`
 and
 `f404a5f0bf2d0484318685339c08a978c3bbc9ce7a9f824f2055f38565568cb6`.
-Those are immutable state identities, not a substitute for the required final
-post-run source rehash or preload validation.
+Those are retained state identities without a surviving state root; they are
+not a substitute for the required final post-run source rehash or preload
+validation.
 
-## Terminal full-six source gate still pending
+## Terminal full-six source gate blocked
 
-The v9 source-comparison hash above is a projection-time before/after result.
-The mandatory final comparison must independently rehash authoritative and
-projected sources after A, B, and every alternate schedule finish.
+The v9 source-comparison hash above is an observed projection-time before/after
+result. The mandatory final comparison was not published and must be recreated
+by independently rehashing authoritative and projected sources after A, B, and
+every alternate schedule finish in a fresh run.
 
 | Required terminal measure | Current standing |
 |---|---|
-| Post-run authoritative identities | PENDING terminal v9 summary |
-| Post-run projection identities | PENDING terminal v9 summary |
-| Combined authoritative + projection comparison rows | PENDING terminal v9 summary |
-| Post-run source mutations | PENDING terminal v9 summary |
-| Full-six final source-comparison SHA-256 | PENDING terminal v9 publication |
+| Post-run authoritative identities | BLOCKED; no terminal v9 summary |
+| Post-run projection identities | BLOCKED; projection root deleted |
+| Combined authoritative + projection comparison rows | BLOCKED; no terminal v9 summary |
+| Post-run source mutations | BLOCKED; no terminal v9 summary |
+| Full-six final source-comparison SHA-256 | BLOCKED; not published |
 
 Accordingly no post-repair claim is yet made for a final 280/280 combined
 matrix or its digest. The pre-repair combined result must not be carried
@@ -128,12 +144,12 @@ allowlists. The package was resealed because the sparse empty-Index repair
 changed an authenticated engine byte and its configuration pin; the frozen
 analytical contract was not changed.
 
-## Preloaded-state binding pending
+## Preloaded-state binding blocked
 
-The fresh v9 incremental-A state is sealed, contains 26 files and
-4,141,835,394 bytes, and has the state manifest/tree identities recorded above.
-It has not yet been promoted to deployment state. The real copied-state preload
-validator must wait for terminal v9 acceptance and then verify SQLite integrity,
+The fresh v9 incremental-A state was observed sealed with 26 files and
+4,141,835,394 bytes, but its root was deleted; only the recorded identities
+remain. It was not promoted to deployment state. A real copied-state preload
+validator requires a fresh terminal state and must then verify SQLite integrity,
 six finalized sessions, exact frozen/live recounts, clean session state, empty
 callback outboxes, engine/configuration/projection bindings, and source
 evidence. No current preload-validator digest or success claim is made here.

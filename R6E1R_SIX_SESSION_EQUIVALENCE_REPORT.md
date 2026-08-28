@@ -2,17 +2,29 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **IN PROGRESS — CURRENT-REPAIR A/B AND REFERENCE MATRICES PASS; EIGHT ALTERNATE SCHEDULES AND TERMINAL GATES PENDING**
+Status: **R6E1R_FINAL_VERIFICATION_INFRASTRUCTURE_BLOCKED**
 
-This report records only immutable evidence already published by the persistent
-current-repair v9 verifier. It does not promote the full six-session gate to
-PASS. A verified tag and deployment preload remain prohibited until every
-pending schedule and terminal artifact below is sealed and independently
-validated.
+This report retains independently observed and pushed v9 baseline/reference
+facts. It does not promote the full six-session gate to PASS.
+
+## Terminal infrastructure stop
+
+The operator stop applied a runtime mask at `20:39:00.999`. Systemd then
+recorded a client-requested `SIGINT` at `20:39:01` and client-requested
+`SIGTERM` at `20:39:06`. No OOM kill occurred, swap use remained zero, and the
+observed peak was 14.5 GiB. The v9 evidence, work, and control roots were
+externally deleted after the operator stop. A post-stop search found zero surviving alternate-schedule bundles,
+no bundle marker, and no terminal all-gates summary.
+
+Consequently the hashes below are retained observations, not surviving final
+all-nine artifacts, and no terminal six-session equivalence claim is made. A
+fresh run requires an explicit uninterrupted root-agreed window and must not
+evade or work around an active root operator. Deployment and preload were not
+performed; no verified tag was created.
 
 ## Current authority
 
-The active evidence run is pinned to clean repair commit
+The stopped evidence run was pinned to clean repair commit
 `e1d67c534bea5c61b0e3d379db7f599de7e1c445`. The repaired engine aggregate is
 `eb3e848d75ef10471d14c641507f44b6f825c4dd63c305e27a803376048f2947`;
 its 38-file manifest SHA-256 is
@@ -20,13 +32,13 @@ its 38-file manifest SHA-256 is
 The combined runtime-configuration identity is
 `b4148be9892cc4e19c2a13d52ef68a65239578e6147cb3cdf94fd2d812e48a41`.
 
-The persistent verifier is `market-profile-history-verifier-v9.service`,
+The verifier was `market-profile-history-verifier-v9.service`,
 invocation `ce9595fd18b344ab8ab2765ae509f8fa`. Its clean checkout is
 `/home/codexuser/mp-engine-e1d-v9`; its evidence output root is
 `/opt/banknifty/research/vpoc_oi_price_response_v2/historical_callback_acceptance_v9`.
-The service is intentionally left running while the eight alternate schedules
-complete. Values below are read only from marker-last immutable seals and
-matrices; mutable SQLite state is not acceptance evidence.
+It is no longer an active acceptance run. Values below were independently
+observed before deletion; they cannot now be revalidated from the original
+seals or mutable state.
 
 ## Focused prerequisite
 
@@ -75,9 +87,9 @@ R2-R6 analytical table was used as A/B input.
 | Projection provenance | `ea2430747045621a1a835ce84d9888b5179bdc5c2e14f7a68b73eb78a99507e0` |
 | Pre-run source comparison | `3726fbfba76ff4b3cdab50cba4288eca2a34506140f167a6adaba5583d0c5c56` |
 
-All 141 source-comparison rows were unchanged at projection time. The distinct
-terminal post-run source rehash remains pending and is not inferred from this
-pre-run comparison.
+All 141 source-comparison rows were observed unchanged at projection time. The
+distinct terminal post-run source rehash did not survive and is not inferred
+from this pre-run comparison.
 
 ## Sealed original-source A/B baseline
 
@@ -178,9 +190,9 @@ SHA-256 is
 
 ## Current scoped zero gates
 
-These are established for sealed original-source A, independent clean B, and
-the published canonical/reference matrices only. They are not a substitute for
-the pending alternate-schedule and terminal audits.
+These were observed for original-source A, independent clean B, and the
+published canonical/reference matrices only. They are not a substitute for
+the missing alternate-schedule and terminal audits.
 
 | Measure | Current value | Scope |
 |---|---:|---|
@@ -198,25 +210,25 @@ the pending alternate-schedule and terminal audits.
 
 Final values for schedule failures, bundle failures, checkpoint failures,
 recovery failures, prohibited/unmeasured runtime opens, and post-run source
-mutations remain pending.
+mutations were not published and are blocked by the deleted roots.
 
-## Alternate schedules still pending
+## Alternate schedules blocked
 
-The original-source A/B baseline above is sealed, but the terminal scheduling
-matrix has not been published. Every alternate schedule is therefore retained
-as explicitly pending; historical results are not imported.
+The original-source A/B baseline above was observed sealed, but the terminal
+scheduling matrix was not published. Every alternate schedule is therefore
+blocked; historical results are not imported.
 
 | Schedule | Current v9 status |
 |---|---|
-| Original source chunks | `SEALED_BASELINE_PASS; TERMINAL_SCHEDULE_BUNDLE_PENDING` |
-| One complete JSONL record per increment | `PENDING_V9_EVIDENCE` |
-| Deterministic variable chunks | `PENDING_V9_EVIDENCE` |
-| Chunk boundaries inside JSONL lines | `PENDING_V9_EVIDENCE` |
-| Empty/repeated polls | `PENDING_V9_EVIDENCE` |
-| Multiple checkpoint restarts | `PENDING_V9_EVIDENCE` |
-| Restart at analytical transition boundaries | `PENDING_V9_EVIDENCE` |
-| Hourly file rotation | `PENDING_V9_EVIDENCE` |
-| Large chronological chunks | `PENDING_V9_EVIDENCE` |
+| Original source chunks | `OBSERVED_BASELINE_PASS; ROOTS_DELETED` |
+| One complete JSONL record per increment | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Deterministic variable chunks | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Chunk boundaries inside JSONL lines | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Empty/repeated polls | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Multiple checkpoint restarts | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Restart at analytical transition boundaries | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Hourly file rotation | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Large chronological chunks | `BLOCKED_NO_SURVIVING_BUNDLE` |
 
 The published schedule contract file SHA-256 is
 `9579ec8a4dc5d3b06e3f0caf6005903a83a12804711aff3f8b01d05ce5663020`;
@@ -225,22 +237,22 @@ its embedded canonical contract SHA-256 is
 The feasibility CSV is planning evidence only and labels unexecuted schedules
 `REQUIRED_NOT_SATISFIED`; it is not a completion matrix.
 
-## Terminal publication gates still pending
+## Terminal publication gates blocked
 
 | Required terminal artifact | Current status |
 |---|---|
-| Fresh/final bundle-storage matrix and marker-last revalidation | `PENDING_V9_EVIDENCE` |
-| Full checkpoint-accounting matrix | `PENDING_V9_EVIDENCE` |
-| Truncation/replacement recovery matrix | `PENDING_V9_EVIDENCE` |
-| Complete runtime file-open audit | `PENDING_V9_EVIDENCE` |
-| Post-run authoritative-source hash comparison | `PENDING_V9_EVIDENCE` |
-| Terminal all-gates equivalence summary | `PENDING_V9_EVIDENCE` |
-| Incremental-A deployment-preload validation | `PENDING_V9_EVIDENCE` |
+| Fresh/final bundle-storage matrix and marker-last revalidation | `BLOCKED_NO_SURVIVING_BUNDLE` |
+| Full checkpoint-accounting matrix | `BLOCKED_NO_TERMINAL_SUMMARY` |
+| Truncation/replacement recovery matrix | `BLOCKED_NO_TERMINAL_SUMMARY` |
+| Complete runtime file-open audit | `BLOCKED_NO_TERMINAL_SUMMARY` |
+| Post-run authoritative-source hash comparison | `BLOCKED_NO_TERMINAL_SUMMARY` |
+| Terminal all-gates equivalence summary | `BLOCKED_NO_TERMINAL_SUMMARY` |
+| Incremental-A deployment-preload validation | `BLOCKED_NO_ACCEPTED_STATE_ROOT` |
 
-Until these artifacts and all eight alternate schedule bundles pass, this
-report must remain `IN PROGRESS`. No elapsed total, terminal peak RSS, output
-tree total, final full-six test count, deployment package result, or verified
-tag is claimed here.
+No elapsed total, terminal test count, terminal output tree, or all-nine
+equivalence result is claimed. The observed 14.5-GiB process peak is stop
+diagnostic evidence only, not a terminal performance measurement. Deployment
+was not performed and no verified tag was created.
 
 ## Rejected historical evidence
 
@@ -259,4 +271,4 @@ partial or inherited schedule result is carried into v9.
 
 Per-artifact status will be reconciled in
 [R6E1R_ARTIFACT_EQUIVALENCE_MATRIX.md](R6E1R_ARTIFACT_EQUIVALENCE_MATRIX.md)
-after terminal v9 publication.
+after a fresh uninterrupted root-agreed rerun publishes terminal evidence.

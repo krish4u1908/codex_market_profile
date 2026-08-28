@@ -2,117 +2,83 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-## Current authoritative status — post-repair persistent v9
+Current status: **R6E1R_FINAL_VERIFICATION_INFRASTRUCTURE_BLOCKED**
 
-- The current analytical authority is clean commit
-  `e1d67c534bea5c61b0e3d379db7f599de7e1c445`, with pushed handoff head
-  `a7dabbdb8ed1f8971c2789fe0930cc2f19f08aaf` before this documentation
-  update. Earlier `81b0836` acceptance is superseded by the sparse empty-Index
-  clock repair and is historical evidence only.
-- Focused August 19 acceptance is final for this engine: 21/21 components,
-  8/8 ledgers, 9/9 causality invariants, 9/9 schedules, 72/72 checkpoints,
-  2/2 recovery probes and 8/8 source hashes PASS; summary SHA-256
+This is not `R6E1R_ANALYTICS_VERIFIED_DEPLOYMENT_BLOCKED`. The mandatory
+six-session all-nine-schedule run did not reach a terminal acceptance summary,
+so final analytics, deployment, and the verification tag remain unverified.
+
+## Terminal blocking condition
+
+- Persistent full-six v9 was runtime-masked at **20:39:00.999 IST**. Its
+  journal records SIGINT at **20:39:01** and SIGTERM at **20:39:06**, both on
+  client request.
+- The process had consumed **2h15m44.789 CPU**, reached a **14.5G** cgroup
+  peak, used **0 swap**, and produced no OOM event. This was not an analytical
+  assertion failure or a resource-limit termination.
+- The one-record-per-increment schedule was interrupted at approximately
+  **96,650 / 543,329** selected records. It published no marker-last atomic
+  schedule bundle.
+- Root `pts/1` logged in at **20:37:18 IST** from `169.254.0.1`. Exact
+  attribution for the later control and deletion actions is unavailable; the
+  login chronology is not proof of actor identity.
+- An operator then deleted:
+  - `/home/codexuser/mp-history-v9`
+  - `/home/codexuser/mp-history-v9-control`
+  - `/opt/banknifty/research/vpoc_oi_price_response_v2/historical_callback_acceptance_v9`
+- An exhaustive read-only search found zero surviving
+  `equivalence_summary`, `schedule_resume_contract`, or `schedule_bundle`
+  artifacts. No v9 partial output is eligible for promotion or resume.
+- This repeats the external stop/deletion condition across v2-v8. Further
+  automatic relaunches would not make safe progress and must not attempt to
+  evade root controls.
+
+## Verified work that remains valid
+
+- Current analytical repair commit:
+  `e1d67c534bea5c61b0e3d379db7f599de7e1c445`.
+- Complete post-repair regression: **660/660 passed**, zero failures and zero
+  skips.
+- Fresh post-repair focused August 19 all-nine result: 21/21 canonical
+  components, 8/8 analytical ledgers, 9/9 causality groups, 9/9 schedules,
+  72/72 checkpoint rows, 2/2 recovery probes, and 8/8 source hashes passed;
+  summary SHA-256
   `f83d519226bf7876be5446e16b657bbea9c3624f3ecb7a5e2a724bf35b0954f9`.
-- Persistent v9 has sealed fresh canonical A and independently clean B. Their
-  21/21 component, 8/8 ledger and 9/9 causality matrices pass with every
-  difference/failure zero. Frozen R6C2R 30/30 and R6D 180/180 row-level
-  comparisons pass with zero unexplained remainder.
-- The active remaining analytical gate is all eight alternate full-six
-  schedules plus final recovery, file-open, post-source, storage and terminal
-  summary validation. One-record-per-increment is executing now. No incomplete
-  schedule state or marker may be promoted.
-- After terminal v9 PASS, remaining work is preload validation, isolated local
-  deployment/replay/browser/health tests, final regression and security scans,
-  report refresh, push and clean remote verification. External TCP/8805 remains
-  a likely infrastructure blocker because UFW defaults to INPUT DROP and this
-  account has neither host-firewall nor provider-firewall authority.
-- Do not create `r6e1r-live-shadow-verified` unless the external URL is also
-  independently reachable and every remaining gate passes. If local deployment
-  succeeds but external reachability remains unavailable, close exactly as
-  `R6E1R_ANALYTICS_VERIFIED_DEPLOYMENT_BLOCKED` and do not tag.
+- Before deletion, v9 had immutably sealed fresh canonical A and independent
+  chronological B, and observed comparisons passed 21/21 components, 8/8
+  ledgers, 9/9 causality groups, R6C2R 30/30, and R6D 180/180. These recorded
+  intermediate observations do not replace the missing all-schedule terminal
+  evidence.
+- The authoritative raw root
+  `/opt/banknifty-collector/data-prod-v4` remains present and readable.
 
-## Historical and superseded notes
+## Repository and protected-host state
 
-- The resumable all-nine harness is security-reviewed, test-complete, committed,
-  and pushed at `81b0836fe50939246ae210bb62780ac4e163e100`. Resume
-  imports still require that exact clean commit, checkout/config/projection/source
-  contract, and completed marker-last schedule bundles. No bundle from an older
-  or differently contracted run is eligible.
+- Branch: `fix/r6e1r-final-live-shadow`.
+- Local and remote head before these scratchpad edits:
+  `92673323d3523b3338a39743063299d491ff4d08`.
+- Verified tag `r6e1r-live-shadow-verified`: **not created**.
+- Port 8803 PID/start identity: `380743 / 46015771`, unchanged.
+- Port 8804 PID/start identity: `465394 / 51980337`, unchanged.
+- Collector PID/start identity: `1430352 / 81242549`, unchanged.
+- Collector script SHA-256:
+  `0dbd270ba3a1fedc63f4ed8c8eff1947a7c14d08e412b3f82a890cb5500a4a4a`,
+  unchanged.
+- Ports 8805 and 18805 are unbound. No deployment is active and no deployed
+  URL is verified.
 
-- Current focused acceptance and the exact-current 656-test regression pass.
-  The canonical `81b0836` full-six run is active from 2026-08-27 23:33:15 IST
-  as invocation `b538f7e58a7c4f8796963ea46e58eeb0`. Its preflight reverified
-  the remote head, clean detached checkout, both manifests, projection identity,
-  fresh roots, protected-service identities, 28.95 GB available memory, and
-  248.80 GB available disk. A separate branch's full-six service remains active
-  in isolated roots. Concurrency was admitted only after measured anonymous
-  memory and reclaimable-cache accounting showed substantial headroom; do not
-  stop, reuse, or treat that other branch's output as `81b0836` evidence.
+## Required recovery
 
-- Fresh evidence from the repair commit now includes passing large-only and
-  focused August 19 all-nine gates. The focused gate has 21/21 components,
-  8/8 ledgers, 9/9 invariants, 9/9 schedules, 72/72 checkpoints, 2/2 recovery
-  probes and 8/8 source hashes exact, with every failure/safety counter zero.
-  Still mandatory are the full canonical six-session all-nine equivalence,
-  final post-change regression/browser/security/scan reruns, then isolated
-  deployment. Two pre-seal repair diagnostics were rejected (one missing
-  `PYTHONPATH`, one external signal-2 interruption); neither is acceptance
-  evidence. Do not deploy or create the verified tag yet.
+1. Obtain an explicit uninterrupted, root-agreed execution window that covers
+   the full mandatory run and evidence retention. Do not evade root service or
+   filesystem controls.
+2. Rebuild from authoritative raw bytes in fresh roots and rerun the actual
+   R6E checkpoint/callback path through all nine schedules. Require a terminal
+   summary plus marker-last schedule bundles and every mandated zero gate.
+3. Only after terminal full-six acceptance, perform preload validation,
+   isolated deployment, replay/browser/API/health/restart tests, final
+   regression and security scans, report refresh, push, and remote closeout.
+4. Create `r6e1r-live-shadow-verified` only if every analytical and deployment
+   gate, including independent public reachability, passes.
 
-- The non-destructive merge is complete and pushed as `dcccc723c6584bd929fab1aef531c3aad32eb1a2`; no verified tag exists.
-- The repaired 38-file engine and 47-file deployment manifests are exact and independently verified. Current engine manifest/aggregate are `51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7` / `362474858eda75b18180ad2fce48e50e1d4acdd1b04a0db405eaae199e70b7a7`; deployment manifest/package are `aa1e0280613e4418db01bbaed9a14d79468dbbaf8cb98fdee33581c5621b5dd4` / `a73163704cb8131ab0f1a157738bdea358accd5b7985f6b846a95bc3c760127f`. Reseal only if an allowlisted byte changes.
-- The current pushed evidence head is `81b0836fe50939246ae210bb62780ac4e163e100`. Focused August 19 is accepted; canonical six-session all-nine equivalence is the active remaining analytical gate.
-- Require zero stream/batch differences, canonical-reference mismatches, future joins, backdating, duplicate analytical IDs, prohibited or unmeasured opens, checkpoint failures, analytical refusals, and source mutations across every required schedule.
-- The current fully provisioned regression is 656/656 with zero failures/skips;
-  harness-only is 53/53 and ingestion/orchestrator/harness is 294/294. A final
-  complete regression and scans are still required after the last report and
-  deployment changes.
-- User lingering is enabled (`Linger=yes`). Isolated installation, cold-preload measurement, health/readiness, restart recovery, public-interface reachability, and final screenshots remain pending.
-- UFW is enabled with default inbound drop, while rule inspection/change and
-  provider-firewall verification require administrator or off-host access.
-  Local isolated deployment can proceed only after analytics pass; external
-  acceptance may become the genuine deployment blocker if TCP 8805 cannot be
-  verified from an independent client.
-- Verify ports 8803/8804 and collectors remain byte/process/restart unchanged. Use only localhost backend 18805 and one selected external research port after every verification gate passes.
-- The collector source and control scripts remain byte/mtime unchanged and no R6E action touched them. The market-hours collector process self-shut down through its recurring near-close watchdog path at 15:40:56 IST, so final evidence must distinguish unchanged code/non-interference from the expected old PID no longer being alive.
-- The auxiliary August 20 material remains diagnostic only and cannot replace the canonical focused or six-session inputs.
-- Do not create `r6e1r-live-shadow-verified` before full equivalence, regression, browser, deployment, public reachability, manifest, and clean-remote-closeout gates all pass.
-
-## 2026-08-28 live-activation supersession
-
-- The first deployment state is rejected and must not be reused: sparse August
-  26 fixed-context construction exposed an empty-Index aware/naive clock defect.
-  The narrow engine repair and 660-test regression now pass, but the prior
-  `81b0836` equivalence seal is not final evidence for the new authenticated
-  engine identity. Fresh focused and full-six all-nine equivalence, a new sealed
-  incremental-A state, final scans, redeployment, and external reachability are
-  still mandatory. Services remain stopped; no verified tag may be created.
-- Fresh post-repair focused all-nine acceptance is now independently verified
-  PASS at summary SHA-256 `f83d519226bf7876be5446e16b657bbea9c3624f3ecb7a5e2a724bf35b0954f9`.
-  The remaining analytical gate is the active fresh full-six all-nine run from
-  the same pinned engine commit; deployment remains prohibited until it passes.
-- Full-six final-v2 was externally SIGINT/TERM/KILLed and runtime-masked after
-  its baseline A/B/reference pass but before any alternate bundle sealed. The
-  interrupted root is retained and not accepted. Exact-contract final-v3 is
-  active under invocation `d15e42ff1149423e9dbcea606d3d638e`; it will rerun
-  A/B/references and every schedule fresh because no partial bundle is eligible.
-- The concurrent cleanup also killed v3-v5 before analytical state creation.
-  That transaction has now exited after explicit final checks; direct managed
-  final-v6 is active from fresh roots. If the same external kill condition
-  recurs after its cleanup has ended, acceptance execution will be genuinely
-  infrastructure-blocked despite the already sealed v2 A/B/reference PASS.
-- Final-v6 was subsequently terminated and the cleanup deleted every prior
-  full-six evidence/work tree, the clean checkout, and the reusable projection.
-  Those deleted identities are historical observations only and cannot support
-  the final claim. After cleanup quiescence, neutral direct final-v7 started
-  from a newly verified clean e1d67c5 checkout and authoritative raw bytes. It
-  rebuilds the projection and reruns A/B/references/all nine schedules fresh.
-  Deployment and the verified tag remain prohibited until this run seals and
-  the remaining regression/browser/deployment gates pass.
-- Direct v7 was externally SIGINTed at the managed terminal's 16:44 lifetime
-  and its projection/output were then deleted; it produced no eligible A seal.
-  Persistent v8 correctly refused the missing projection before Python. Neutral
-  persistent v9 is now the only active full-six attempt, from a fresh clean
-  checkout and fresh roots. If the same external signal/deletion condition
-  reaches this user-manager run, mandatory execution is an infrastructure
-  blocker rather than an analytical failure; no partial result may be promoted.
+Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**

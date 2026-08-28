@@ -2,7 +2,7 @@
 
 Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 
-Status: **POST-REPAIR FIXTURE AND FRESH V9 BASELINE PASS — TERMINAL FULL-SIX AND DEPLOYED-LIVE ACCEPTANCE PENDING**
+Status: **R6E1R_FINAL_VERIFICATION_INFRASTRUCTURE_BLOCKED — FIXTURE PASS; TERMINAL AND DEPLOYED-LIVE NOT VERIFIED**
 
 Code-under-test repair commit: `e1d67c534bea5c61b0e3d379db7f599de7e1c445`.
 
@@ -12,6 +12,13 @@ server-published analytical rows; it may select, sort, filter, and draw them,
 but it must not recompute detector, inventory, lifecycle, participation, or
 cross-layer analytics.
 
+Persistent v9's independently recorded R6D baseline passed 180/180 before an
+external root/operator transaction runtime-masked and stopped the verifier at
+20:39 IST, then deleted every v9 evidence/work/control root. No alternate
+schedule marker or terminal summary survived. The baseline observation and
+fixture captures therefore do not authorize deployment; a root-agreed
+uninterrupted rerun is required.
+
 ## Current post-repair evidence
 
 | Evidence | Result | What it proves |
@@ -20,8 +27,8 @@ cross-layer analytics.
 | Current Playwright/Chromium fixture | PASS within the 660-test suite; zero console/page errors | Current synthetic rendering, replay/control persistence, and tracked fixture screenshots |
 | Focused August 19 all-nine callback run | PASS; summary SHA-256 `f83d519226bf7876be5446e16b657bbea9c3624f3ecb7a5e2a724bf35b0954f9` | Actual post-repair checkpoint/callback GUI projection across all nine focused schedules |
 | Fresh persistent-v9 A/B GUI baseline | R6D 180/180 rows PASS; 174,080 target-only rows equal 174,080 permitted live extensions; zero unexplained | Fresh full-six baseline parity with the frozen R6D GUI reference |
-| Terminal persistent-v9 schedule suite | PENDING | Baseline success must not be promoted to terminal all-nine full-six acceptance |
-| Isolated deployed GUI and public browser | PENDING | Fresh installed-service screenshots, external reachability, and public-surface checks remain required |
+| Terminal persistent-v9 schedule suite | BLOCKED / NOT VERIFIED | External stop and deletion occurred during one-record processing before its marker |
+| Isolated deployed GUI and public browser | NOT DEPLOYED | Analytics never reached the deployment gate |
 
 The historical `81b0836fe50939246ae210bb62780ac4e163e100` result is retained
 only as regression history. It is not current post-repair, terminal full-six, or
@@ -80,7 +87,7 @@ code-under-test. Fresh screenshots must be captured from the final isolated
 deployment for complete fixed horizons, Intraday-only degradation, and the
 live/latest operational state.
 
-## Fresh v9 GUI baseline
+## Deleted v9 GUI baseline observations
 
 Persistent v9 has sealed its incremental A and independently clean
 chronological B baselines. Their canonical GUI-visible artifacts passed the
@@ -89,12 +96,15 @@ independently enumerated 174,080 permitted live-degradation extensions; there
 are zero reference-only or unexplained rows. The R6D comparison matrix SHA-256
 is `dc0c5814dbabaafd5d914627b4435038729f4a187a41beb98f385a19b1e6c467`.
 
+The underlying v9 evidence files were later externally deleted. These hashes
+remain independently recorded provenance, not a surviving terminal package.
+
 This baseline establishes fresh GUI parity for the original-chunk incremental
 path and clean chronological batch path. It does not establish terminal
 full-six acceptance: every required schedule, restart/recovery gate, and
 terminal marker must still complete successfully.
 
-## Remaining final acceptance gates
+## Remaining acceptance gates — infrastructure blocked
 
 - Complete and seal the persistent-v9 all-nine full-six schedule suite.
 - Start the verified isolated backend and sanitized gateway without touching
@@ -106,6 +116,6 @@ terminal marker must still complete successfully.
 - Capture fresh deployed-browser screenshots and verify the selected public URL
   from an off-host client.
 
-`GUI_ACCEPTANCE: POST_REPAIR_FIXTURE_AND_V9_BASELINE_PASS_TERMINAL_AND_DEPLOYED_LIVE_PENDING`
+`GUI_ACCEPTANCE: R6E1R_FINAL_VERIFICATION_INFRASTRUCTURE_BLOCKED_FIXTURE_ONLY_NOT_DEPLOYED`
 
 Detailed pending browser cases are listed in [R6E1R_BROWSER_TEST_REPORT.md](R6E1R_BROWSER_TEST_REPORT.md).
