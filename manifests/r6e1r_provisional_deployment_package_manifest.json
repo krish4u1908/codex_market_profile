@@ -50,9 +50,9 @@
     "src/banknifty_profiler/shadow/symbols.py"
   ],
   "classification": "LIVE MARKET-PROFILING DIAGNOSTIC \u2014 NOT A BUY/SELL SIGNAL",
-  "engine_base_commit": "a12a5864cc1cd28cf4b0c1d665d63fa623a1c69a",
-  "engine_hash": "362474858eda75b18180ad2fce48e50e1d4acdd1b04a0db405eaae199e70b7a7",
-  "engine_source_manifest_sha256": "51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7",
+  "engine_base_commit": "88f30e740d55376d1eb9ed091a4080b3372a2757",
+  "engine_hash": "4de92582121b8173a0400e7b5566c9c8c74e8965ceb57c8a70643b7486b2a827",
+  "engine_source_manifest_sha256": "aa95d6cabb27785dd65e440d846b6eb9beb71b7d40fd7d730f370c1dbba7910d",
   "file_count": 48,
   "files": [
     {
@@ -67,8 +67,8 @@
     },
     {
       "path": "deploy/r6e1r_provisional/README.md",
-      "sha256": "7b7ad5d4f4dddde99ca0b8e849cd5e403dd919525578b3fd3f607bb03c2d1040",
-      "size": 8323
+      "sha256": "485e96ef249446670284fc4885315df491f25bb5722052b010c09d2dc5f38a81",
+      "size": 8353
     },
     {
       "path": "deploy/r6e1r_provisional/r6e1r-activation.json.example",
@@ -82,17 +82,17 @@
     },
     {
       "path": "deploy/r6e1r_provisional/r6e1r-provisional-shadow.service",
-      "sha256": "c226a2bb4de4d30cfb47a4dff3dadde1e067db329949abffa2d6f2b9faee4730",
+      "sha256": "379e0dff6c99c47646ce51694944218602959757e07b1fbfc2067e40666735ce",
       "size": 4563
     },
     {
       "path": "deploy/r6e1r_provisional/r6e1r-provisional-status.json",
-      "sha256": "f306688a520329923046a1ede9ffed70f818becf15365d71cff23739b0cdd516",
+      "sha256": "c8aaf5f42ebc6ca38bfa0b812650606862d03897c63817e9c83790202955ce96",
       "size": 804
     },
     {
       "path": "deploy/r6e1r_provisional/r6e1r-runtime-config.json.example",
-      "sha256": "ecfa9e1a8afb4622f8d4f3128511817bef451f5353ff1998d72e6475c67ebab2",
+      "sha256": "79ef15060260af02725143d89b7268b5eb5c33ec69fee279fe64f36ceb577455",
       "size": 903
     },
     {
@@ -102,17 +102,17 @@
     },
     {
       "path": "deploy/r6e1r_provisional/validate_clean_start.py",
-      "sha256": "0940ecb70d97c1d39ad281241105bea070681617910a11632e4cbcede51e9a83",
+      "sha256": "f39529691153c40cdcf296b893b0217cb39c35d49fde34a355390c7b789e1ca8",
       "size": 26773
     },
     {
       "path": "manifests/r6e1r_engine_source_manifest.json",
-      "sha256": "51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7",
+      "sha256": "aa95d6cabb27785dd65e440d846b6eb9beb71b7d40fd7d730f370c1dbba7910d",
       "size": 8851
     },
     {
       "path": "manifests/r6e1r_engine_source_manifest.sha256",
-      "sha256": "a6ef10c91e7f481d422bb36e7c943fe0549c22f047584d5e8c43805d813daa0a",
+      "sha256": "fdfbfc300d8a1254b74920dd1495ae0e0e28e9c1acb3a1bba74970899722a77b",
       "size": 110
     },
     {
@@ -232,8 +232,8 @@
     },
     {
       "path": "src/banknifty_profiler/raw_io/reader.py",
-      "sha256": "9873d578e4238193067d4d883ae9f279d8a86afcb6d529d6eae182358e949d2e",
-      "size": 6636
+      "sha256": "a26eddb074cf4f1b6bf26235512c2cbb4fef747bbac4a0bb2dbe068e862bb6f4",
+      "size": 6702
     },
     {
       "path": "src/banknifty_profiler/runtime/__init__.py",
@@ -299,10 +299,10 @@
   "final_equivalence_status": "PENDING_FULL_SIX_ALL_NINE",
   "final_tag_authorized": false,
   "historical_replay_certified": false,
-  "package_hash": "28c8c7573b326a694dfea7f355f2549afc12517ff283521d737b65c27753d807",
+  "package_hash": "50b5513e8ab26a9ff7b7ba6f89b7badc67980ecedd099f99b9c683b15c6d46ea",
   "preloaded_state": false,
   "provisional_status": "PROVISIONAL_CLEAN_START_FULL_SIX_PENDING",
-  "runtime_configuration_hash": "43654758453b2a39209dbe0df6f6d2587c63c2bf5cb77c99d44df07dd54f485b",
+  "runtime_configuration_hash": "09d091a9d9518779e3f5fdee1b5a7d4c931e1510838f87d1702cc141a6676339",
   "schema": "R6E1R_PROVISIONAL_DEPLOYMENT_PACKAGE_MANIFEST_V1",
   "state_origin": "EMPTY_AT_PREPARATION"
 }

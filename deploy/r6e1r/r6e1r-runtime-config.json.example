@@ -4,7 +4,7 @@
   "analytical_threshold_overrides": null,
   "classification": "LIVE MARKET-PROFILING DIAGNOSTIC \u2014 NOT A BUY/SELL SIGNAL",
   "engine_source_manifest_path": "manifests/r6e1r_engine_source_manifest.json",
-  "engine_source_manifest_sha256": "51b527e17b60ce7453cd29fdbb951c83dfb2190cd0f0fc97058671bd99636bd7",
+  "engine_source_manifest_sha256": "aa95d6cabb27785dd65e440d846b6eb9beb71b7d40fd7d730f370c1dbba7910d",
   "freshness_seconds": {
     "ce": 180,
     "futures": 10,

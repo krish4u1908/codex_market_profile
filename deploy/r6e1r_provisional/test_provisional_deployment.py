@@ -21,9 +21,9 @@ RENDERER = PACKAGE_ROOT / "render_service_units.py"
 MANIFEST = ROOT / "manifests/r6e1r_provisional_deployment_package_manifest.json"
 COMPANION = ROOT / "manifests/r6e1r_provisional_deployment_package_manifest.sha256"
 CLASSIFICATION = "LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL"
-BASE_COMMIT = "a12a5864cc1cd28cf4b0c1d665d63fa623a1c69a"
+BASE_COMMIT = "88f30e740d55376d1eb9ed091a4080b3372a2757"
 FINAL_MANIFEST_SHA256 = (
-    "d5106846fcbfbc84e172ab00449535cf030b6f641745e6d048223c1b2fc799db"
+    "b7bdbc5ed602aa1a5a737878bf5d20ad696764e7358ec8ca1b9cc3ed4943a013"
 )
 
 

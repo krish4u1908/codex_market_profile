@@ -5,21 +5,21 @@ Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
 Status: **PROVISIONAL CLEAN-START — FULL-SIX PENDING**
 
 This is a separate deployment package for operating the exact repaired
-`a12a5864cc1cd28cf4b0c1d665d63fa623a1c69a` analytical engine while the
-full-six all-nine acceptance run continues. It does not alter, bypass, or
+`88f30e740d55376d1eb9ed091a4080b3372a2757` analytical engine while the
+full-six all-nine acceptance gate remains pending. It does not alter, bypass, or
 replace `deploy/r6e1r/validate_preloaded_state.py`, the sealed final package,
 or the final verification gate.
 
 The provisional runtime starts from a newly created empty state directory and
 reads only collector sessions on or after the sealed activation boundary,
 2026-08-26. It does not preload the focused fixture, an obsolete equivalence
-state, or any part of the active full-six output. Its state is never promoted
+state, or any part of the preserved full-six output. Its state is never promoted
 into the final deployment.
 
 ## Non-negotiable boundaries
 
-- Keep `r6e1r-v2-six-a12a586-v1.service` and its process, output, checkpoints,
-  invocation, CPU affinity, and limits untouched.
+- Keep `r6e1r-v2-six-a12a586-v1.service` inactive. Preserve its partial output,
+  checkpoints, and logs unchanged; do not restart or replace it.
 - Keep collectors and existing ports 8803/8804 untouched.
 - Install only the two units whose names begin `r6e1r-provisional-`.
 - Use a new deployment root. Do not point this package at a final or test state
@@ -35,7 +35,7 @@ into the final deployment.
 The provisional backend conflicts only with the final `r6e1r-shadow.service`
 because both use `127.0.0.1:18805`. The provisional gateway similarly
 conflicts with the final gateway. Neither unit conflicts with or controls the
-full-six validation service.
+stopped full-six validation service.
 
 ## Package and host preflight
 
@@ -54,7 +54,7 @@ sha256sum -c manifests/r6e1r_provisional_deployment_package_manifest.sha256
 jq -r '.files[] | "\(.sha256)  \(.path)"' \
   manifests/r6e1r_provisional_deployment_package_manifest.json | sha256sum -c -
 test "$(jq -r .engine_base_commit manifests/r6e1r_provisional_deployment_package_manifest.json)" = \
-  a12a5864cc1cd28cf4b0c1d665d63fa623a1c69a
+  88f30e740d55376d1eb9ed091a4080b3372a2757
 test "$(jq -r .final_equivalence_status manifests/r6e1r_provisional_deployment_package_manifest.json)" = \
   PENDING_FULL_SIX_ALL_NINE
 test "$(jq -r .final_tag_authorized manifests/r6e1r_provisional_deployment_package_manifest.json)" = false
@@ -63,8 +63,8 @@ systemctl --user show r6e1r-v2-six-a12a586-v1.service \
   -p ActiveState -p SubState -p MainPID -p InvocationID -p NRestarts
 ```
 
-Require the accepted full-six unit to remain active with the same invocation
-and zero restarts. Require `127.0.0.1:18805` and the selected gateway port to
+Require the obsolete full-six unit to remain inactive and do not restart it.
+Require `127.0.0.1:18805` and the selected gateway port to
 be unused. Prefer 8805, otherwise choose the first unused port through 8810.
 Never select 8803 or 8804.
 
@@ -155,8 +155,8 @@ After hours, readiness may be `503 STALE_DATA` only when health is 200,
 checkpoint/source-manifest integrity remains true, causality counters remain
 zero, and the current/latest status endpoint works. During initial catch-up,
 readiness can remain unavailable until the service has processed sufficient
-post-activation collector data. This is not a failure of the long full-six
-run.
+post-activation collector data. This does not authorize the final verification
+tag.
 
 Verify externally only through the selected provisional URL. Confirm POST,
 PUT, PATCH, and DELETE return 405, unknown paths are sanitized, and no response
@@ -171,8 +171,8 @@ systemctl --user disable --now r6e1r-provisional-readonly-gateway.service
 systemctl --user disable --now r6e1r-provisional-shadow.service
 ```
 
-Do not delete its state while diagnosing a failure. Once full-six all-nine
-passes, preserve the provisional state as non-acceptance evidence, stop these
-two units, and deploy the final package through `deploy/r6e1r/README.md` using
-only the immutable full-six incremental-A state. Never copy or merge the
-provisional clean-start state into the final state root.
+Do not delete its state while diagnosing a failure. If final certification is
+resumed later and passes, preserve the provisional state as non-acceptance
+evidence, stop these two units, and deploy the final package through
+`deploy/r6e1r/README.md` using only separately certified final state. Never copy
+or merge the provisional clean-start state into the final state root.
