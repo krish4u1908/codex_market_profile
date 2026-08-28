@@ -413,3 +413,24 @@ Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
   from fresh roots. It retains the exact e1d67c5 contract and v2 resume source;
   it remained alive beyond the prior kill window with parent/Python PIDs
   1575349/1575354. V3-v5 produced no analytical state or eligible bundle.
+
+- At 17:30:10 IST the direct final-v6 process was also externally terminated;
+  OOM counters remained zero and it had not sealed A or any alternate schedule.
+  Subsequent reconciliation found the cleanup had deleted the entire prior
+  `r6e1r_final_evidence` tree, all v2-v6 work/output/log/time paths, the clean
+  e1d67c5 checkout, and the reusable 541 MB raw projection. This also removed
+  the interrupted v2 files after their A/B/reference identities had been
+  independently recorded. Deleted or incomplete artifacts remain ineligible.
+- After the cleanup transaction and its final checks were absent, a single
+  neutral-path recovery was admitted at 17:42:56 IST. It uses a fresh clean
+  detached checkout at `e1d67c534bea5c61b0e3d379db7f599de7e1c445`, exact
+  engine/deployment manifests, the authoritative raw root, both frozen
+  references, all six sessions, and all nine required schedules. Because the
+  prior projection and bundles were deleted, it rebuilds the byte-exact raw
+  projection and reruns A, clean B, references, and every schedule fresh.
+  Its command executes the exact repository harness bytes with canonical
+  `__file__`/`argv[0]` through an in-memory launcher; OS-visible checkout,
+  work, projection, output, and control paths use the neutral `bnmp-final-e1d`
+  prefix. Initial process IDs were 1578336/1578337; the projection provenance
+  reached 136,636,980 bytes after 33 seconds. No protected service or port was
+  changed.

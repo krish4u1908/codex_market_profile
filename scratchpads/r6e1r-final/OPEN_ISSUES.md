@@ -70,3 +70,11 @@ Classification: **LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL**
   final-v6 is active from fresh roots. If the same external kill condition
   recurs after its cleanup has ended, acceptance execution will be genuinely
   infrastructure-blocked despite the already sealed v2 A/B/reference PASS.
+- Final-v6 was subsequently terminated and the cleanup deleted every prior
+  full-six evidence/work tree, the clean checkout, and the reusable projection.
+  Those deleted identities are historical observations only and cannot support
+  the final claim. After cleanup quiescence, neutral direct final-v7 started
+  from a newly verified clean e1d67c5 checkout and authoritative raw bytes. It
+  rebuilds the projection and reruns A/B/references/all nine schedules fresh.
+  Deployment and the verified tag remain prohibited until this run seals and
+  the remaining regression/browser/deployment gates pass.
