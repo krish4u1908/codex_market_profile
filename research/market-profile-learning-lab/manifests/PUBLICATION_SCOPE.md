@@ -2,7 +2,7 @@
 
 ## Included
 
-- V0.1.2 source, schemas, tests, templates, methodology, and source manifest.
+- V0.1.2 and V0.1.3 source, schemas, tests, templates, methodology, and source manifests.
 - Centralized commentary design and decision log.
 - NIFTY reuse boundary and V0.1.3 evaluation plan.
 - Aggregate pilot counts, candidate hashes, validation selection, and leading

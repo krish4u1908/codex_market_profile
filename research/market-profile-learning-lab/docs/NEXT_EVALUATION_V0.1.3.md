@@ -1,7 +1,10 @@
 # V0.1.3 Evaluation-Hardening Plan
 
-V0.1.3 should evaluate the frozen V0.1.2 candidates more rigorously. It should
-not generate additional candidates from the same validation result.
+Implementation status: **IMPLEMENTED IN `releases/v0.1.3/`; real-session
+execution remains pending and both holdouts remain sealed.**
+
+V0.1.3 evaluates the frozen V0.1.2 candidates more rigorously. It does not
+generate additional candidates from the same validation result.
 
 ## Frozen shortlist
 

@@ -1,0 +1,67 @@
+{
+  "schema": "BANKNIFTY_MARKET_PROFILE_LEARNING_CONFIG_V1",
+  "experiment_name": "banknifty-market-profile-pilot-2026-08",
+  "classification": "RESEARCH_ONLY_NOT_A_TRADING_SIGNAL",
+  "splits": {
+    "train": [
+      "2026-07-28",
+      "2026-07-29",
+      "2026-08-05",
+      "2026-08-06",
+      "2026-08-07",
+      "2026-08-10",
+      "2026-08-11",
+      "2026-08-12",
+      "2026-08-13",
+      "2026-08-17"
+    ],
+    "validation": [
+      "2026-08-18",
+      "2026-08-19",
+      "2026-08-20",
+      "2026-08-21"
+    ],
+    "holdout": [
+      "2026-08-24",
+      "2026-08-25",
+      "2026-08-27",
+      "2026-08-28"
+    ]
+  },
+  "horizons_minutes": [5, 15, 30],
+  "direction_threshold_points": 25.0,
+  "direction_sensitivity_points": [15.0, 25.0, 40.0],
+  "profile_bin_points": 25,
+  "value_area_fraction": 0.7,
+  "max_index_age_seconds": 5.0,
+  "episode_merge_seconds": 0.0,
+  "level_touch_tolerance_points": 15.0,
+  "level_reaction_points": 25.0,
+  "level_breach_points": 15.0,
+  "maximum_levels_each_side": 2,
+  "minimum_training_sessions": 8,
+  "minimum_validation_sessions": 3,
+  "minimum_holdout_sessions": 3,
+  "evaluation_v013": {
+    "horizon_candidate_allowlist": {
+      "5": [],
+      "15": [
+        "conservative-flow-confirmation-v1-966e83ba1736"
+      ],
+      "30": [
+        "empirical-minimal-abstaining-v1-13051026b24b"
+      ]
+    },
+    "minimum_balanced_accuracy_margin": 0.0,
+    "minimum_composite_margin": 0.0,
+    "maximum_brier_worsening": 0.0,
+    "minimum_session_win_fraction": 0.75,
+    "minimum_loo_pass_fraction": 0.75,
+    "minimum_directional_coverage": 0.2,
+    "minimum_present_actual_classes": 3,
+    "minimum_level_reaction_tests": 5,
+    "minimum_level_reaction_rate_margin": 0.0,
+    "session_bootstrap_replicates": 1000,
+    "session_bootstrap_seed": 130513
+  }
+}

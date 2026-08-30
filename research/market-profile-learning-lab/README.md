@@ -14,7 +14,8 @@ versioned inputs and forecasts.
 
 ## Repository contents
 
-- `releases/v0.1.2/` — verified source release used for the August 2026 pilot.
+- `releases/v0.1.2/` — verified source release used for candidate generation.
+- `releases/v0.1.3/` — evaluation-hardening release using frozen candidates.
 - `docs/CONCEPT_AND_SYSTEM_DESIGN.md` — centralized shift-analysis and GUI design.
 - `docs/DECISION_LOG.md` — decisions carried forward from the design discussion.
 - `docs/NIFTY_REUSE_PLAN.md` — instrument-adapter boundary for NIFTY.
@@ -54,3 +55,11 @@ package stored in Git.
 The holdout remains sealed until a horizon-specific evaluation contract is
 predeclared and frozen. Even a holdout pass would permit only prospective
 shadow commentary, not automatic production promotion.
+
+## V0.1.3 status
+
+V0.1.3 implements the next evaluation stage without opening the holdout. It
+builds a new sealed run containing ordered future receipts only in label files,
+imports the exact V0.1.2 candidate hashes, evaluates the predeclared 15-minute
+flow and 30-minute empirical specialists, and adds session-level stability and
+reaction-before-breach tests. The 5-minute learned-agent allowlist is empty.
