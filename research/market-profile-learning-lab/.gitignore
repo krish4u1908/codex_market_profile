@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+runs/
+data/
+raw/
+logs/
+outputs/
+candidate_workspaces/
+*.jsonl
+*.csv
+*.tar.gz
+*.zip
+.env
+*.pem
+*.key

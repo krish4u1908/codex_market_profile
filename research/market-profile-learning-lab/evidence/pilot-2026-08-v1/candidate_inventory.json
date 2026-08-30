@@ -1,0 +1,20 @@
+{
+  "candidates": [
+    {
+      "candidate_id": "empirical-minimal-abstaining-v1-13051026b24b",
+      "origin": "CODEX_TRAINING_SUMMARY",
+      "sha256": "13051026b24b54cb62eaf6ccbdb2f674d77dc4ceb35ca78222678007115cdacc"
+    },
+    {
+      "candidate_id": "conservative-profile-confluence-v1-369c2cd86346",
+      "origin": "CODEX_TRAINING_SUMMARY",
+      "sha256": "369c2cd86346226db18a0fad705f62c9083ea9e6a5b6a6ab1824dd7c472457ad"
+    },
+    {
+      "candidate_id": "conservative-flow-confirmation-v1-966e83ba1736",
+      "origin": "CODEX_TRAINING_SUMMARY",
+      "sha256": "966e83ba1736dc24c730dfc454446af7d3496396ab39d2e5d46c4b0a6b6a3c57"
+    }
+  ],
+  "schema": "BANKNIFTY_MARKET_PROFILE_PILOT_CANDIDATE_INVENTORY_V1"
+}

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "banknifty-market-profile-learning-lab"
+version = "0.1.2"
+description = "Isolated causal learning and evaluation lab for BankNifty market-profile shift agents"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+banknifty-market-profile-lab = "banknifty_market_profile_lab.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+banknifty_market_profile_lab = ["py.typed"]
+
+[tool.setuptools.data-files]
+"share/banknifty-market-profile-learning-lab/schemas" = [
+  "schemas/agent-spec.schema.json",
+  "schemas/forecast.schema.json"
+]
+"share/banknifty-market-profile-learning-lab/config" = [
+  "config/learning_run.json",
+  "config/codex-learning.config.toml"
+]
+"share/banknifty-market-profile-learning-lab/templates/market-profile-agent/references" = [
+  "templates/market-profile-agent/references/market-profile-semantics.md"
+]

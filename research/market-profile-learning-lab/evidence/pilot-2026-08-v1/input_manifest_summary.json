@@ -1,0 +1,26 @@
+{
+  "classification": "RESEARCH_ONLY_NOT_A_TRADING_SIGNAL",
+  "consolidated_causal_episodes": 705,
+  "futures_market_not_retained_sessions": 1,
+  "holdout_state": "SEALED",
+  "input_manifest_sha256": "2dc87193ab168ec1b834ff2aebe4ba8594135325bc4b212b8927c3b340ff6cde",
+  "inventory_equivalence_all_sessions": "PASS",
+  "schema": "BANKNIFTY_MARKET_PROFILE_PILOT_INPUT_SUMMARY_V1",
+  "splits": {
+    "holdout": {
+      "episodes": 164,
+      "labels": 164,
+      "sessions": 4
+    },
+    "train": {
+      "episodes": 373,
+      "labels": 373,
+      "sessions": 10
+    },
+    "validation": {
+      "episodes": 168,
+      "labels": 168,
+      "sessions": 4
+    }
+  }
+}

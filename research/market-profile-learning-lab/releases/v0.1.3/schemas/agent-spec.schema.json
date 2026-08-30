@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "BANKNIFTY_MARKET_PROFILE_AGENT_SPEC_V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "name",
+    "thesis",
+    "direction_weights",
+    "direction_bias",
+    "horizon_bias",
+    "neutral_score_threshold",
+    "level_family_weights",
+    "level_scope_weights",
+    "level_kind_weights",
+    "distance_penalty",
+    "confluence_bonus",
+    "confidence_floor",
+    "confidence_ceiling",
+    "confidence_scale",
+    "commentary_focus",
+    "limitations"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "BANKNIFTY_MARKET_PROFILE_AGENT_SPEC_V1"
+    },
+    "name": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,62}$"},
+    "thesis": {"type": "string", "minLength": 20, "maxLength": 600},
+    "direction_weights": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 26,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["feature", "weight"],
+        "properties": {
+          "feature": {
+            "type": "string",
+            "enum": [
+              "price_return_1m",
+              "price_return_5m",
+              "price_return_15m",
+              "basis",
+              "basis_change_5m",
+              "futures_oi_delta",
+              "ce_delta_oi_total",
+              "pe_delta_oi_total",
+              "pe_minus_ce_delta",
+              "CE_POS_OI_VPOC_shift",
+              "CE_NEG_OI_VPOC_shift",
+              "PE_POS_OI_VPOC_shift",
+              "PE_NEG_OI_VPOC_shift",
+              "FUT_POS_OI_VPOC_shift",
+              "FUT_NEG_OI_VPOC_shift",
+              "BN_REF_FUT_VOLUME_VPOC_shift",
+              "shift_family_count",
+              "upward_shift_count",
+              "downward_shift_count",
+              "profile_confluence_count",
+              "nearest_support_distance",
+              "nearest_resistance_distance",
+              "basis_state_numeric",
+              "supporting_horizons",
+              "ce_minus_pe_upward_migration",
+              "price_inside_volume_value_area"
+            ]
+          },
+          "weight": {"type": "number", "minimum": -4.0, "maximum": 4.0}
+        }
+      }
+    },
+    "direction_bias": {"type": "number", "minimum": -3.0, "maximum": 3.0},
+    "horizon_bias": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["5", "15", "30"],
+      "properties": {
+        "5": {"type": "number", "minimum": -2.0, "maximum": 2.0},
+        "15": {"type": "number", "minimum": -2.0, "maximum": 2.0},
+        "30": {"type": "number", "minimum": -2.0, "maximum": 2.0}
+      }
+    },
+    "neutral_score_threshold": {"type": "number", "minimum": 0.1, "maximum": 4.0},
+    "level_family_weights": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["family", "weight"],
+        "properties": {
+          "family": {
+            "type": "string",
+            "enum": [
+              "BN_REF_FUT_VOLUME_VPOC",
+              "CE_NEG_OI_VPOC",
+              "CE_POS_OI_VPOC",
+              "FUT_NEG_OI_VPOC",
+              "FUT_POS_OI_VPOC",
+              "PE_NEG_OI_VPOC",
+              "PE_POS_OI_VPOC"
+            ]
+          },
+          "weight": {"type": "number", "minimum": -2.0, "maximum": 4.0}
+        }
+      }
+    },
+    "level_scope_weights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ID", "1D", "2D", "3D"],
+      "properties": {
+        "ID": {"type": "number", "minimum": -2.0, "maximum": 4.0},
+        "1D": {"type": "number", "minimum": -2.0, "maximum": 4.0},
+        "2D": {"type": "number", "minimum": -2.0, "maximum": 4.0},
+        "3D": {"type": "number", "minimum": -2.0, "maximum": 4.0}
+      }
+    },
+    "level_kind_weights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["VPOC", "VAL", "VAH"],
+      "properties": {
+        "VPOC": {"type": "number", "minimum": -2.0, "maximum": 4.0},
+        "VAL": {"type": "number", "minimum": -2.0, "maximum": 4.0},
+        "VAH": {"type": "number", "minimum": -2.0, "maximum": 4.0}
+      }
+    },
+    "distance_penalty": {"type": "number", "minimum": 0.0, "maximum": 3.0},
+    "confluence_bonus": {"type": "number", "minimum": 0.0, "maximum": 4.0},
+    "confidence_floor": {"type": "number", "minimum": 0.34, "maximum": 0.7},
+    "confidence_ceiling": {"type": "number", "minimum": 0.5, "maximum": 0.9},
+    "confidence_scale": {"type": "number", "minimum": 0.01, "maximum": 1.0},
+    "commentary_focus": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 8,
+      "items": {"type": "string", "minLength": 3, "maxLength": 100}
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 8,
+      "items": {"type": "string", "minLength": 8, "maxLength": 180}
+    }
+  }
+}
