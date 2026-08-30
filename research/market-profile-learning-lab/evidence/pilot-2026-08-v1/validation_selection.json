@@ -1,0 +1,22 @@
+{
+  "automatic_production_promotion": false,
+  "best_baseline": {
+    "candidate_id": "baseline-momentum-5m",
+    "mean_balanced_accuracy": 0.36158700636549185,
+    "mean_brier_score": 0.21903183061665396,
+    "mean_composite_score": 0.47517833882435306,
+    "mean_level_extreme_hit_rate": 0.5596876720674273,
+    "origin": "DETERMINISTIC_BASELINE"
+  },
+  "best_candidate": {
+    "candidate_id": "empirical-minimal-abstaining-v1-13051026b24b",
+    "mean_balanced_accuracy": 0.35900371284729404,
+    "mean_brier_score": 0.22461007213502596,
+    "mean_composite_score": 0.4706096011663122,
+    "mean_level_extreme_hit_rate": 0.5478613482838417,
+    "origin": "CODEX_TRAINING_SUMMARY"
+  },
+  "candidate_passes_relative_gate": false,
+  "decision": "NO_CANDIDATE_EDGE_ON_VALIDATION",
+  "schema": "BANKNIFTY_MARKET_PROFILE_VALIDATION_SELECTION_V1"
+}

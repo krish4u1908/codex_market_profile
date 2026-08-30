@@ -1,0 +1,33 @@
+# Install as /home/codexuser/.codex/banknifty-learning.config.toml.
+# It is active only when Codex is invoked with --profile banknifty-learning.
+
+approval_policy = "never"
+default_permissions = "banknifty-learning-candidate"
+web_search = "disabled"
+
+[agents]
+enabled = false
+
+[apps._default]
+enabled = false
+
+[features]
+apps = false
+memories = false
+multi_agent = false
+plugins = false
+
+[permissions.banknifty-learning-candidate]
+description = "Read only the current candidate workspace; deny the rest of the host filesystem."
+
+[permissions.banknifty-learning-candidate.filesystem]
+":root" = "deny"
+":minimal" = "read"
+":tmpdir" = "deny"
+":slash_tmp" = "deny"
+
+[permissions.banknifty-learning-candidate.filesystem.":workspace_roots"]
+"." = "read"
+
+[permissions.banknifty-learning-candidate.network]
+enabled = false
