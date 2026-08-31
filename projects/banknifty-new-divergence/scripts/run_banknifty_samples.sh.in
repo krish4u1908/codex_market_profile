@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+sample_python="@SAMPLE_PYTHON@"
+sample_generator="@SAMPLE_GENERATOR@"
+divergence_cli="@DIVERGENCE_CLI@"
+data_root="@DATA_ROOT@"
+output_root="@OUTPUT_ROOT@"
+browser_root="@BROWSER_ROOT@"
+context_state_root="@CONTEXT_STATE_ROOT@"
+enable_oi_vpoc="@ENABLE_OI_VPOC@"
+enable_volume_profile="@ENABLE_VOLUME_PROFILE@"
+
+"${sample_python}" "${sample_generator}" \
+  --data-root "${data_root}" \
+  --output-root "${output_root}" \
+  --stability-seconds 120 \
+  "$@"
+
+build_args=(
+  build-browser
+  --run-root "${output_root}"
+  --output-root "${browser_root}"
+  --context-state-root "${context_state_root}"
+)
+[[ "${enable_oi_vpoc}" == "1" ]] || build_args+=(--no-oi-vpoc)
+[[ "${enable_volume_profile}" == "1" ]] || build_args+=(--no-volume-profile)
+"${divergence_cli}" "${build_args[@]}"

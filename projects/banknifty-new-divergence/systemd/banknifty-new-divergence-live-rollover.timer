@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily BankNifty New Divergence live-session rollover
+
+[Timer]
+OnCalendar=*-*-* 09:05:00 Asia/Kolkata
+Persistent=true
+Unit=banknifty-new-divergence-live-rollover.service
+
+[Install]
+WantedBy=timers.target

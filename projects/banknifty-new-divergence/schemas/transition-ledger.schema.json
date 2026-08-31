@@ -1,0 +1,2 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","required":["transition_id","episode_id","effective_timestamp","source_clock","previous_state","new_state"],"properties":{"transition_id":{"type":"string"},"episode_id":{"type":"string"},"effective_timestamp":{"type":"string","format":"date-time"},"source_clock":{"enum":["SYNCHRONIZED_BASIS_CLOCK","INDEX_RECEIPT_CLOCK","DIVERGENCE_OR_LIFECYCLE_CLOCK"]},"previous_state":{"type":"string"},"new_state":{"type":"string"}}}
+

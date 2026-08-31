@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "banknifty-market-profiler"
+version = "1.0.22"
+description = "Causal BankNifty divergence replay and research diagnostic"
+requires-python = ">=3.12"
+dependencies = ["numpy==2.5.2", "pandas==3.0.5", "websockets==16.0"]
+
+[project.scripts]
+banknifty-new-divergence = "banknifty_profiler.new_divergence.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"banknifty_profiler.new_divergence" = [
+  "static_new/*.html",
+  "static_new/*.js",
+  "static_new/*.css",
+  "static_live/*.html",
+  "static_live/*.js",
+]

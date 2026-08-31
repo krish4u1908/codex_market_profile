@@ -1,0 +1,13 @@
+[Unit]
+Description=Generate BankNifty cash-participation samples after market close
+Documentation=file://@PROJECT_DIR@/docs/CASH_SAMPLES.md
+
+[Timer]
+OnCalendar=*-*-* 15:40:00 Asia/Kolkata
+Persistent=true
+RandomizedDelaySec=60
+AccuracySec=1min
+Unit=banknifty-new-divergence-samples.service
+
+[Install]
+WantedBy=timers.target

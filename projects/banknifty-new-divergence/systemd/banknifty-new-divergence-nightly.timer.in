@@ -1,0 +1,13 @@
+[Unit]
+Description=Run BankNifty New Divergence nightly context after midnight IST
+Documentation=file://@PROJECT_DIR@/docs/NIGHTLY_CONTEXT.md
+
+[Timer]
+OnCalendar=*-*-* 00:15:00 Asia/Kolkata
+Persistent=true
+RandomizedDelaySec=120
+AccuracySec=1min
+Unit=banknifty-new-divergence-nightly.service
+
+[Install]
+WantedBy=timers.target

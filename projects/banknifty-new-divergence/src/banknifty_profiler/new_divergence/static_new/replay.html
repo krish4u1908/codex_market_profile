@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>New Divergence · Causal Replay</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="replay-page">
+  <header class="site-header compact">
+    <div>
+      <a class="back-link" href="index.html">← Sessions</a>
+      <h1 id="sessionTitle">Causal replay</h1>
+    </div>
+    <span class="research-badge">Diagnostic · not a signal</span>
+  </header>
+
+  <main id="replayApp" class="replay-shell" hidden>
+    <section class="control-bar panel" aria-label="Replay controls">
+      <button id="playButton" type="button">Play</button>
+      <button id="pauseButton" type="button">Pause</button>
+      <label>Speed
+        <select id="speedSelect">
+          <option value="1">1 observation/s</option>
+          <option value="5" selected>5 observations/s</option>
+          <option value="20">20 observations/s</option>
+          <option value="60">60 observations/s</option>
+        </select>
+      </label>
+      <button id="previousEvent" type="button">Previous transition</button>
+      <button id="nextEvent" type="button">Next transition</button>
+      <label class="check-label"><input id="pauseImportant" type="checkbox" checked> Pause at transitions</label>
+      <div class="clock-block">
+        <span id="replayClock">—</span>
+        <span id="replayProgress" class="muted">—</span>
+      </div>
+      <input id="replaySlider" class="replay-slider" type="range" min="0" max="0" value="0" aria-label="Replay position">
+    </section>
+
+    <section class="codex-replay-panel panel" aria-label="Causal replay explanation">
+      <div class="codex-replay-heading">
+        <div>
+          <p class="eyebrow">Exact visible cursor · server-reconstructed causal prefix</p>
+          <h2>Central market-profile commentary</h2>
+        </div>
+        <span id="codexReplayStatus" class="state-pill neutral">Checking worker</span>
+      </div>
+      <div class="codex-replay-controls commentary-controls">
+        <button id="codexExplainButton" type="button">Show commentary</button>
+      </div>
+      <p class="codex-replay-note">One server-generated result is stored centrally and shared by every browser. Textbook market-profile analysis is shown separately from Codex output and from the experimental outlook.</p>
+      <div id="codexReplayAnswer" class="codex-replay-answer" aria-live="polite" hidden></div>
+    </section>
+
+    <section class="frame-controls panel" aria-label="Chart frame visibility">
+      <span class="frame-controls-label">Frames</span>
+      <label><input id="frameMarket" type="checkbox" checked> Market</label>
+      <label><input id="frameBasis" type="checkbox" checked> Basis</label>
+      <label><input id="frameCeOi" type="checkbox" checked> CE ΔOI</label>
+      <label><input id="framePeOi" type="checkbox" checked> PE ΔOI</label>
+      <label><input id="frameCeVolume" type="checkbox" checked> CE ΔVolume</label>
+      <label><input id="framePeVolume" type="checkbox" checked> PE ΔVolume</label>
+      <label><input id="frameCeSnapshot" type="checkbox" checked> CE OI snapshot</label>
+      <label><input id="framePeSnapshot" type="checkbox" checked> PE OI snapshot</label>
+      <label><input id="frameInventoryList" type="checkbox" checked> Inventory list</label>
+    </section>
+
+    <section class="inventory-controls panel" aria-label="Intraday and prior-session inventory display flags">
+      <div class="inventory-heading">
+        <div>
+          <p class="eyebrow">09:45 developing profile + prior completed sessions · BN Index coordinate</p>
+          <h2>OI-VPOC and Futures-volume profile</h2>
+        </div>
+        <div class="inventory-heading-status">
+          <span id="inventoryVisibleCount" class="state-pill neutral">0 levels shown</span>
+          <span id="inventoryContextStatus" class="state-pill neutral">Checking context</span>
+        </div>
+      </div>
+      <div class="inventory-flag-groups">
+        <fieldset>
+          <legend>Scope</legend>
+          <label><input id="inventoryScopeID" type="checkbox" checked> ID (09:45→cursor)</label>
+          <label><input id="inventoryScope1D" type="checkbox"> 1D prior</label>
+          <label><input id="inventoryScope2D" type="checkbox"> 2D</label>
+          <label><input id="inventoryScope3D" type="checkbox"> 3D</label>
+        </fieldset>
+        <fieldset>
+          <legend>OI-VPOC</legend>
+          <label><input id="inventoryOiVpoc" type="checkbox" checked> Show</label>
+          <label><input id="inventoryOiFutures" type="checkbox" checked> Futures</label>
+          <label><input id="inventoryOiCe" type="checkbox"> CE</label>
+          <label><input id="inventoryOiPe" type="checkbox"> PE</label>
+        </fieldset>
+        <fieldset>
+          <legend>BN-ref Futures volume</legend>
+          <label><input id="inventoryVolumeProfile" type="checkbox" checked> Show</label>
+          <label><input id="inventoryVolumeVpoc" type="checkbox" checked> VPOC</label>
+          <label><input id="inventoryVolumeVah" type="checkbox" checked> VAH</label>
+          <label><input id="inventoryVolumeVal" type="checkbox" checked> VAL</label>
+          <span id="inventoryVolumeStatus" class="inventory-control-status">Checking selected scope</span>
+        </fieldset>
+      </div>
+      <p class="inventory-note">Display only. Every scope may be switched off. ID develops causally from 09:45 to the replay cursor; 1D/2D/3D are frozen prior-session levels. None enter RED/GREEN divergence identification.</p>
+    </section>
+
+    <div class="replay-workspace">
+      <div class="primary-chart-column">
+        <section id="marketPanel" class="chart-panel panel">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Receipt-time synchronized</p>
+              <h2>Index / Futures / OI / ΔOI</h2>
+            </div>
+            <div class="legend" aria-label="Market and Futures participation series">
+              <span class="line-index">Index</span>
+              <span class="line-futures">Futures</span>
+              <span class="line-oi">OI</span>
+              <span class="bar-oi-positive">+ΔOI</span>
+              <span class="bar-oi-negative">−ΔOI</span>
+            </div>
+          </div>
+          <canvas id="priceChart" height="390" data-logical-height="390" role="img" aria-label="Index, futures, open interest, and open-interest change on one receipt-time chart"></canvas>
+          <div id="currentReadout" class="readout-grid"></div>
+        </section>
+
+        <section id="basisPanel" class="chart-panel panel">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Futures minus Index</p>
+              <h2>Basis and confirmed divergence zones</h2>
+              <div class="zone-key" aria-label="Confirmed-zone colours">
+                <span class="zone-red">Confirmed RED</span>
+                <span class="zone-green">Confirmed GREEN</span>
+                <span class="zone-gap">Missing basis data</span>
+              </div>
+            </div>
+            <span id="basisStatus" class="state-pill neutral">No published episode</span>
+          </div>
+          <canvas id="basisChart" height="220" data-logical-height="220" role="img" aria-label="Synchronized basis chart"></canvas>
+        </section>
+
+        <section id="ceOiFlowPanel" class="strike-flow-panel panel">
+          <div class="section-title flow-title">
+            <div>
+              <p class="eyebrow">BN 09:45 close ATM · fixed thereafter</p>
+              <h2>CE strikes 1–4 · change in OI</h2>
+              <div id="ceOiFlowLegend" class="strike-flow-key" aria-label="Selected call-option strikes"></div>
+            </div>
+            <span id="ceOiFlowStatus" class="state-pill neutral">Awaiting selection</span>
+          </div>
+          <canvas id="ceOiFlowChart" height="210" data-logical-height="210" role="img" aria-label="Signed open-interest change for four fixed 09:45-close call-option strikes"></canvas>
+        </section>
+
+        <section id="peOiFlowPanel" class="strike-flow-panel panel">
+          <div class="section-title flow-title">
+            <div>
+              <p class="eyebrow">BN 09:45 close ATM · fixed thereafter</p>
+              <h2>PE strikes 1–4 · change in OI</h2>
+              <div id="peOiFlowLegend" class="strike-flow-key" aria-label="Selected put-option strikes"></div>
+            </div>
+            <span id="peOiFlowStatus" class="state-pill neutral">Awaiting selection</span>
+          </div>
+          <canvas id="peOiFlowChart" height="210" data-logical-height="210" role="img" aria-label="Signed open-interest change for four fixed 09:45-close put-option strikes"></canvas>
+        </section>
+
+        <section id="ceVolumeFlowPanel" class="strike-flow-panel panel">
+          <div class="section-title flow-title">
+            <div>
+              <p class="eyebrow">Incremental traded volume · gap/reset safe</p>
+              <h2>CE strikes 1–4 · change in volume</h2>
+              <div id="ceVolumeFlowLegend" class="strike-flow-key" aria-label="Selected call-option strike volumes"></div>
+            </div>
+            <span id="ceVolumeFlowStatus" class="state-pill neutral">Awaiting selection</span>
+          </div>
+          <canvas id="ceVolumeFlowChart" height="210" data-logical-height="210" role="img" aria-label="Incremental volume for four fixed 09:45-close call-option strikes"></canvas>
+        </section>
+
+        <section id="peVolumeFlowPanel" class="strike-flow-panel panel">
+          <div class="section-title flow-title">
+            <div>
+              <p class="eyebrow">Incremental traded volume · gap/reset safe</p>
+              <h2>PE strikes 1–4 · change in volume</h2>
+              <div id="peVolumeFlowLegend" class="strike-flow-key" aria-label="Selected put-option strike volumes"></div>
+            </div>
+            <span id="peVolumeFlowStatus" class="state-pill neutral">Awaiting selection</span>
+          </div>
+          <canvas id="peVolumeFlowChart" height="210" data-logical-height="210" role="img" aria-label="Incremental volume for four fixed 09:45-close put-option strikes"></canvas>
+        </section>
+      </div>
+
+      <aside class="strike-column" aria-label="Option strike open-interest maps">
+        <section id="ceSnapshotPanel" class="strike-panel panel">
+          <div class="section-title strike-title">
+            <div>
+              <p class="eyebrow">Current receipt · absolute OI by option strike</p>
+              <h2>CE OI snapshot</h2>
+            </div>
+            <span id="ceStrikeStatus" class="state-pill neutral">Awaiting data</span>
+          </div>
+          <canvas id="ceStrikeChart" height="300" data-logical-height="300" role="img" aria-label="Current absolute call-option open interest by strike with BankNifty reference"></canvas>
+          <div class="strike-key" aria-label="Call option open-interest snapshot legend">
+            <span class="strike-ce-oi">Absolute OI</span>
+            <span class="strike-delta-positive">+ΔOI</span>
+            <span class="strike-delta-negative">−ΔOI</span>
+            <span class="strike-bn-reference">BN Index</span>
+          </div>
+        </section>
+
+        <section id="peSnapshotPanel" class="strike-panel panel">
+          <div class="section-title strike-title">
+            <div>
+              <p class="eyebrow">Current receipt · absolute OI by option strike</p>
+              <h2>PE OI snapshot</h2>
+            </div>
+            <span id="peStrikeStatus" class="state-pill neutral">Awaiting data</span>
+          </div>
+          <canvas id="peStrikeChart" height="300" data-logical-height="300" role="img" aria-label="Current absolute put-option open interest by strike with BankNifty reference"></canvas>
+          <div class="strike-key" aria-label="Put option open-interest snapshot legend">
+            <span class="strike-pe-oi">Absolute OI</span>
+            <span class="strike-delta-positive">+ΔOI</span>
+            <span class="strike-delta-negative">−ΔOI</span>
+            <span class="strike-bn-reference">BN Index</span>
+          </div>
+        </section>
+
+        <section id="inventoryListPanel" class="inventory-level-panel panel">
+          <div class="section-title strike-title">
+            <div>
+              <p class="eyebrow">Visible fixed reference levels</p>
+              <h2>Inventory controls</h2>
+            </div>
+            <span id="inventoryLevelCount" class="state-pill neutral">0 shown</span>
+          </div>
+          <div id="inventoryLevelList" class="inventory-level-list"></div>
+        </section>
+      </aside>
+    </div>
+
+    <div class="lower-grid">
+      <section class="panel">
+        <div class="section-title"><h2>Actual session scopes</h2><span class="muted">Eligible prior sessions only</span></div>
+        <div id="scopeList" class="scope-list"></div>
+        <div id="runFacts" class="facts-grid"></div>
+      </section>
+      <section class="panel transition-panel">
+        <div class="section-title"><h2>Visible transition ledger</h2><span id="transitionCount" class="muted"></span></div>
+        <div id="transitionList" class="transition-list" aria-live="polite"></div>
+      </section>
+    </div>
+  </main>
+  <main id="replayError" class="landing-shell" hidden><section class="panel error"></section></main>
+  <script src="app.js" defer></script>
+</body>
+</html>

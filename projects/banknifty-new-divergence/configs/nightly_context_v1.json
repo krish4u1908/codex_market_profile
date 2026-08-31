@@ -1,0 +1,13 @@
+{
+  "algorithm_version": "NEW_DIVERGENCE_NIGHTLY_CONTEXT_V1",
+  "bin_points": 25,
+  "edge_grace_minutes": 5,
+  "join_tolerance_seconds": 5,
+  "maximum_missing_market_minutes": 5,
+  "maximum_missing_oi_minutes": 5,
+  "near_otm_strikes": 3,
+  "session_end": "15:30:00",
+  "session_start": "09:15:00",
+  "stability_seconds": 600,
+  "timezone": "Asia/Kolkata"
+}

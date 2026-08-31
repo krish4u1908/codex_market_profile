@@ -1,0 +1,32 @@
+[Unit]
+Description=BankNifty New Divergence Restricted Codex Worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@@CODEX_USER@@
+Group=@@CODEX_GROUP@@
+WorkingDirectory=@@WORK_ROOT@@
+Environment=CODEX_HOME=@@CODEX_HOME@@
+ExecStart=@@CODEX_BIN@@ app-server --listen ws://@@CODEX_HOST@@:@@CODEX_PORT@@
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=@@CODEX_HOME@@ @@WORK_ROOT@@
+UMask=0077
+TasksMax=64
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target

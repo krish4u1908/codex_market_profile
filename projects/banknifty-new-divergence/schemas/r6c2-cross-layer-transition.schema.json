@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "R6C2 material cross-layer transition",
+  "type": "object",
+  "required": ["transition_id", "evaluation_date", "effective_timestamp", "component", "previous_state", "new_state", "constituent_effective_timestamps"],
+  "properties": {
+    "transition_id": {"type": "string", "pattern": "^XL-"},
+    "evaluation_date": {"type": "string", "format": "date"},
+    "effective_timestamp": {"type": "string", "format": "date-time"},
+    "component": {"enum": ["INVENTORY", "DIVERGENCE", "LIFECYCLE", "RESOLUTION", "FUTURES_PARTICIPATION", "OPTION_PARTICIPATION", "BREADTH_JOINT", "FRESHNESS"]},
+    "previous_state": {"type": "string"},
+    "new_state": {"type": "string"},
+    "constituent_effective_timestamps": {"type": "string"}
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,16 @@
+{
+  "classification": "LIVE MARKET-PROFILING DIAGNOSTIC — NOT A BUY/SELL SIGNAL",
+  "mode": "SEALED_HISTORICAL_OFFLINE_REPLAY",
+  "timezone": "Asia/Kolkata",
+  "synchronization_tolerance_ms": 2000,
+  "session_start": "09:15:00",
+  "session_end": "15:30:00",
+  "jump_times": ["09:45:00", "14:30:00"],
+  "replay_speeds_bars_per_minute": [1, 5, 10, 30],
+  "default_replay_speed_bars_per_minute": 5,
+  "future_path_visible_by_default": false,
+  "legacy_futures_coordinate_price_vpoc_enabled_by_default": false,
+  "canonical_price_vpoc_label": "BN-REF FUT VOL-VPOC",
+  "canonical_price_vpoc_coordinate": "CAUSAL_BANKNIFTY_INDEX_REFERENCE_PRICE_BIN",
+  "legacy_price_vpoc_label": "FUT-PRICE VOL-VPOC — Legacy diagnostic"
+}

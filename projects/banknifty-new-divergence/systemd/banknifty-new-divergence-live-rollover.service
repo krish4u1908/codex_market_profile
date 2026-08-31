@@ -1,0 +1,6 @@
+[Unit]
+Description=Restart BankNifty New Divergence Live Monitor for current IST session
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl try-restart banknifty-new-divergence-live.service

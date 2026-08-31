@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["transition_id", "episode_id", "component", "previous_state", "new_state", "effective_timestamp", "calculation_timestamp"],
+  "properties": {
+    "transition_id": {"type": "string", "pattern": "^R6B3R-"},
+    "episode_id": {"type": "string", "pattern": "^BDR1-"},
+    "component": {"enum": ["FUTURES", "CE", "PE", "BREADTH", "JOINT"]}
+  }
+}

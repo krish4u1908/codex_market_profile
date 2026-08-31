@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "R6C2 independently eligible inventory layer",
+  "type": "object",
+  "required": ["evaluation_date", "horizon", "availability_state", "overall_state"],
+  "properties": {
+    "evaluation_date": {"type": "string", "format": "date"},
+    "horizon": {"enum": ["1D", "2D", "3D", "ID"]},
+    "availability_state": {"enum": ["AVAILABLE", "MISSING_PRIOR_SESSION", "INELIGIBLE_PRIOR_SESSION", "EXPIRY_MISMATCH", "INCOMPLETE_RAW_DATA", "STALE_DATA", "NOT_YET_AVAILABLE"]},
+    "overall_state": {"enum": ["LIVE_FULL_CONTEXT", "LIVE_PARTIAL_CONTEXT", "LIVE_INTRADAY_ONLY", "FIXED_CONTEXT_ONLY", "STALE_PARTIAL", "NO_VALID_MARKET_DATA"]}
+  },
+  "additionalProperties": true
+}

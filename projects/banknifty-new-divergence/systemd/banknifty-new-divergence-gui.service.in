@@ -1,0 +1,37 @@
+[Unit]
+Description=BankNifty New Divergence Replay GUI
+Documentation=file://@PROJECT_DIR@/docs/OPERATIONS.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@SERVICE_USER@
+Group=@SERVICE_GROUP@
+WorkingDirectory=@PROJECT_DIR@
+EnvironmentFile=/etc/banknifty-new-divergence-gui.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStartPre=/usr/bin/test -r ${BROWSER_ROOT}/catalog.json
+ExecStartPre=/usr/bin/test -r ${CODEX_TOKEN_FILE}
+ExecStart=/bin/sh -c 'exec "$DIVERGENCE_CLI" serve --directory "$BROWSER_ROOT" --host "$GUI_HOST" --port "$GUI_PORT" --codex-host "$CODEX_HOST" --codex-port "$CODEX_PORT" --codex-cwd "$CODEX_CWD" --codex-token-file "$CODEX_TOKEN_FILE" --commentary-db "$COMMENTARY_DB" --acknowledge-research-only'
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=15s
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectHome=read-only
+ProtectSystem=strict
+ReadOnlyPaths=@CODEX_TOKEN_FILE@
+ReadWritePaths=@BROWSER_ROOT@
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

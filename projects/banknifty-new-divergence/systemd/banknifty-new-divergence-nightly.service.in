@@ -1,0 +1,41 @@
+[Unit]
+Description=BankNifty New Divergence Nightly 1D/2D/3D Context Builder
+Documentation=file://@PROJECT_DIR@/docs/NIGHTLY_CONTEXT.md
+RequiresMountsFor=@DATA_ROOT@ @STATE_ROOT@
+StartLimitIntervalSec=30min
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+User=@SERVICE_USER@
+Group=@SERVICE_GROUP@
+WorkingDirectory=@PROJECT_DIR@
+EnvironmentFile=/etc/banknifty-new-divergence-nightly.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStartPre=/usr/bin/test -r @DATA_ROOT@/raw
+ExecStartPre=/usr/bin/test -x @DATA_ROOT@/raw
+ExecStartPre=/usr/bin/test -r @DATA_ROOT@/oi
+ExecStartPre=/usr/bin/test -x @DATA_ROOT@/oi
+ExecStart=/bin/sh -c 'exec "$DIVERGENCE_CLI" nightly-context --data-root "$COLLECTOR_DATA_ROOT" --state-root "$CONTEXT_STATE_ROOT" --config "$CONTEXT_CONFIG"'
+TimeoutStartSec=8h
+Restart=on-failure
+RestartSec=5min
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateNetwork=true
+PrivateTmp=true
+ProtectClock=true
+ProtectHome=read-only
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX
+ReadOnlyPaths=@DATA_ROOT@
+ReadWritePaths=@STATE_ROOT@
+UMask=0027

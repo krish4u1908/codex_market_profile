@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "New Divergence immutable nightly context",
+  "type": "object",
+  "required": [
+    "schema",
+    "snapshot_id",
+    "status",
+    "cutoff_source_session",
+    "algorithm_version",
+    "runtime_version",
+    "config_sha256",
+    "model_parameters_changed",
+    "source_chain",
+    "controls"
+  ],
+  "properties": {
+    "schema": {"const": "NEW_DIVERGENCE_DAILY_CONTEXT_V1"},
+    "snapshot_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "status": {"const": "COMPLETE"},
+    "cutoff_source_session": {"type": "string", "format": "date"},
+    "algorithm_version": {"const": "NEW_DIVERGENCE_NIGHTLY_CONTEXT_V1"},
+    "runtime_version": {"type": "string"},
+    "config_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "model_parameters_changed": {"const": false},
+    "source_chain": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["session", "revision_id", "status", "source_manifest_sha256"],
+        "properties": {
+          "session": {"type": "string", "format": "date"},
+          "revision_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+          "status": {"enum": ["ACCEPTED", "REJECTED"]},
+          "source_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "controls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "scope",
+          "family",
+          "status",
+          "reason",
+          "control_value",
+          "source_sessions",
+          "source_revision_ids",
+          "source_contracts",
+          "source_expiries"
+        ],
+        "properties": {
+          "scope": {"enum": ["1D", "2D", "3D"]},
+          "family": {
+            "enum": [
+              "BN_REF_FUT_VOLUME_VPOC",
+              "FUT_POS_OI_VPOC",
+              "FUT_NEG_OI_VPOC",
+              "CE_POS_OI_VPOC",
+              "CE_NEG_OI_VPOC",
+              "PE_POS_OI_VPOC",
+              "PE_NEG_OI_VPOC"
+            ]
+          },
+          "status": {"enum": ["AVAILABLE", "UNAVAILABLE"]},
+          "reason": {"type": "string"},
+          "control_value": {"type": ["number", "null"]},
+          "source_sessions": {"type": "array", "items": {"type": "string", "format": "date"}},
+          "source_revision_ids": {"type": "array", "items": {"type": "string"}},
+          "source_contracts": {"type": "array"},
+          "source_expiries": {"type": "array"}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,39 @@
+[Unit]
+Description=BankNifty V1.0.16 cash-participation sample generator and GUI refresh
+Documentation=file://@PROJECT_DIR@/docs/CASH_SAMPLES.md
+RequiresMountsFor=@DATA_ROOT@ @OUTPUT_ROOT@ @BROWSER_ROOT@ @CONTEXT_STATE_ROOT@
+After=local-fs.target
+StartLimitIntervalSec=30min
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+User=@SERVICE_USER@
+Group=@SERVICE_GROUP@
+WorkingDirectory=@COLLECTOR_ROOT@
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStartPre=/usr/bin/test -r @DATA_ROOT@/minute
+ExecStartPre=/usr/bin/test -x @DATA_ROOT@/minute
+ExecStart=@SAMPLE_RUNNER@
+TimeoutStartSec=2h
+Restart=on-failure
+RestartSec=5min
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateNetwork=true
+PrivateTmp=true
+ProtectClock=true
+ProtectHome=read-only
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX
+ReadOnlyPaths=@DATA_ROOT@ @CONTEXT_STATE_ROOT@ @SAMPLE_GENERATOR@ @SAMPLE_RUNNER@
+ReadWritePaths=@OUTPUT_ROOT@ @BROWSER_ROOT@
+UMask=0027
