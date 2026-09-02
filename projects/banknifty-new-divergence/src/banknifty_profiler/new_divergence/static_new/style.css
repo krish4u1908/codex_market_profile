@@ -96,6 +96,14 @@ body.has-maximized-frame { overflow: hidden; }
 .commentary-warning { color: var(--amber) !important; border-left: 2px solid var(--amber); padding-left: .5rem; }
 .commentary-details { margin-top: .45rem; border-top: 1px solid var(--grid); padding-top: .4rem; }
 .commentary-details summary { cursor: pointer; color: var(--muted); font-size: .72rem; }
+.analysis-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; margin-top: .55rem; }
+.analysis-block { padding: .65rem .75rem; border: 1px solid var(--grid); border-radius: 6px; background: rgba(16,41,58,.52); }
+.analysis-block h4 { margin: 0 0 .35rem; color: var(--cyan); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
+.analysis-block p { margin: .3rem 0; }
+.backend-analysis { border-left: 3px solid var(--cyan); }
+.codex-analysis { border-left: 3px solid var(--amber); }
+.scenario-name { display: block; margin-bottom: .45rem; color: var(--cyan); }
+@media (max-width: 760px) { .analysis-comparison { grid-template-columns: 1fr; } }
 .inventory-controls { padding: .65rem .75rem; margin-bottom: .8rem; }
 .inventory-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .inventory-heading-status { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .35rem; }
@@ -144,9 +152,12 @@ canvas { width: 100%; display: block; background: #071620; border-radius: 4px; }
 .zone-red { color: var(--red); }
 .zone-green { color: var(--green); }
 .zone-gap { color: var(--muted); }
-.line-index::before, .line-futures::before, .line-oi::before { content: ""; display: inline-block; width: 16px; height: 2px; vertical-align: middle; margin-right: .35rem; }
+.title-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .45rem .8rem; min-width: 0; }
+.market-state-pills { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .35rem; }
+.line-index::before, .line-futures::before, .line-basis::before, .line-oi::before { content: ""; display: inline-block; width: 16px; height: 2px; vertical-align: middle; margin-right: .35rem; }
 .line-index::before { background: var(--cyan); }
 .line-futures::before { background: var(--white-line); }
+.line-basis::before { background: #b79cff; }
 .line-oi::before { background: var(--amber); }
 .bar-oi-positive::before, .bar-oi-negative::before { content: ""; display: inline-block; width: 9px; height: 9px; vertical-align: -1px; margin-right: .35rem; }
 .bar-oi-positive::before { background: var(--green); }

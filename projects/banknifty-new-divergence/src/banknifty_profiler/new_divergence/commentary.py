@@ -21,6 +21,8 @@ from typing import Callable
 from .codex_replay import CodexAppServerClient, replay_fact_bundle
 from .api import ProjectionReadModel
 from .provenance import RUNTIME_VERSION
+from .scenario import inventory_scenario
+from .volume_climax import compact_futures_volume_minutes
 
 
 FAMILIES = (
@@ -28,7 +30,7 @@ FAMILIES = (
     "PE_NEG_OI_VPOC", "FUT_POS_OI_VPOC", "FUT_NEG_OI_VPOC",
     "BN_REF_FUT_VOLUME_VPOC",
 )
-GENERATION_REVISION = 3
+GENERATION_REVISION = 5
 
 
 def _canonical(value: object) -> bytes:
@@ -159,34 +161,33 @@ def compact_commentary(
 ) -> dict[str, object]:
     """Convert the diagnostic answer into the fixed compact GUI contract.
 
-    Validation V0.1.3 selected no specialist, therefore direction is deliberately
-    NO_EDGE and no numeric probability is fabricated.
+    The transparent backend scenario is independent of the unpromoted Codex
+    candidates. No numeric probability is fabricated.
     """
     supports, resistances = _levels(bundle)
     shift_text = "; ".join(
         f"{row['family']} {row['from']:g}→{row['to']:g}" for row in shifts
     ) or "No new material inventory-control migration at this receipt"
+    scenario = inventory_scenario(bundle)
     return {
         "schema": "NEW_DIVERGENCE_CENTRAL_COMMENTARY_V1",
         "runtime_version": RUNTIME_VERSION,
         "generation_revision": GENERATION_REVISION,
         "classification": "EXPERIMENTAL_NOT_VALIDATED",
-        "bias": "NO_EDGE",
-        "horizon_minutes": 30,
-        "confidence": "LOW",
+        "bias": scenario["direction"],
+        "horizon_minutes": scenario["horizon_minutes"],
+        "confidence": scenario["confidence"],
         "probability": None,
         "headline": str(answer.get("headline", "Inventory context updated"))[:180],
         "what_changed": shift_text,
-        "possible_outcome": (
-            "Rotation between the nearest verified controls remains the base case; "
-            "direction requires fresh price acceptance and confirming CE/PE/futures flow."
-        ),
+        "possible_outcome": scenario["expected"],
         "support": supports,
         "resistance": resistances,
-        "confirmation": "Fresh price acceptance beyond a listed control with confirming option and futures flow.",
-        "invalidation": "Opposite-side control acceptance or reversal of the latest inventory migration.",
+        "confirmation": scenario["confirmation"],
+        "invalidation": scenario["invalidation"],
         "summary": str(answer.get("summary", ""))[:1200],
         "market_profile_analysis": market_profile_analysis(bundle, shifts),
+        "backend_scenario": scenario,
         "shifts": shifts,
         "causal_as_of": bundle["causal_as_of"],
         "verified_prefix_sha256": bundle["verified_prefix_sha256"],
@@ -396,17 +397,23 @@ def live_fact_bundle(snapshot: dict[str, object]) -> dict[str, object]:
     if not isinstance(latest, dict):
         raise ValueError("latest live observation is invalid")
     events = snapshot.get("events", [])
-    option_event = next(
-        (row for row in reversed(events) if isinstance(row, dict) and row.get("kind") == "OPTION_PRESSURE"),
-        None,
-    ) if isinstance(events, list) else None
-    strikes = option_event.get("values", {}).get("strike_oi", []) if option_event else []
+    profile = snapshot.get("profile", {})
+    strikes = profile.get("option_strike_oi", []) if isinstance(profile, dict) else []
+    selection = profile.get("strike_selection", {}) if isinstance(profile, dict) else {}
+    selected_symbols = {
+        str(row.get("symbol", "")).upper()
+        for side in ("CE", "PE")
+        for row in (selection.get(side, []) if isinstance(selection, dict) else [])
+        if isinstance(row, dict)
+    }
+    if selected_symbols:
+        strikes = [row for row in strikes if str(row.get("symbol", "")).upper() in selected_symbols]
     option_summary = {}
     for option_type in ("CE", "PE"):
-        rows = [row for row in strikes if isinstance(row, dict) and row.get("option_type") == option_type]
+        rows = [row for row in strikes if isinstance(row, dict) and row.get("k") == option_type]
         option_summary[option_type] = {
             "absolute_oi_total": sum(float(row.get("oi", 0) or 0) for row in rows),
-            "delta_oi_total": sum(float(row.get("delta_oi", 0) or 0) for row in rows),
+            "delta_oi_total": sum(float(row.get("d", 0) or 0) for row in rows),
             "strikes": rows,
         }
     causal_as_of = str(latest.get("receipt_timestamp") or latest.get("timestamp") or snapshot.get("server_time"))
@@ -414,6 +421,29 @@ def live_fact_bundle(snapshot: dict[str, object]) -> dict[str, object]:
         "i": latest.get("index_price"), "f": latest.get("futures_price"),
         "b": latest.get("basis"), "t": causal_as_of,
     }
+    recent_market = []
+    stride = max(1, len(observations) // 180)
+    for row in observations[::stride]:
+        if isinstance(row, dict):
+            recent_market.append({
+                "t": row.get("receipt_timestamp") or row.get("timestamp"),
+                "i": row.get("index_price"), "f": row.get("futures_price"),
+                "b": row.get("basis"),
+            })
+    if observations and recent_market and recent_market[-1]["t"] != compact_market["t"]:
+        recent_market.append(compact_market)
+    futures_oi = profile.get("futures_oi", []) if isinstance(profile, dict) else []
+    futures_volume = profile.get("futures_volume", []) if isinstance(profile, dict) else []
+    precomputed_volume_minutes = (
+        profile.get("futures_volume_minutes", []) if isinstance(profile, dict) else []
+    )
+    volume_minutes = (
+        precomputed_volume_minutes
+        if isinstance(precomputed_volume_minutes, list) and precomputed_volume_minutes
+        else compact_futures_volume_minutes(
+            futures_volume if isinstance(futures_volume, list) else []
+        )
+    )
     facts = {
         "schema": "NEW_DIVERGENCE_CODEX_LIVE_FACTS_V1",
         "runtime_version": RUNTIME_VERSION,
@@ -421,15 +451,24 @@ def live_fact_bundle(snapshot: dict[str, object]) -> dict[str, object]:
         "session": snapshot.get("session"),
         "causal_as_of": causal_as_of,
         "latest_market": compact_market,
+        "recent_market": recent_market[-181:],
+        "recent_futures_oi": futures_oi[-20:] if isinstance(futures_oi, list) else [],
+        "recent_futures_volume_minutes": volume_minutes[-12:],
         "latest_state": (snapshot.get("evidence") or [None])[-1],
         "latest_option_summary": option_summary,
         "recent_events": events[-20:] if isinstance(events, list) else [],
         "recent_visible_transitions": (snapshot.get("transitions") or [])[-12:],
-        "visible_intraday_inventory": {},
-        "recent_intraday_inventory_shifts": {},
+        "visible_intraday_inventory": (
+            profile.get("visible_intraday_inventory", {}) if isinstance(profile, dict) else {}
+        ),
+        "recent_intraday_inventory_shifts": (
+            profile.get("recent_intraday_inventory_shifts", {}) if isinstance(profile, dict) else {}
+        ),
         "availability": "LIVE_PREFIX_ONLY",
     }
     facts["verified_prefix_sha256"] = hashlib.sha256(_canonical(facts)).hexdigest()
+    if len(_canonical(facts)) > 96_000:
+        raise ValueError("verified live fact bundle exceeds the diagnostic size limit")
     return facts
 
 
@@ -446,7 +485,10 @@ class LiveCommentaryCoordinator:
         transitions = bundle.get("recent_visible_transitions", [])
         latest_transition = transitions[-1] if isinstance(transitions, list) and transitions else None
         trigger = hashlib.sha256(_canonical({
-            "option": bundle.get("latest_option_summary"), "transition": latest_transition,
+            "option": bundle.get("latest_option_summary"),
+            "inventory": bundle.get("visible_intraday_inventory"),
+            "volume_climax": (bundle.get("recent_futures_volume_minutes") or [None])[-1],
+            "transition": latest_transition,
         })).hexdigest()
         if existing and existing.get("codex_status") == "AVAILABLE" and existing.get("live_trigger_sha256") == trigger:
             return {**existing, "cached": True}

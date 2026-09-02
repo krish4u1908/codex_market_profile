@@ -55,7 +55,7 @@
     <section class="frame-controls panel" aria-label="Chart frame visibility">
       <span class="frame-controls-label">Frames</span>
       <label><input id="frameMarket" type="checkbox" checked> Market</label>
-      <label><input id="frameBasis" type="checkbox" checked> Basis</label>
+      <label><input id="frameBasis" type="checkbox" checked> Basis lane</label>
       <label><input id="frameCeOi" type="checkbox" checked> CE ΔOI</label>
       <label><input id="framePeOi" type="checkbox" checked> PE ΔOI</label>
       <label><input id="frameCeVolume" type="checkbox" checked> CE ΔVolume</label>
@@ -109,34 +109,25 @@
           <div class="section-title">
             <div>
               <p class="eyebrow">Receipt-time synchronized</p>
-              <h2>Index / Futures / OI / ΔOI</h2>
+              <h2>Index / Futures / adaptive Basis / Futures OI / ΔOI</h2>
             </div>
-            <div class="legend" aria-label="Market and Futures participation series">
-              <span class="line-index">Index</span>
-              <span class="line-futures">Futures</span>
-              <span class="line-oi">OI</span>
-              <span class="bar-oi-positive">+ΔOI</span>
-              <span class="bar-oi-negative">−ΔOI</span>
-            </div>
-          </div>
-          <canvas id="priceChart" height="390" data-logical-height="390" role="img" aria-label="Index, futures, open interest, and open-interest change on one receipt-time chart"></canvas>
-          <div id="currentReadout" class="readout-grid"></div>
-        </section>
-
-        <section id="basisPanel" class="chart-panel panel">
-          <div class="section-title">
-            <div>
-              <p class="eyebrow">Futures minus Index</p>
-              <h2>Basis and confirmed divergence zones</h2>
-              <div class="zone-key" aria-label="Confirmed-zone colours">
-                <span class="zone-red">Confirmed RED</span>
-                <span class="zone-green">Confirmed GREEN</span>
-                <span class="zone-gap">Missing basis data</span>
+            <div class="title-tools">
+              <div class="legend" aria-label="Market, basis, and Futures participation series">
+                <span class="line-index">Index</span>
+                <span class="line-futures">Futures</span>
+                <span class="line-basis">Basis</span>
+                <span class="line-oi">Futures OI</span>
+                <span class="bar-oi-positive">+ΔOI</span>
+                <span class="bar-oi-negative">−ΔOI</span>
+              </div>
+              <div class="market-state-pills">
+                <span id="basisPlacement" class="state-pill neutral">Basis lane · checking</span>
+                <span id="basisStatus" class="state-pill neutral">No published episode</span>
               </div>
             </div>
-            <span id="basisStatus" class="state-pill neutral">No published episode</span>
           </div>
-          <canvas id="basisChart" height="220" data-logical-height="220" role="img" aria-label="Synchronized basis chart"></canvas>
+          <canvas id="priceChart" height="680" data-logical-height="680" role="img" aria-label="Index, Futures, adaptive basis lane with four scale guides, Futures open interest, and open-interest change on one receipt-time chart"></canvas>
+          <div id="currentReadout" class="readout-grid"></div>
         </section>
 
         <section id="ceOiFlowPanel" class="strike-flow-panel panel">

@@ -53,6 +53,8 @@ def test_fact_bundle_ends_at_exact_receipt_and_excludes_future(tmp_path) -> None
     assert bundle["observation_count"] == 11
     assert bundle["latest_market"]["t"] == cutoff
     assert bundle["latest_state"]["t"] == cutoff
+    assert "recent_futures_volume_minutes" in bundle
+    assert len(json.dumps(bundle, sort_keys=True, separators=(",", ":")).encode()) < 96_000
     assert len(bundle_hash) == 64
     assert all(row["published_at"] <= cutoff for row in bundle["recent_visible_transitions"])
 

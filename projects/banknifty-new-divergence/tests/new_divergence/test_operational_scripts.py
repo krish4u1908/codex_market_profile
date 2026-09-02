@@ -66,7 +66,8 @@ def test_v1022_central_commentary_uses_server_token_and_loopback_worker() -> Non
     assert "Central market-profile commentary" in replay
     assert 'id="codexAccessToken"' not in replay
     assert "/api/v1/commentary/current" in script
-    assert "Codex explanation and rule details" in script
+    assert "Scenario rules and market-profile details" in script
+    assert "Backend directional analysis" in script
     assert "Central commentary: enabled; internal token remains server-side" in installer
     assert "enter in each browser tab" not in installer
     assert '--commentary-db "$COMMENTARY_DB"' in service

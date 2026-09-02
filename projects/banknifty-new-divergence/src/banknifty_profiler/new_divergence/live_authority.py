@@ -16,6 +16,9 @@ from .contracts import EngineConfig, MarketEvent
 from .engine import CausalDivergenceEngine
 from .ledger import canonical_json
 from .provenance import RUNTIME_VERSION
+from .projection import confirmed_zones
+from .scenario import inventory_scenario
+from .live_profile import live_profile_projection
 
 
 def _record_hash(previous: str, payload: Mapping[str, object]) -> str:
@@ -55,6 +58,8 @@ class LiveAuthority:
         self._event_hash = ""
         self._publication_hash = ""
         self._sequence = 0
+        self._profile_cache_sequence = -1
+        self._profile_cache: dict[str, object] | None = None
         self._last_sort_key: tuple | None = None
         self._condition = threading.Condition(threading.RLock())
 
@@ -103,6 +108,8 @@ class LiveAuthority:
             self._event_hash = "" if not event_rows else str(event_rows[-1]["record_hash"])
             self._publication_hash = "" if not publication_rows else str(publication_rows[-1]["record_hash"])
             self._sequence = len(self.publications)
+            self._profile_cache_sequence = -1
+            self._profile_cache = None
             self.pending = []
             self._pending_ids = set()
             self.source_offsets = {}
@@ -224,6 +231,16 @@ class LiveAuthority:
 
     def snapshot(self) -> dict[str, object]:
         with self._condition:
+            observations = [row.to_dict() for row in self.engine.observations]
+            evidence = [row.to_dict() for row in self.engine.evidence_snapshots]
+            transitions = [row.to_dict() for row in self.engine.transitions]
+            if self._profile_cache is None or self._profile_cache_sequence != self._sequence:
+                self._profile_cache = live_profile_projection(
+                    self.events, observations, evidence,
+                    session=self.session, config=self.config,
+                )
+                self._profile_cache_sequence = self._sequence
+            profile = dict(self._profile_cache)
             return {
                 "schema": "NEW_DIVERGENCE_LIVE_SNAPSHOT_V1",
                 "runtime_version": RUNTIME_VERSION,
@@ -233,10 +250,139 @@ class LiveAuthority:
                 "sequence": self._sequence,
                 "server_time": iso_utc(datetime.now().astimezone()),
                 "events": [row.to_dict() for row in self.events],
-                "observations": [row.to_dict() for row in self.engine.observations],
-                "evidence": [row.to_dict() for row in self.engine.evidence_snapshots],
-                "transitions": [row.to_dict() for row in self.engine.transitions],
+                "observations": observations,
+                "evidence": evidence,
+                "transitions": transitions,
+                "confirmed_zones": confirmed_zones(transitions),
+                "profile": profile,
                 "pending_count": len(self.pending),
                 "source_offsets": dict(self.source_offsets),
                 "production_weight": self.config.production_weight,
+            }
+
+    def status_snapshot(self) -> dict[str, object]:
+        """Return operational state without projecting or serializing the day."""
+        with self._condition:
+            return {
+                "session": self.session.isoformat(),
+                "status": self.status,
+                "recovery_mode": self.recovery_mode,
+                "sequence": self._sequence,
+                "server_time": iso_utc(datetime.now().astimezone()),
+                "pending_count": len(self.pending),
+            }
+
+    def _profile_locked(self) -> dict[str, object]:
+        observations = [row.to_dict() for row in self.engine.observations]
+        evidence = [row.to_dict() for row in self.engine.evidence_snapshots]
+        if self._profile_cache is None or self._profile_cache_sequence != self._sequence:
+            self._profile_cache = live_profile_projection(
+                self.events, observations, evidence,
+                session=self.session, config=self.config,
+            )
+            self._profile_cache_sequence = self._sequence
+        return dict(self._profile_cache)
+
+    def profile_snapshot(self) -> dict[str, object]:
+        """Return only the live profile contract used by the polling endpoint."""
+        with self._condition:
+            profile = self._profile_locked()
+            return {
+                "session": self.session.isoformat(),
+                "sequence": self._sequence,
+                "profile": profile,
+                "backend_scenario": self._scenario_locked(profile),
+            }
+
+    def _scenario_locked(self, profile: dict[str, object]) -> dict[str, object]:
+        observations = [row.to_dict() for row in self.engine.observations[-1200:]]
+        return inventory_scenario({
+            "causal_as_of": observations[-1]["timestamp"] if observations else None,
+            "recent_market": observations,
+            "recent_futures_oi": profile.get("futures_oi", []),
+            "recent_futures_volume_minutes": profile.get("futures_volume_minutes", []),
+            "visible_intraday_inventory": profile.get("visible_intraday_inventory", {}),
+            "recent_intraday_inventory_shifts": profile.get("recent_intraday_inventory_shifts", {}),
+        })
+
+    @staticmethod
+    def _sample(rows: list[dict[str, object]], limit: int) -> list[dict[str, object]]:
+        if limit <= 0:
+            return []
+        if limit == 1:
+            return rows[-1:]
+        if len(rows) <= limit:
+            return rows
+        indices = {0, len(rows) - 1}
+        for step in range(1, limit - 1):
+            indices.add(round(step * (len(rows) - 1) / (limit - 1)))
+        return [rows[index] for index in sorted(indices)]
+
+    def browser_snapshot(self, *, observation_limit: int | None = 4000) -> dict[str, object]:
+        """Return a bounded mobile bootstrap or the complete desktop history."""
+        with self._condition:
+            observations = [row.to_dict() for row in self.engine.observations]
+            evidence = [row.to_dict() for row in self.engine.evidence_snapshots]
+            transitions = [row.to_dict() for row in self.engine.transitions]
+            profile = self._profile_locked()
+            return {
+                "schema": "NEW_DIVERGENCE_LIVE_BROWSER_SNAPSHOT_V1",
+                "runtime_version": RUNTIME_VERSION,
+                "session": self.session.isoformat(),
+                "status": self.status,
+                "recovery_mode": self.recovery_mode,
+                "sequence": self._sequence,
+                "server_time": iso_utc(datetime.now().astimezone()),
+                "events": [],
+                "observations": (
+                    observations if observation_limit is None
+                    else self._sample(observations, observation_limit)
+                ),
+                "observation_count": len(observations),
+                "observations_sampled": (
+                    observation_limit is not None
+                    and len(observations) > observation_limit
+                ),
+                "evidence": evidence[-1:],
+                "transitions": transitions[-50:],
+                "confirmed_zones": confirmed_zones(transitions),
+                "profile": profile,
+                "backend_scenario": self._scenario_locked(profile),
+                "pending_count": len(self.pending),
+                "production_weight": self.config.production_weight,
+            }
+
+    def observation_history(self, *, before: int, limit: int) -> dict[str, object]:
+        """Return an exact older observation slice for progressive browser hydration.
+
+        ``before`` is an exclusive observation offset captured from the initial
+        snapshot. Appending live observations does not move any older offsets.
+        """
+        with self._condition:
+            total = len(self.engine.observations)
+            end = max(0, min(before, total))
+            start = max(0, end - limit)
+            rows = [row.to_dict() for row in self.engine.observations[start:end]]
+            return {
+                "schema": "NEW_DIVERGENCE_LIVE_OBSERVATION_HISTORY_V1",
+                "session": self.session.isoformat(),
+                "start": start,
+                "end": end,
+                "total": total,
+                "complete": start == 0,
+                "observations": rows,
+            }
+
+    def commentary_snapshot(self) -> dict[str, object]:
+        """Return the bounded causal prefix required by central commentary."""
+        with self._condition:
+            return {
+                "session": self.session.isoformat(),
+                "sequence": self._sequence,
+                "server_time": iso_utc(datetime.now().astimezone()),
+                "events": [row.to_dict() for row in self.events[-20:]],
+                "observations": [row.to_dict() for row in self.engine.observations[-1200:]],
+                "evidence": [row.to_dict() for row in self.engine.evidence_snapshots[-1:]],
+                "transitions": [row.to_dict() for row in self.engine.transitions[-12:]],
+                "profile": self._profile_locked(),
             }

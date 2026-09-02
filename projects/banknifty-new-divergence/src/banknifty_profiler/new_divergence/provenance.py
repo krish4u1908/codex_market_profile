@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-RUNTIME_VERSION = "1.0.22"
+RUNTIME_VERSION = "1.0.35"
 
 
 def runtime_identity() -> dict[str, object]:

@@ -10,11 +10,50 @@ neither dates nor contract years are embedded in the new runtime.
 
 **Operational status:** completed-session replay, the persistent replay GUI,
 versioned nightly 1D/2D/3D context, and checkpointed live monitoring are
-available. V1.0.22 adds centralized, durable commentary shared by replay and
+available. V1.0.23 adds replay-equivalent live inventory projection and keeps
+centralized, durable commentary shared by replay and
 live browsers, with exact inventory shifts, transparent market-profile analysis,
 Codex explanation, and a separately labelled experimental outlook. It builds on
 the replay-only exact-cursor Codex boundary introduced in V1.0.19 through a
 restricted local worker. Live Codex prompting remains disabled.
+V1.0.24 corrects the live frame presentation without changing calculations,
+commentary generation, market-data inputs, or service boundaries.
+V1.0.25 aligns live monitoring with the replay workspace and explicitly
+separates browser connectivity from receipt-feed freshness.
+V1.0.26 corrects the remaining desktop workspace flow by keeping shifts in the
+primary column rather than below the height of the snapshot rail.
+V1.0.27 bounds mobile/browser bootstrap and background polling payloads and
+shows transparent inventory analysis separately from Codex interpretation.
+V1.0.28 adds the same auditable four-scenario directional backend contract to
+replay and live. It classifies confirmed/potential long buildup, short buildup,
+long trap, short trap or NO_EDGE without using option-premium assumptions, and
+keeps the live backend decision independent of Codex latency.
+V1.0.29 consolidates Index, Futures, basis, Futures OI and signed Futures ΔOI
+onto one synchronized long market canvas in replay and live. Basis retains its
+own scale in an adaptive internal lane: it occupies a verified clear corridor
+between Index and Futures when one exists across the visible prefix, otherwise
+it moves to a reserved top lane. Futures OI and ΔOI retain an independent
+bottom participation scale. These are display-only changes.
+V1.0.30 gives that adaptive basis lane a fixed 180-pixel visual budget and four
+horizontal basis-scale guides. The complete lane moves between Index/Futures
+only when the full height fits safely; otherwise it moves to the top without
+compressing the oscillation. The combined replay/live canvas is 680 pixels
+high, while calculations and data contracts remain unchanged.
+V1.0.31 restores the live confirmed-divergence layers already present in
+replay. Live projects zones from the complete authoritative transition ledger,
+shows green/red confirmed spans and start lines with dashed terminal markers,
+and updates them from new publications. Candidate states remain uncoloured.
+V1.0.32 follows the compact participation overlay: active BankNifty Futures OI
+is an amber linear trace over the price plot, while positive and negative ΔOI
+are green/red bars around an internal lower baseline. These participation
+series have independent normalization and never alter the price scale.
+V1.0.35 changes only the experimental short-trap path. A 2.5x Futures-volume
+climax creates a non-directional candidate; it cannot assign BUY/SELL. The
+classifier reports `CONFIRMED_SHORT_TRAP`/`UP` only after later-minute price,
+Futures OI, basis, and PE-control confirmation. Exact causal UTC and IST
+timestamps are returned in scenario metrics. See
+[`docs/SHORT_TRAP_V1035.md`](docs/SHORT_TRAP_V1035.md) and
+[`docs/DEPLOYMENT_V1035.md`](docs/DEPLOYMENT_V1035.md).
 
 The runtime is fixed at `production_weight: 0`. It publishes candidates at
 their receipt time, confirms them only after later persistence evidence becomes

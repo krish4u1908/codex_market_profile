@@ -23,7 +23,7 @@ def build_live_browser(output_root: Path) -> Path:
     target.mkdir(parents=True, exist_ok=True)
     static = Path(__file__).with_name("static_live")
     replay_static = Path(__file__).with_name("static_new")
-    for name in ("live.html", "live.js"):
+    for name in ("live.html", "live.js", "live.css"):
         shutil.copyfile(static / name, target / name)
     shutil.copyfile(replay_static / "style.css", target / "style.css")
     (target / "build_manifest.json").write_text(json.dumps({
@@ -61,7 +61,7 @@ class _LiveHandler(SimpleHTTPRequestHandler):
         return sequence
 
     def _sse(self, after: int) -> None:
-        snapshot = self.runtime.authority.snapshot()
+        snapshot = self.runtime.authority.status_snapshot()
         current = int(snapshot["sequence"])
         if after > current:
             self._json(409, {"error": "sequence is ahead of authority", "current_sequence": current})
@@ -81,7 +81,7 @@ class _LiveHandler(SimpleHTTPRequestHandler):
                         body = json.dumps(row, sort_keys=True, separators=(",", ":"))
                         self.wfile.write(f"id: {cursor}\nevent: publication\ndata: {body}\n\n".encode())
                 else:
-                    status = self.runtime.authority.snapshot()
+                    status = self.runtime.authority.status_snapshot()
                     body = json.dumps({
                         "sequence": status["sequence"],
                         "status": status["status"],
@@ -96,7 +96,7 @@ class _LiveHandler(SimpleHTTPRequestHandler):
         request = urlparse(self.path)
         query = parse_qs(request.query)
         if request.path == "/healthz":
-            snapshot = self.runtime.authority.snapshot()
+            snapshot = self.runtime.authority.status_snapshot()
             status = "ok" if snapshot["status"] != "LIVE_RECOVERY_REQUIRED" else "error"
             codex_worker = self.codex_probe.status()
             self._json(200 if status == "ok" else 503, {
@@ -112,7 +112,35 @@ class _LiveHandler(SimpleHTTPRequestHandler):
             })
             return
         if request.path == "/api/v1/live/snapshot":
-            self._json(200, self.runtime.authority.snapshot())
+            try:
+                requested = int(query.get("max_points", ["4000"])[0])
+            except (TypeError, ValueError):
+                self._json(400, {"error": "max_points must be an integer"})
+                return
+            # A non-positive value explicitly requests the complete intraday
+            # observation history (used by the desktop layout).
+            observation_limit = None if requested <= 0 else max(1000, min(12000, requested))
+            self._json(200, self.runtime.authority.browser_snapshot(
+                observation_limit=observation_limit
+            ))
+            return
+        if request.path == "/api/v1/live/history":
+            try:
+                before = int(query.get("before", ["0"])[0])
+                requested_limit = int(query.get("limit", ["2000"])[0])
+            except (TypeError, ValueError):
+                self._json(400, {"error": "before and limit must be integers"})
+                return
+            if before < 0:
+                self._json(400, {"error": "before must be non-negative"})
+                return
+            limit = max(250, min(4000, requested_limit))
+            self._json(200, self.runtime.authority.observation_history(
+                before=before, limit=limit
+            ))
+            return
+        if request.path == "/api/v1/live/profile":
+            self._json(200, self.runtime.authority.profile_snapshot())
             return
         if request.path == "/api/v1/codex/status":
             status = self.codex_probe.status()
@@ -123,7 +151,7 @@ class _LiveHandler(SimpleHTTPRequestHandler):
             if self.commentary is None:
                 self._json(503, {"error": "central live commentary is not configured"})
                 return
-            snapshot = self.runtime.authority.snapshot()
+            snapshot = self.runtime.authority.status_snapshot()
             result = self.commentary.store.current(str(snapshot["session"]))
             if result is None:
                 self._json(202, {"schema": "NEW_DIVERGENCE_COMMENTARY_PENDING_V1",
@@ -137,7 +165,7 @@ class _LiveHandler(SimpleHTTPRequestHandler):
             except (TypeError, ValueError):
                 self._json(400, {"error": "invalid after/Last-Event-ID sequence"})
                 return
-            current = int(self.runtime.authority.snapshot()["sequence"])
+            current = int(self.runtime.authority.status_snapshot()["sequence"])
             if after > current:
                 self._json(409, {"error": "sequence is ahead of authority", "current_sequence": current})
                 return
@@ -184,7 +212,7 @@ def serve_live(
         def generate_commentary() -> None:
             while not commentary_stop.wait(5.0):
                 try:
-                    _LiveHandler.commentary.generate(runtime.authority.snapshot())
+                    _LiveHandler.commentary.generate(runtime.authority.commentary_snapshot())
                 except (CodexReplayError, OSError, RuntimeError, TypeError, ValueError):
                     # Health remains independently observable; the live authority
                     # must never fail because optional commentary is unavailable.

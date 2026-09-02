@@ -1,5 +1,157 @@
 # Changelog
 
+## 1.0.35
+
+- Replaced the legacy same-freeze `SHORT_TRAP` classification with a causal
+  `SHORT_TRAP_CANDIDATE` to `CONFIRMED_SHORT_TRAP` transition.
+- Added an inclusive, unrounded 2.5x Futures-volume gate against the exact
+  preceding five complete one-minute volumes. The current minute is excluded;
+  reset, gap, missing, and non-positive-baseline cases fail closed.
+- A volume climax is non-directional. An UP classification now requires a
+  later market minute with price reclaim, Futures OI liquidation, basis
+  recovery, and PE positive-OI control reclaim.
+- Added exact UTC/IST climax, candidate, signal-availability, and gap metrics.
+- Added raw Futures-volume prefix filtering to replay, while Codex receives
+  only the last twelve compact minute summaries under the 96 KB fail-closed
+  fact-bundle limit.
+- Added a separate V1.0.35 staging service installer; it does not overwrite or
+  promote the existing live service.
+
+## 1.0.32
+
+- Overlay the active BankNifty Futures OI linear trace directly within the
+  synchronized Index/Futures price plot in replay and live.
+- Overlay signed Futures ΔOI bars in the same price plot: positive bars are
+  green above the internal baseline and negative bars are red below it.
+- Keep Futures OI and ΔOI independently normalized; neither changes the
+  BankNifty price scale. Remove the separate lower participation lane.
+- Retain the V1.0.30 adaptive basis lane and V1.0.31 confirmed divergence-layer
+  parity without changing calculations or data contracts.
+
+## 1.0.31
+
+- Restore replay/live parity for confirmed divergence-layer overlays on the
+  synchronized live market chart.
+- Project live `confirmed_zones` server-side from the complete authoritative
+  transition ledger, while keeping the transition-card list bounded.
+- Draw the same confirmed green/red interval shading and confirmation-start
+  lines used by replay, plus neutral dashed terminal lines.
+- Update live zones incrementally from SSE publications. Candidate episodes do
+  not create coloured zones, and no divergence-engine rule is changed.
+
+## 1.0.30
+
+- Expand the adaptive basis band from a compact 62–68 pixel strip to a
+  consistent 180-pixel lane in replay and live.
+- Draw four evenly spaced basis-scale reference guides, including their basis
+  values, so intraday expansion, contraction and oscillation remain legible.
+- Increase the synchronized market canvas to 680 pixels. Use the `BETWEEN`
+  placement only when the entire 180-pixel band clears Index and Futures;
+  otherwise move the complete band to `TOP` without reducing its scale.
+- Preserve the shared receipt-time axis, independent Bank Nifty price and
+  Futures OI scales, all backend calculations, commentary and service inputs.
+
+## 1.0.29
+
+- Consolidate the separate basis chart into the long synchronized market
+  canvas in both replay and live without putting basis on the BankNifty price
+  scale.
+- Place the independent basis trace inside a globally clear visible corridor
+  between Index and Futures when at least 54 pixels remain after safety insets;
+  otherwise reserve a top lane. A sign crossing also forces the top lane.
+- Keep active BankNifty Futures OI as a linear amber trace in an independent
+  bottom participation lane with normalized positive/negative ΔOI bars.
+- Add an explicit basis-placement status, legend entry, persistent visibility
+  toggle, larger single canvas and gap-safe paths. Remove the redundant basis
+  canvas from replay and live.
+- Preserve every market-data payload, scenario calculation, commentary rule,
+  replay cursor, service boundary and production weight.
+
+## 1.0.28
+
+- Add one shared deterministic causal scenario engine for replay and live:
+  true/potential long buildup, true/potential short buildup, confirmed long
+  trap, confirmed short trap, and mandatory NO_EDGE abstention.
+- Use synchronized five-minute BankNifty/Futures/basis movement, recent Futures
+  OI, CE/PE positive-OI controls, control migration and 30-second price
+  acceptance. A trap requires an observed buildup followed by liquidation;
+  missing earlier buildup is never invented.
+- Publish the live backend scenario independently of Codex in the initial
+  browser snapshot and existing 15-second profile refresh, avoiding another
+  full-profile polling path; display it beside stored Codex interpretation.
+- Show the identical backend-scenario contract at exact replay cursors. Opening
+  09:15–09:45 and closing 15:00–15:30 IST are observation-only.
+- Do not infer buyer/writer identity from OI. Option-premium classification is
+  explicitly reported as missing evidence until a gap-safe premium contract is
+  designed and validated.
+- Replay transport, collector behavior and existing Codex prompt remain
+  unchanged.
+
+## 1.0.27
+
+- Replace the unbounded browser bootstrap with adaptive sampled observation
+  snapshot now returns the latest synchronized state immediately, starts SSE,
+  and progressively backfills exact historical observations in bounded chunks;
+  desktop and mobile eventually receive the complete intraday graph without
+  blocking the live connection; raw retained events
+  are never sent to the browser.
+- Add lightweight status, profile and commentary snapshot contracts so health,
+  five-second profile polling and central commentary no longer serialize the
+  complete live day.
+- Separate transparent inventory-rule analysis from Codex interpretation in
+  the visible commentary card.
+- No collector, calculation or production-service behavior changed.
+
+## 1.0.26
+
+- Move material inventory shifts and optional transitions into the primary
+  chart column directly below Basis, eliminating blank space caused by the
+  taller CE/PE/inventory rail.
+- Widen the live snapshot rail at desktop sizes so complete inventory values
+  and frame actions remain visible.
+- No data, chart, calculation, collector or service behavior changed.
+
+## 1.0.25
+
+- Replace the standalone live-card layout with the replay workspace hierarchy:
+  primary market/basis charts, sticky CE/PE snapshot rail, inventory list and
+  compact lower shift/transition frames.
+- Draw synchronized Index and Futures together, overlay selected live ID
+  inventory controls, and add Futures OI/Delta-OI participation.
+- Break chart paths across feed gaps rather than visually joining unavailable
+  intervals; separate browser connectivity from receipt-feed freshness.
+- Split CE and PE absolute-OI snapshots with signed Delta-OI colour and a
+  BankNifty reference marker.
+- Keep maximize actions in frame headers and hide the verbose transition frame
+  by default.
+- Calculation, commentary, collector and production-service behavior remain
+  unchanged.
+
+## 1.0.24
+
+- Correct the live inventory-row grid contract that compressed labels into a
+  replay-only swatch column and caused overlapping text.
+- Add a dedicated live stylesheet while retaining the shared replay theme.
+- Present live inventory controls, option strikes, and transitions as compact,
+  responsive card grids with readable values and timestamps.
+- Reduce normal live chart heights so profile and commentary information stays
+  visible without excessive scrolling; maximized chart behavior is unchanged.
+- No calculation, commentary, service-port, or market-data behavior changed.
+
+## 1.0.23
+
+- Added an authoritative live market-profile projection built from the same
+  causal ID functions used by completed-session replay.
+- Published CE/PE/Futures signed OI-VPOCs, BN-reference Futures-volume
+  VPOC/VAH/VAL, selected-strike OI/ΔOI, and causal shift history in live
+  snapshots.
+- Replaced the empty live Codex inventory fields with the verified live profile
+  and incremented central commentary generation revision to 4.
+- Added replay-style compact SHIFT/READ/CHECK/OUTCOME/CONFIRM/INVALIDATE live
+  commentary and dedicated live inventory and strike-flow panels.
+- Kept commentary server-generated, centrally stored, and retrieval-only from
+  browsers; port 4500 remains loopback-only.
+
 ## 1.0.22
 
 - Replaced the tall commentary report with a compact shift/read/outcome/levels

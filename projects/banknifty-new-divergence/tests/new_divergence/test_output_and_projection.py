@@ -78,6 +78,7 @@ def test_atomic_run_and_browser_are_discovered_without_embedded_dates(tmp_path) 
         for row in prefix["confirmed_zones"]
     )
     assert prefix["availability"]["future_observations_returned"] is False
+    assert prefix["availability"]["future_futures_volume_returned"] is False
 
 
 def test_replay_retains_futures_counter_and_publishes_prefix_safe_id_volume_profile(
@@ -117,11 +118,21 @@ def test_replay_retains_futures_counter_and_publishes_prefix_safe_id_volume_prof
         if row[family_index] == "BN_REF_FUT_VOLUME_VPOC"
     ]
     assert volume_rows
+    assert payload["futures_volume"]["fields"] == [
+        "t", "p", "v", "dv", "vs", "i", "symbol", "event_id",
+    ]
+    assert payload["futures_volume"]["rows"]
 
     cutoff = parse_instant(volume_rows[0][fields.index("t")]) - timedelta(milliseconds=1)
     prefix = ProjectionReadModel(browser).session(events[0].session.isoformat(), as_of=cutoff)
     assert len(prefix["intraday_inventory"]["rows"]) < len(intraday["rows"])
     assert prefix["availability"]["future_intraday_inventory_returned"] is False
+    volume_time_index = prefix["futures_volume"]["fields"].index("t")
+    assert all(
+        parse_instant(row[volume_time_index]) <= cutoff
+        for row in prefix["futures_volume"]["rows"]
+    )
+    assert prefix["availability"]["future_futures_volume_returned"] is False
 
 
 def test_retaining_futures_volume_does_not_change_divergence_ledger(tmp_path) -> None:
@@ -724,10 +735,15 @@ def test_market_and_oi_share_one_panel_domain_and_plot_margins() -> None:
     assert "function marketOiChart(" in script
     assert '.flatMap((row) => [Number(row.i), Number(row.f)])' in script
     assert 'byId("priceChart"), rows, oiRows, cursor, visibleZones' in script
-    assert 'id="priceChart" height="390" data-logical-height="390"' in replay
+    assert 'id="priceChart" height="680" data-logical-height="680"' in replay
     assert 'id="oiChart"' not in replay
-    assert replay.count('class="chart-panel panel"') == 2
-    assert "Index / Futures / OI / ΔOI" in replay
+    assert replay.count('class="chart-panel panel"') == 1
+    assert "Index / Futures / adaptive Basis / Futures OI / ΔOI" in replay
+    assert 'id="basisChart"' not in replay
+    assert 'id="basisPanel"' not in replay
+    assert 'id="frameBasis" type="checkbox" checked> Basis lane' in replay
+    assert 'id="basisPlacement"' in replay
+    assert 'class="line-basis"' in replay
     assert 'class="line-oi"' in replay
     assert 'class="bar-oi-positive"' in replay
     assert 'class="bar-oi-negative"' in replay
@@ -763,8 +779,8 @@ def test_replay_canvas_height_is_stable_across_repeated_frames() -> None:
     assert "canvas.dataset.logicalHeight" in script
     assert 'canvas.getAttribute("height")' not in script
     assert "canvas.style.height = `${height}px`" in script
-    assert 'id="priceChart" height="390" data-logical-height="390"' in replay
-    assert 'id="basisChart" height="220" data-logical-height="220"' in replay
+    assert 'id="priceChart" height="680" data-logical-height="680"' in replay
+    assert 'id="basisChart"' not in replay
     assert 'id="ceStrikeChart" height="300" data-logical-height="300"' in replay
     assert 'id="peStrikeChart" height="300" data-logical-height="300"' in replay
     for canvas_id in (
@@ -834,7 +850,6 @@ def test_every_replay_frame_has_a_persistent_independent_visibility_control() ->
     style = (static / "style.css").read_text(encoding="utf-8")
     expected = {
         "frameMarket": "marketPanel",
-        "frameBasis": "basisPanel",
         "frameCeOi": "ceOiFlowPanel",
         "framePeOi": "peOiFlowPanel",
         "frameCeVolume": "ceVolumeFlowPanel",
@@ -847,6 +862,8 @@ def test_every_replay_frame_has_a_persistent_independent_visibility_control() ->
         assert f'id="{control}" type="checkbox" checked' in replay
         assert f'id="{target}"' in replay
         assert f'{control}: "{target}"' in script
+    assert 'const OVERLAY_TOGGLE_IDS = Object.freeze(["frameBasis"])' in script
+    assert 'id="frameBasis" type="checkbox" checked' in replay
     assert 'window.sessionStorage.setItem(FRAME_STORAGE_KEY' in script
     assert "installFrameMaximizeControls();" in script
     assert 'event.key === "Escape"' in script
@@ -854,6 +871,33 @@ def test_every_replay_frame_has_a_persistent_independent_visibility_control() ->
     assert "restoreFrameVisibility();" in script
     assert 'classList.toggle("no-strike-column", !rightVisible)' in script
     assert ".replay-workspace.no-strike-column { grid-template-columns: minmax(0, 1fr); }" in style
+
+
+def test_v1032_basis_futures_oi_and_delta_oi_overlay_one_market_canvas() -> None:
+    root = Path(__file__).resolve().parents[2]
+    static = root / "src/banknifty_profiler/new_divergence/static_new"
+    script = (static / "app.js").read_text(encoding="utf-8")
+    replay = (static / "replay.html").read_text(encoding="utf-8")
+    assert "function adaptiveBasisLane(" in script
+    assert "function drawAdaptiveBasisLane(" in script
+    assert 'mode: "BETWEEN"' in script
+    assert 'mode: "TOP"' in script
+    assert "corridorBottom - corridorTop >= requestedLaneHeight" in script
+    assert "const requestedLaneHeight = 180" in script
+    assert "guide <= 4" in script
+    assert "const priceBottom = height - margin.bottom" in script
+    assert "const oiOverlayTop = priceTop + 22" in script
+    assert "const oiOverlayBottom = Math.max(oiOverlayTop + 1, priceBottom - 48)" in script
+    assert "const deltaZeroY = priceBottom - 23" in script
+    assert "const deltaHalfHeight = 20" in script
+    assert "participationHeight" not in script
+    assert "oiLineTop" not in script
+    assert "oiLineBottom" not in script
+    assert "return basisLane.mode" in script
+    assert 'id="basisPlacement"' in replay
+    assert "Basis lane · between Index/Futures" in script
+    assert "Basis lane · top" in script
+    assert 'id="basisPanel"' not in replay
 
 
 def test_service_rejects_browser_assets_built_by_another_runtime(tmp_path) -> None:

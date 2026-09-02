@@ -27,7 +27,6 @@ const FRAME_MAXIMIZED_KEY = "banknifty-new-divergence-maximized-frame-v1";
 const CODEX_TOKEN_STORAGE_KEY = "banknifty-new-divergence-codex-token-v1";
 const FRAME_TARGETS = Object.freeze({
   frameMarket: "marketPanel",
-  frameBasis: "basisPanel",
   frameCeOi: "ceOiFlowPanel",
   framePeOi: "peOiFlowPanel",
   frameCeVolume: "ceVolumeFlowPanel",
@@ -36,6 +35,7 @@ const FRAME_TARGETS = Object.freeze({
   framePeSnapshot: "peSnapshotPanel",
   frameInventoryList: "inventoryListPanel"
 });
+const OVERLAY_TOGGLE_IDS = Object.freeze(["frameBasis"]);
 const RIGHT_FRAME_IDS = Object.freeze([
   "frameCeSnapshot", "framePeSnapshot", "frameInventoryList"
 ]);
@@ -73,7 +73,7 @@ function restoreFrameVisibility() {
   } catch (_error) {
     saved = {};
   }
-  for (const id of Object.keys(FRAME_TARGETS)) {
+  for (const id of [...Object.keys(FRAME_TARGETS), ...OVERLAY_TOGGLE_IDS]) {
     if (typeof saved[id] === "boolean") byId(id).checked = saved[id];
   }
 }
@@ -85,6 +85,7 @@ function applyFrameVisibility() {
     saved[id] = visible;
     byId(target).hidden = !visible;
   }
+  for (const id of OVERLAY_TOGGLE_IDS) saved[id] = byId(id)?.checked === true;
   const rightVisible = RIGHT_FRAME_IDS.some((id) => byId(id)?.checked === true);
   document.querySelector(".strike-column").hidden = !rightVisible;
   document.querySelector(".replay-workspace").classList.toggle("no-strike-column", !rightVisible);
@@ -537,7 +538,7 @@ function drawInventoryLevels(context, width, margin, priceY, lines) {
   const projected = lines
     .map((line) => ({ line, py: priceY(line.value), labelY: priceY(line.value) }))
     .sort((a, b) => a.py - b.py);
-  const labelRoom = Math.max(0, margin.priceBottom - margin.top - 6);
+  const labelRoom = Math.max(0, margin.priceBottom - (margin.priceTop ?? margin.top) - 6);
   const minimumLabelGap = projected.length > 1
     ? Math.max(7, Math.min(11, labelRoom / (projected.length - 1))) : 11;
   for (let index = 1; index < projected.length; index += 1) {
@@ -579,21 +580,113 @@ function drawInventoryLevels(context, width, margin, priceY, lines) {
   context.restore();
 }
 
+function adaptiveBasisLane(rows, priceY, priceTop, priceBottom, enabled) {
+  if (!enabled) return { mode: "HIDDEN", top: 0, bottom: 0 };
+  const samples = rows.map((row) => ({
+    index: Number(row.i), futures: Number(row.f), basis: Number(row.b)
+  })).filter((row) => Number.isFinite(row.index)
+    && Number.isFinite(row.futures) && Number.isFinite(row.basis));
+  if (!samples.length) return { mode: "UNAVAILABLE", top: 0, bottom: 0 };
+  const sign = Math.sign(samples.at(-1).basis);
+  const oneSided = sign !== 0 && samples.every((row) => Math.sign(row.basis) === sign);
+  const upper = samples.map((row) => Math.min(priceY(row.index), priceY(row.futures)));
+  const lower = samples.map((row) => Math.max(priceY(row.index), priceY(row.futures)));
+  const corridorTop = Math.max(...upper) + 9;
+  const corridorBottom = Math.min(...lower) - 9;
+  const requestedLaneHeight = 180;
+  if (oneSided && corridorBottom - corridorTop >= requestedLaneHeight) {
+    const centre = (corridorTop + corridorBottom) / 2;
+    return {
+      mode: "BETWEEN",
+      top: centre - requestedLaneHeight / 2,
+      bottom: centre + requestedLaneHeight / 2
+    };
+  }
+  return {
+    mode: "TOP",
+    top: priceTop,
+    bottom: Math.min(priceBottom, priceTop + requestedLaneHeight)
+  };
+}
+
+function drawAdaptiveBasisLane(context, width, margin, rows, x, lane, gapLimitMs) {
+  if (!lane || lane.mode === "HIDDEN" || lane.mode === "UNAVAILABLE") return;
+  const values = rows.map((row) => Number(row.b)).filter(Number.isFinite);
+  if (!values.length) return;
+  let low = Math.min(...values), high = Math.max(...values);
+  const padding = Math.max((high - low) * .12, .5);
+  low -= padding; high += padding;
+  const laneHeight = lane.bottom - lane.top;
+  const y = (value) => lane.top + 8 + (high - value) / (high - low || 1) * Math.max(1, laneHeight - 16);
+  context.save();
+  context.fillStyle = "rgba(17, 28, 48, .93)";
+  context.fillRect(margin.left, lane.top, width - margin.left - margin.right, laneHeight);
+  context.strokeStyle = "rgba(183, 156, 255, .28)";
+  context.strokeRect(margin.left, lane.top, width - margin.left - margin.right, laneHeight);
+  context.font = "9px ui-monospace, monospace";
+  context.textAlign = "right";
+  context.textBaseline = "middle";
+  for (let guide = 1; guide <= 4; guide += 1) {
+    const fraction = guide / 5;
+    const guideY = lane.top + laneHeight * fraction;
+    const guideValue = high - (high - low) * fraction;
+    context.strokeStyle = "rgba(183, 156, 255, .24)";
+    context.beginPath();
+    context.moveTo(margin.left, guideY);
+    context.lineTo(width - margin.right, guideY);
+    context.stroke();
+    context.fillStyle = "rgba(212, 197, 255, .72)";
+    context.fillText(number(guideValue, 1), width - margin.right - 5, guideY - 7);
+  }
+  context.save();
+  context.beginPath();
+  context.rect(margin.left, lane.top, width - margin.left - margin.right, laneHeight);
+  context.clip();
+  context.strokeStyle = "#b79cff";
+  context.lineWidth = 1.45;
+  context.beginPath();
+  let penDown = false;
+  let priorTime = null;
+  for (const row of rows) {
+    const time = new Date(row.t).getTime();
+    const value = Number(row.b);
+    if (!Number.isFinite(time) || !Number.isFinite(value)) {
+      penDown = false;
+      priorTime = time;
+      continue;
+    }
+    const point = [x(time), y(value)];
+    if (!penDown || priorTime === null || time - priorTime > gapLimitMs) context.moveTo(...point);
+    else context.lineTo(...point);
+    penDown = true;
+    priorTime = time;
+  }
+  context.stroke();
+  context.restore();
+  const latest = values.at(-1);
+  context.font = "10px ui-monospace, monospace";
+  context.textAlign = "left";
+  context.textBaseline = "top";
+  context.fillStyle = "#d4c5ff";
+  context.fillText(
+    `BASIS · FUT − INDEX · ${latest >= 0 ? "+" : ""}${number(latest, 1)} · ${lane.mode}`,
+    margin.left + 6, lane.top + 4
+  );
+  context.textBaseline = "alphabetic";
+  context.restore();
+}
+
 function marketOiChart(
   canvas, priceRows, oiRows, cursor, confirmedZones,
-  priceGapToleranceSeconds, oiGapToleranceSeconds, inventoryLines
+  priceGapToleranceSeconds, oiGapToleranceSeconds, inventoryLines, showBasis
 ) {
   const { context, width, height } = canvasSize(canvas);
   context.clearRect(0, 0, width, height);
   const margin = { ...CHART_MARGIN, top: 13, bottom: 28 };
   const plotWidth = width - margin.left - margin.right;
-  const deltaHeight = 68;
-  const sectionGap = 18;
-  const priceHeight = height - margin.top - margin.bottom - deltaHeight - sectionGap;
-  const deltaTop = margin.top + priceHeight + sectionGap;
-  const deltaBottom = deltaTop + deltaHeight;
+  const priceBottom = height - margin.bottom;
   const visiblePrice = priceRows.slice(0, cursor + 1);
-  if (!visiblePrice.length || plotWidth <= 0 || priceHeight <= 0) return;
+  if (!visiblePrice.length || plotWidth <= 0 || priceBottom - margin.top <= 0) return;
 
   const first = new Date(visiblePrice[0].t).getTime();
   const last = new Date(visiblePrice.at(-1).t).getTime();
@@ -614,13 +707,30 @@ function marketOiChart(
   let priceLow = Math.min(...prices), priceHigh = Math.max(...prices);
   const pricePadding = Math.max((priceHigh - priceLow) * .08, .5);
   priceLow -= pricePadding; priceHigh += pricePadding;
-  const priceY = (value) => margin.top + (priceHigh - value) / (priceHigh - priceLow) * priceHeight;
-  margin.priceBottom = margin.top + priceHeight;
+  const preliminaryPriceY = (value) => margin.top
+    + (priceHigh - value) / (priceHigh - priceLow) * (priceBottom - margin.top);
+  let basisLane = adaptiveBasisLane(
+    visiblePrice, preliminaryPriceY, margin.top, priceBottom, showBasis
+  );
+  const priceTop = basisLane.mode === "TOP" ? basisLane.bottom + 8 : margin.top;
+  const priceHeight = priceBottom - priceTop;
+  const priceY = (value) => priceTop
+    + (priceHigh - value) / (priceHigh - priceLow) * priceHeight;
+  if (basisLane.mode === "BETWEEN") {
+    basisLane = adaptiveBasisLane(visiblePrice, priceY, priceTop, priceBottom, showBasis);
+  }
+  margin.priceTop = priceTop;
+  margin.priceBottom = priceBottom;
   let oiLow = oiValues.length ? Math.min(...oiValues) : 0;
   let oiHigh = oiValues.length ? Math.max(...oiValues) : 1;
   const oiPadding = Math.max((oiHigh - oiLow) * .08, 1);
   oiLow -= oiPadding; oiHigh += oiPadding;
-  const oiY = (value) => margin.top + (oiHigh - value) / (oiHigh - oiLow) * priceHeight;
+  const oiOverlayTop = priceTop + 22;
+  const oiOverlayBottom = Math.max(oiOverlayTop + 1, priceBottom - 48);
+  const oiY = (value) => oiOverlayTop
+    + (oiHigh - value) / (oiHigh - oiLow || 1) * (oiOverlayBottom - oiOverlayTop);
+  const deltaZeroY = priceBottom - 23;
+  const deltaHalfHeight = 20;
 
   for (const zone of confirmedZones) {
     const start = Math.max(first, new Date(zone.confirmed_at).getTime());
@@ -628,7 +738,7 @@ function marketOiChart(
     if (end < start || last === first) continue;
     context.fillStyle = zone.colour === "GREEN"
       ? "rgba(75, 213, 155, .10)" : "rgba(255, 100, 131, .11)";
-    context.fillRect(x(start), margin.top, Math.max(1, x(end) - x(start)), priceHeight);
+    context.fillRect(x(start), priceTop, Math.max(1, x(end) - x(start)), priceHeight);
   }
 
   const priceGapLimitMs = Math.max(1, Number(priceGapToleranceSeconds)) * 1000;
@@ -640,7 +750,7 @@ function marketOiChart(
   }
   for (const gap of gaps) {
     context.fillStyle = "rgba(142, 176, 193, .08)";
-    context.fillRect(x(gap.before), margin.top, Math.max(1, x(gap.after) - x(gap.before)), priceHeight);
+    context.fillRect(x(gap.before), priceTop, Math.max(1, x(gap.after) - x(gap.before)), priceHeight);
   }
 
   context.strokeStyle = "#17384a";
@@ -649,7 +759,7 @@ function marketOiChart(
   context.lineWidth = 1;
   context.textAlign = "left";
   for (let tick = 0; tick <= 4; tick += 1) {
-    const py = margin.top + priceHeight * tick / 4;
+    const py = priceTop + priceHeight * tick / 4;
     context.beginPath();
     context.moveTo(margin.left, py);
     context.lineTo(width - margin.right, py);
@@ -660,10 +770,15 @@ function marketOiChart(
   if (oiValues.length) {
     context.fillStyle = "#f7c34d";
     context.textAlign = "right";
-    context.fillText(`OI ${number(oiHigh, 0)}`, width - margin.right - 4, margin.top + 11);
-    context.fillText(`OI ${number(oiLow, 0)}`, width - margin.right - 4, margin.top + priceHeight - 4);
+    context.fillText(`OI ${number(oiHigh, 0)}`, width - margin.right - 4, priceTop + 11);
+    context.fillText(`OI ${number(oiLow, 0)}`, width - margin.right - 4, priceBottom - 5);
     context.textAlign = "left";
   }
+
+  drawAdaptiveBasisLane(
+    context, width, margin, visiblePrice, x, basisLane,
+    Math.max(1, Number(priceGapToleranceSeconds)) * 1000
+  );
 
   for (const series of [
     { field: "i", colour: "#2bc2ff" },
@@ -719,14 +834,13 @@ function marketOiChart(
       priorOiTime = time;
     }
     context.stroke();
+    context.fillStyle = "#f7c34d";
+    context.textAlign = "left";
+    context.fillText(`FUT OI ${number(visibleOi.at(-1).oi, 0)}`, margin.left + 5, priceTop + 13);
   } else {
     context.fillStyle = "#8eb0c1";
-    context.textAlign = "center";
-    context.fillText(
-      "No Futures OI was retained in this verified run.",
-      margin.left + plotWidth / 2,
-      margin.top + priceHeight / 2
-    );
+    context.textAlign = "left";
+    context.fillText("Futures OI unavailable", margin.left + 5, priceTop + 13);
     context.textAlign = "left";
   }
 
@@ -736,15 +850,15 @@ function marketOiChart(
     context.strokeStyle = zone.colour === "GREEN" ? "#4bd59b" : "#ff6483";
     context.lineWidth = 2;
     context.beginPath();
-    context.moveTo(x(start), margin.top);
-    context.lineTo(x(start), margin.top + priceHeight);
+    context.moveTo(x(start), priceTop);
+    context.lineTo(x(start), priceBottom);
     context.stroke();
     if (zone.closed && zone.renderEnd >= first && zone.renderEnd <= last) {
       context.strokeStyle = "#8eb0c1";
       context.setLineDash([4, 3]);
       context.beginPath();
-      context.moveTo(x(zone.renderEnd), margin.top);
-      context.lineTo(x(zone.renderEnd), margin.top + priceHeight);
+      context.moveTo(x(zone.renderEnd), priceTop);
+      context.lineTo(x(zone.renderEnd), priceBottom);
       context.stroke();
       context.setLineDash([]);
     }
@@ -754,45 +868,37 @@ function marketOiChart(
     context.lineWidth = 1;
     context.setLineDash([2, 3]);
     context.beginPath();
-    context.moveTo(x(gap.before), margin.top);
-    context.lineTo(x(gap.before), margin.top + priceHeight);
-    context.moveTo(x(gap.after), margin.top);
-    context.lineTo(x(gap.after), margin.top + priceHeight);
+    context.moveTo(x(gap.before), priceTop);
+    context.lineTo(x(gap.before), priceBottom);
+    context.moveTo(x(gap.after), priceTop);
+    context.lineTo(x(gap.after), priceBottom);
     context.stroke();
     context.setLineDash([]);
   }
 
   drawInventoryLevels(context, width, margin, priceY, inventoryLines);
 
-  context.strokeStyle = "#17384a";
-  context.beginPath();
-  context.moveTo(margin.left, deltaTop - sectionGap / 2);
-  context.lineTo(width - margin.right, deltaTop - sectionGap / 2);
-  context.stroke();
-  const zeroY = deltaTop + deltaHeight / 2;
   context.strokeStyle = "#31566a";
   context.beginPath();
-  context.moveTo(margin.left, zeroY);
-  context.lineTo(width - margin.right, zeroY);
+  context.moveTo(margin.left, deltaZeroY);
+  context.lineTo(width - margin.right, deltaZeroY);
   context.stroke();
   context.fillStyle = "#8eb0c1";
-  context.fillText("+ΔOI", 4, deltaTop + 10);
-  context.fillText("−ΔOI", 4, deltaBottom - 2);
+  context.fillText("±ΔOI", 4, deltaZeroY + 3);
 
   const deltas = visibleOi.map((row) => Number(row.d)).filter(Number.isFinite);
   const maximumDelta = Math.max(1, ...deltas.map(Math.abs));
-  const halfBarHeight = deltaHeight / 2 - 5;
   const barWidth = Math.max(1, Math.min(6, plotWidth / Math.max(visibleOi.length, 1) * .72));
   for (const row of visibleOi) {
     if (row.d === null) continue;
     const delta = Number(row.d);
     const time = new Date(row.t).getTime();
     if (!Number.isFinite(delta) || !Number.isFinite(time) || delta === 0) continue;
-    const barHeight = Math.max(1, Math.abs(delta) / maximumDelta * halfBarHeight);
+    const barHeight = Math.max(1, Math.abs(delta) / maximumDelta * deltaHalfHeight);
     context.fillStyle = delta > 0 ? "#4bd59b" : "#ff6483";
     context.fillRect(
       x(time) - barWidth / 2,
-      delta > 0 ? zeroY - barHeight : zeroY,
+      delta > 0 ? deltaZeroY - barHeight : deltaZeroY,
       barWidth,
       barHeight
     );
@@ -803,6 +909,7 @@ function marketOiChart(
   context.fillText(formatIST(visiblePrice[0].t), margin.left, height - 8);
   const endLabel = formatIST(visiblePrice.at(-1).t);
   context.fillText(endLabel, width - margin.right - context.measureText(endLabel).width, height - 8);
+  return basisLane.mode;
 }
 
 function latestStrikeSnapshot(strikeRows, priceRows, cursor, selection, retained, maxAgeSeconds) {
@@ -1112,6 +1219,7 @@ function renderCodexReplayAnswer(result) {
   const shell = byId("codexReplayAnswer");
   const answer = result;
   const textbook = result.market_profile_analysis || {};
+  const scenario = result.backend_scenario || {};
   shell.replaceChildren();
   const header = element("div", "commentary-summary-row");
   header.append(
@@ -1121,14 +1229,25 @@ function renderCodexReplayAnswer(result) {
   );
   shell.append(header);
   shell.append(element("p", "commentary-shift", `SHIFT · ${answer.what_changed || "No material control migration"}`));
-  shell.append(element("p", "commentary-read", `READ · ${textbook.concise_read || answer.summary || "No interpretation available."}`));
+  const comparison = element("div", "analysis-comparison");
+  const backend = element("section", "analysis-block backend-analysis");
+  backend.append(element("h4", "", "Backend directional analysis"));
+  backend.append(element("strong", "scenario-name", `${scenario.scenario || "NO_EDGE"} · ${scenario.stage || "UNRESOLVED"}`));
+  for (const row of (scenario.evidence || []).slice(0, 4)) backend.append(element("p", "", row));
+  backend.append(element("p", "commentary-outlook", `EXPECTED · ${scenario.expected || answer.possible_outcome || "No directional edge."}`));
+  backend.append(element("p", "commentary-invalidation", `CONFIRM · ${scenario.confirmation || answer.confirmation || "unavailable"}`));
+  backend.append(element("p", "commentary-invalidation", `INVALIDATE · ${scenario.invalidation || answer.invalidation || "unavailable"}`));
+  if ((scenario.missing_evidence || []).length) backend.append(element("p", "commentary-warning", `MISSING · ${scenario.missing_evidence.join(", ")}`));
+  const codex = element("section", "analysis-block codex-analysis");
+  codex.append(element("h4", "", "Codex interpretation"));
+  codex.append(element("p", "", answer.summary || "No Codex summary was returned."));
+  comparison.append(backend, codex);
+  shell.append(comparison);
   if (textbook.basis_warning) shell.append(element("p", "commentary-warning", `CHECK · ${textbook.basis_warning}`));
-  shell.append(element("p", "commentary-outlook", `OUTCOME · ${answer.possible_outcome || "No directional edge."}`));
-  shell.append(element("p", "commentary-invalidation", `CONFIRM · ${answer.confirmation || "unavailable"} · INVALIDATE · ${answer.invalidation || "unavailable"}`));
   const details = element("details", "commentary-details");
-  details.append(element("summary", "", "Codex explanation and rule details"));
-  details.append(element("h4", "", "Codex commentary"));
-  details.append(element("p", "", answer.summary || "No Codex summary was returned."));
+  details.append(element("summary", "", "Scenario rules and market-profile details"));
+  if ((scenario.rules || []).length) details.append(element("p", "", `Rules: ${scenario.rules.join(" · ")}`));
+  details.append(element("p", "", `Market profile: ${textbook.concise_read || "Unavailable"}`));
   for (const [heading, values] of [["Rule observations", textbook.observations], ["Cautions", textbook.cautions]]) {
     if (!Array.isArray(values) || !values.length) continue;
     details.append(element("h4", "", heading));
@@ -1255,19 +1374,18 @@ async function replay() {
       byId("replayClock").textContent = `${payload.session} ${formatIST(current.t)} IST`;
       byId("replayProgress").textContent = `${cursor + 1} / ${rows.length} synchronized observations`;
       if (!byId("marketPanel").hidden) {
-        marketOiChart(
+        const basisPlacement = marketOiChart(
           byId("priceChart"), rows, oiRows, cursor, visibleZones,
-          gapToleranceSeconds, oiGapToleranceSeconds, inventoryLines
+          gapToleranceSeconds, oiGapToleranceSeconds, inventoryLines,
+          byId("frameBasis").checked
         );
+        byId("basisPlacement").textContent = basisPlacement === "BETWEEN"
+          ? "Basis lane · between Index/Futures"
+          : basisPlacement === "TOP" ? "Basis lane · top"
+            : basisPlacement === "HIDDEN" ? "Basis lane · hidden" : "Basis lane · unavailable";
       }
       if (!byId("inventoryListPanel").hidden) {
         renderInventoryLevelList(inventoryBlock, intradayBlock, inventoryLines);
-      }
-      if (!byId("basisPanel").hidden) {
-        chart(
-          byId("basisChart"), rows, cursor, [{ field: "b", colour: "#b7a5ff" }],
-          visibleZones, gapToleranceSeconds
-        );
       }
       const strikeSnapshot = latestStrikeSnapshot(
         strikeRows, rows, cursor, strikeSelection, strikeRetained, oiGapToleranceSeconds
@@ -1428,7 +1546,7 @@ async function replay() {
     restoreFrameVisibility();
     applyFrameVisibility();
     installFrameMaximizeControls();
-    for (const id of Object.keys(FRAME_TARGETS)) {
+    for (const id of [...Object.keys(FRAME_TARGETS), ...OVERLAY_TOGGLE_IDS]) {
       byId(id).addEventListener("change", () => {
         applyFrameVisibility();
         render();

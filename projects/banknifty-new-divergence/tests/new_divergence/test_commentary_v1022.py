@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import threading
 
 from banknifty_profiler.new_divergence.commentary import (
@@ -57,8 +58,9 @@ def test_no_unvalidated_probability_is_fabricated():
     assert result["bias"] == "NO_EDGE"
     assert result["probability"] is None
     assert result["classification"] == "EXPERIMENTAL_NOT_VALIDATED"
-    assert result["generation_revision"] == 3
+    assert result["generation_revision"] == 5
     assert "market_profile_analysis" in result
+    assert result["backend_scenario"]["scenario"] == "NO_EDGE"
 
 
 def test_store_is_shared_and_immutable(tmp_path: Path):
@@ -82,9 +84,40 @@ def test_live_bundle_is_prefix_only_and_hashed():
             "futures_price": 57545, "basis": 45,
         }],
         "events": [], "evidence": [], "transitions": [],
+        "profile": {
+            "option_strike_oi": [
+                {"k": "CE", "oi": 1000, "d": 100, "symbol": "CE1"},
+                {"k": "PE", "oi": 1200, "d": 200, "symbol": "PE1"},
+            ],
+            "strike_selection": {
+                "CE": [{"symbol": "CE1"}], "PE": [{"symbol": "PE1"}],
+            },
+            "visible_intraday_inventory": {
+                "CE_POS_OI_VPOC": {"control_value": 57525},
+            },
+            "recent_intraday_inventory_shifts": {
+                "CE_POS_OI_VPOC": [
+                    {"control_value": 57500, "receipt": "2026-08-31T04:29:00Z"},
+                    {"control_value": 57525, "receipt": "2026-08-31T04:30:00Z"},
+                ],
+            },
+            "futures_oi": [
+                {"t": "2026-08-31T04:25:00Z", "p": 57510, "oi": 1000},
+                {"t": "2026-08-31T04:30:00Z", "p": 57545, "oi": 1100},
+            ],
+            "futures_volume": [
+                {"t": "2026-08-31T04:30:00Z", "dv": 100, "vs": "VALID"},
+            ],
+        },
     }
     bundle = live_fact_bundle(snapshot)
     assert bundle["availability"] == "LIVE_PREFIX_ONLY"
+    assert bundle["latest_option_summary"]["PE"]["delta_oi_total"] == 200
+    assert bundle["visible_intraday_inventory"]["CE_POS_OI_VPOC"]["control_value"] == 57525
+    assert len(bundle["recent_intraday_inventory_shifts"]["CE_POS_OI_VPOC"]) == 2
+    assert len(bundle["recent_futures_oi"]) == 2
+    assert len(bundle["recent_futures_volume_minutes"]) == 1
+    assert len(json.dumps(bundle, sort_keys=True, separators=(",", ":")).encode()) < 96_000
     assert len(bundle["verified_prefix_sha256"]) == 64
 
 

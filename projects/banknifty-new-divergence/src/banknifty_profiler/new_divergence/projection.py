@@ -1265,6 +1265,14 @@ def session_payload(
         },
         "price": _pack(price_rows, ("t", "ist", "i", "f", "b", "age")),
         "futures_oi": _pack(oi_rows, ("t", "oi", "d", "p", "symbol", "event_id")),
+        "futures_volume": {
+            **_pack(
+                projected_futures_volume,
+                ("t", "p", "v", "dv", "vs", "i", "symbol", "event_id"),
+            ),
+            "analysis_start": iso_utc(option_analysis_start),
+            "rule": "RECEIPT_PREFIX_COMPACTED_TO_MINUTES_SERVER_SIDE",
+        },
         "option_strike_oi": {
             **_pack(
                 strike_rows,

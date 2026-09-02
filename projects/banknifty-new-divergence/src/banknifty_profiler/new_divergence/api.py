@@ -62,6 +62,14 @@ class ProjectionReadModel:
                 row for row in oi_block.get("rows", [])
                 if parse_instant(row[oi_timestamp_index]) <= cutoff
             ]
+        volume_block = result.get("futures_volume")
+        if isinstance(volume_block, dict):
+            volume_fields = volume_block.get("fields", [])
+            volume_timestamp_index = volume_fields.index("t")
+            volume_block["rows"] = [
+                row for row in volume_block.get("rows", [])
+                if parse_instant(row[volume_timestamp_index]) <= cutoff
+            ]
         strike_block = result.get("option_strike_oi")
         if isinstance(strike_block, dict):
             strike_fields = strike_block.get("fields", [])
@@ -128,6 +136,7 @@ class ProjectionReadModel:
             "as_of": iso_utc(cutoff),
             "future_observations_returned": False,
             "future_futures_oi_returned": False,
+            "future_futures_volume_returned": False,
             "future_option_strike_oi_returned": False,
             "future_option_strike_volume_returned": False,
             "future_cash_participation_returned": False,

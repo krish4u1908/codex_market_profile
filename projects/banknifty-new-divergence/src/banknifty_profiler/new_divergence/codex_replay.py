@@ -18,6 +18,7 @@ from .api import ProjectionReadModel
 from .clock import iso_utc, parse_instant
 from .codex_bridge import CodexWorkerProbe
 from .provenance import RUNTIME_VERSION
+from .volume_climax import compact_futures_volume_minutes
 
 
 QUESTION_LABELS = {
@@ -132,6 +133,8 @@ def replay_fact_bundle(
 
     oi_rows = _unpack(prefix.get("futures_oi"))
     latest_oi = oi_rows[-1] if oi_rows else None
+    futures_volume_rows = _unpack(prefix.get("futures_volume"))
+    volume_minutes = compact_futures_volume_minutes(futures_volume_rows)
     strike_block = prefix.get("option_strike_oi")
     strike_rows = _unpack(strike_block)
     latest_strike_receipt = strike_rows[-1].get("t") if strike_rows else None
@@ -183,6 +186,11 @@ def replay_fact_bundle(
     zones = prefix.get("confirmed_zones")
     visible_zones = zones[-6:] if isinstance(zones, list) else []
     source_hash = hashlib.sha256(_canonical(prefix)).hexdigest()
+    recent_price_source = price_rows[-1200:]
+    recent_stride = max(1, len(recent_price_source) // 180)
+    recent_market = recent_price_source[::recent_stride]
+    if recent_price_source and recent_market[-1] is not recent_price_source[-1]:
+        recent_market.append(recent_price_source[-1])
     bundle = {
         "schema": "NEW_DIVERGENCE_CODEX_REPLAY_FACTS_V1",
         "runtime_version": RUNTIME_VERSION,
@@ -192,8 +200,11 @@ def replay_fact_bundle(
         "verified_prefix_sha256": source_hash,
         "observation_count": len(price_rows),
         "latest_market": price_rows[-1],
+        "recent_market": recent_market[-181:],
         "latest_state": state_rows[-1],
         "latest_futures_oi": latest_oi,
+        "recent_futures_oi": oi_rows[-20:],
+        "recent_futures_volume_minutes": volume_minutes[-12:],
         "latest_option_receipt": latest_strike_receipt,
         "latest_option_summary": option_summary,
         "strike_selection": (
