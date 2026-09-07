@@ -1,0 +1,28 @@
+name: Market Workspace V3
+on:
+  pull_request:
+    paths: ['apps/market-workspace-v3/**', '.github/workflows/market-workspace-v3.yml']
+  push:
+    branches: [main]
+    paths: ['apps/market-workspace-v3/**', '.github/workflows/market-workspace-v3.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/market-workspace-v3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/market-workspace-v3/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: npm test
+      - run: npm run build

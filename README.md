@@ -13,3 +13,8 @@ python scripts/run_external_validation.py \
   --mode stream
 ```
 
+## V3 graphical workspace
+
+The [shared BANKNIFTY/NIFTY workspace](apps/market-workspace-v3/README.md) supports the v1.0.62 and independent v2.0.0 session contracts. It includes responsive charts, replay, retained OI-VPOC levels, cumulative OI bars, independent summaries and V2 volume-climax markers for recorded ratios strictly above 4×. Existing engine semantics remain unchanged.
+
+See the GUI package for setup, source-data import and read-only V2 database export instructions. Large archives and market recordings remain external.
