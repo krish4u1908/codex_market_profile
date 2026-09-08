@@ -1,4 +1,4 @@
-// GUI identities only. Engines remain in their existing services.
+// GUI identities only. Both versions consume one shared core per instrument.
 export const PROFILES = Object.freeze(Object.fromEntries([
   ['banknifty-v1062', 'BANKNIFTY', 'Bank Nifty', 'BN', '1.0.62', 100],
   ['nifty-v1062', 'NIFTY', 'Nifty 50', 'NIFTY', '1.0.62', 50],

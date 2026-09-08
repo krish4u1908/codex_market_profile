@@ -67,3 +67,7 @@ Profile changes remount the workspace and terminate old workers. Data loads use 
 The display marks `futures_volume_ratio > 4` on the index chart and a dedicated volume-ratio pane. The supplied V2 engine defines this ratio as valid five-minute futures volume divided by the median of the previous four five-minute volume windows. The GUI uses the recorded number; it does not recalculate the ratio, change scoring or publish a new engine signal.
 
 Markers use the native V2 context publication time, with the input cutoff available in the tooltip. Their index coordinate uses the context's retained index value, or the last price available at that publication time if the context omits it. A missing price leaves the ratio point available in the ratio pane without inventing a price coordinate. Reconstructed `chart_history` never creates a volume-climax event. Labels retain precision near the strict threshold so a qualifying point cannot be rounded down to `4.00×`. Crowded chart labels can be hidden to avoid collisions; the point tooltip and expandable list retain every ratio in the visible time range.
+
+## Shared live runtime
+
+The V3 core emits these same contracts over a read-only cached transport. Both versions receive the same authority's chart inputs; the V2 decisions remain native. Prior-context rows may include `available_at`, which the GUI respects when replaying a later first publication. `live.server_time` describes transport availability and never replaces a source or call clock. See [API.md](../market-core-v3/API.md).

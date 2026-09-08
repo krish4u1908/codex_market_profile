@@ -1,10 +1,10 @@
 name: Market Workspace V3
 on:
   pull_request:
-    paths: ['apps/market-workspace-v3/**', '.github/workflows/market-workspace-v3.yml']
+    paths: ['apps/market-workspace-v3/**', 'apps/market-core-v3/**', '.github/workflows/market-workspace-v3.yml']
   push:
     branches: [main]
-    paths: ['apps/market-workspace-v3/**', '.github/workflows/market-workspace-v3.yml']
+    paths: ['apps/market-workspace-v3/**', 'apps/market-core-v3/**', '.github/workflows/market-workspace-v3.yml']
 permissions:
   contents: read
 jobs:
@@ -26,3 +26,8 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - run: python -m pip install -r ../market-core-v3/requirements.txt
+      - run: python -m unittest discover -s tests -v
+        working-directory: apps/market-core-v3
+      - run: python scripts/build_bundle.py --output /tmp/market-workspace-v3.zip
+        working-directory: apps/market-core-v3

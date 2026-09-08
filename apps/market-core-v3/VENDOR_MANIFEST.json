@@ -1,0 +1,378 @@
+{
+  "baseline_version": "1.0.62",
+  "calculation_runtime_version": "2.0.0",
+  "files": [
+    {
+      "path": "vendor/banknifty/v2_engine/__init__.py",
+      "sha256": "4ea29453a2ce05ad9bca25838beff21b6df50f55e13c181ce36acf20caf5e72e",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/__init__.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/inventory/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/inventory/__init__.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/inventory/engine.py",
+      "sha256": "aa2743a33ce75fbbe58d9746440ef039c198e9115d0c81fe8eed7e0718662685",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/inventory/engine.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/__init__.py",
+      "sha256": "0ac82a4aad276be432b88015cc899ec241497b5ed8494a5a46fbfb8a802dfbde",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/__init__.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/cash_samples.py",
+      "sha256": "080f7590e605ca6d7a65708d9f27f8310397d4364756b96a0b8363200364938b",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/cash_samples.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/clock.py",
+      "sha256": "6864ee467d1d3a457a2074843b0fc0b1d9d9fc23dca19d2dfadec03f04c15fdd",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/clock.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/collector_archive.py",
+      "sha256": "e2a433009133eb7914c8a1e8b5f72ee5698a9434f89429f5a69ef3333841ed76",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/collector_archive.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/contracts.py",
+      "sha256": "734fa3d06e9d0e3fae6e1a76b35d893833e0f05865e093bfde23a6948fbe4359",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/contracts.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/directional_prediction.py",
+      "sha256": "3273e303a236f0696f401fe4f0ffcc7c61b92a7083fadbf92d11f648cf0a5d47",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/directional_prediction.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/engine.py",
+      "sha256": "cf4904b4f3dfcba8e295af115dbf81c4473fcada3cd7b7063888ad44012e5e47",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/engine.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/ledger.py",
+      "sha256": "dab40aca85c987190cc96f9aabc5f3a8d250521b585923094d9ae0100aef76c6",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/ledger.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/legacy_directional_prediction.py",
+      "sha256": "10dbdb5cf7b386640df62098c329f72f303051c83a7c98a05526fa230da586b8",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/legacy_directional_prediction.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/live_authority.py",
+      "sha256": "085aacb239770f21a1a03dcaba9fcf13aee130827c0ca132d3048e92ff908089",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/live_authority.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/live_cash_vix.py",
+      "sha256": "4b157e571257be3f877530555cac2b2fa358ba84b1b59b8928b4ce10ce07d2d6",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/live_cash_vix.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/live_collector.py",
+      "sha256": "e60688f86f790f5ed3eba5da5ac678d0c23c04ee30229c2f8ec884546e9b79ea",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/live_collector.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/live_profile.py",
+      "sha256": "27a100f3b92d367dbdc8cde295fee861094ab74030b1a1e57fcce5f56a60aca9",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/live_profile.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/nightly_context.py",
+      "sha256": "e157622b083b636e09f1e963047e070e0be686bd79519e6ce99afb99ea7728ed",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/nightly_context.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/output.py",
+      "sha256": "459d0c0e15f8edcf350e1f2fbddfbe65dd350f1dfcdfce5ef71368a55f59e547",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/output.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/projection.py",
+      "sha256": "9e3fa499a6673aea44b6648fafbbdb53d41d1e13bd645d968bb81d6bc8605a08",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/projection.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/provenance.py",
+      "sha256": "65954d7a6005fb87564cdc6e141d1d1558dc4245e46898a32d4a0b860f115704",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/provenance.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/scenario.py",
+      "sha256": "dcbc6d4425379015b4bb00d02dc26a31f10f3da635f65ce2d4a591df7dfa1549",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/scenario.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/short_trap.py",
+      "sha256": "0bf005fe734da29afc0767018a00bcd55bb55e8fee82ce61c976516516076aba",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/short_trap.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/statistics.py",
+      "sha256": "bb77d81dac81a81c01eeba0fb15d7ca040846068cb9dd44f7de3f1e7c03d814b",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/statistics.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/new_divergence/volume_climax.py",
+      "sha256": "be43dee4c1c3cb419898245779c830e7194017f7cbde213df1c837a4dd3cb501",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/volume_climax.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/raw_io/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/raw_io/__init__.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/raw_io/reader.py",
+      "sha256": "e1eeb288e672c449b36e0ecc97d96b2b2140c960da218b533dbb385c97925209",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/raw_io/reader.py"
+    },
+    {
+      "path": "vendor/banknifty/analyze.py",
+      "sha256": "4de983ad4f13f9306ef7c7c94182df3a0f9567cd6e9b0c226cbd077eeedadc31",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "analyze.py"
+    },
+    {
+      "path": "vendor/banknifty/live_context.py",
+      "sha256": "e6418e8794ab1c914a98c2f978988ece2bd6f23b27083d635dafa3a4c5aacdfb",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "live_context.py"
+    },
+    {
+      "path": "vendor/banknifty/chart_history.py",
+      "sha256": "238df736cafa716c7e3b362d2115183600ca59075a58caf0a7ea83f978930367",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "chart_history.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/runtime/__init__.py",
+      "sha256": "32cbb5ec2063778516f9fe57d00c11ecce7fc2931e332acd1251efe3eb8de8ef",
+      "source": "Existing package; exact hash verified against VPS inventory. Source capture excluded directories named runtime.",
+      "original_path": "v2_engine/runtime/__init__.py"
+    },
+    {
+      "path": "vendor/banknifty/v2_engine/runtime/timestamps.py",
+      "sha256": "794b730e0b1f3c8e6bc7714e6524d14eb049057c813f0e377e2a32f9bde352b7",
+      "source": "Existing package; exact hash verified against VPS inventory. Source capture excluded directories named runtime.",
+      "original_path": "v2_engine/runtime/timestamps.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/__init__.py",
+      "sha256": "a943aebe000f251b0543d3cd0f85f97263cbe9c119e357ecba5751a8a220d23c",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/__init__.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/inventory/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/inventory/__init__.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/inventory/engine.py",
+      "sha256": "63d21cddd07965851519dbfe6893e311fc64df9856fd7e775105f7cea08ba261",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/inventory/engine.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/__init__.py",
+      "sha256": "bcf640e66ad357baebaa5dce0d0d05e0804d113de6d1dfbddcb51dbcf3daeafc",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/__init__.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/cash_samples.py",
+      "sha256": "65fac85154e5ed9dc971d4d8bf12143c0554986d878fa1f3718e7a0d626d9462",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/cash_samples.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/clock.py",
+      "sha256": "6864ee467d1d3a457a2074843b0fc0b1d9d9fc23dca19d2dfadec03f04c15fdd",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/clock.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/collector_archive.py",
+      "sha256": "617e22a26924203c76605b8655f14aa6d4746f7cebcbff2368ce813148e51dfa",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/collector_archive.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/configuration.py",
+      "sha256": "6853056495f3c3488ba2d61524881af3f8ac287ef0b4a5c7ec417d1b5dbfa419",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/configuration.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/contracts.py",
+      "sha256": "734fa3d06e9d0e3fae6e1a76b35d893833e0f05865e093bfde23a6948fbe4359",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/contracts.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/directional_prediction.py",
+      "sha256": "2a6475eba7e9fd40f408b10caef2ad99df9c83941ec43221b2cb84a2ac5b7a6e",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/directional_prediction.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/engine.py",
+      "sha256": "cf4904b4f3dfcba8e295af115dbf81c4473fcada3cd7b7063888ad44012e5e47",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/engine.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/ledger.py",
+      "sha256": "dab40aca85c987190cc96f9aabc5f3a8d250521b585923094d9ae0100aef76c6",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/ledger.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/legacy_directional_prediction.py",
+      "sha256": "82259183cbec7b00f66f980995fe77b8da939cf80a9821e1b6abe5b46fcf1017",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/legacy_directional_prediction.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/live_authority.py",
+      "sha256": "085aacb239770f21a1a03dcaba9fcf13aee130827c0ca132d3048e92ff908089",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/live_authority.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/live_cash_vix.py",
+      "sha256": "9dcd3df9f7038d4e27ca557b2c2f0385577f430d2a0f0437e20bf5e5327e878e",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/live_cash_vix.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/live_collector.py",
+      "sha256": "e60688f86f790f5ed3eba5da5ac678d0c23c04ee30229c2f8ec884546e9b79ea",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/live_collector.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/live_profile.py",
+      "sha256": "ea5fb9ead5cfc7223465cfe041fd3c16604f8767eb0d098470d81f471d5bfd2a",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/live_profile.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/nightly_context.py",
+      "sha256": "f54509fd90898cabcf9b630a2c24485f89524160a1cec2e812a6f610810be3cd",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/nightly_context.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/output.py",
+      "sha256": "b1a1a1304f113e90fb36ba231b487b0edd6f83d6891b7167240a0823325fd4e7",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/output.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/projection.py",
+      "sha256": "4260df774dcccad4579429f14ec4904ec096e5b246454a0f7d45ab2df3a125fc",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/projection.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/provenance.py",
+      "sha256": "65954d7a6005fb87564cdc6e141d1d1558dc4245e46898a32d4a0b860f115704",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/provenance.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/scenario.py",
+      "sha256": "6a93a03a13984a5634bc9bf8d7ca7a32cc47b7bf3e13be5e427b14c7e56e0a40",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/scenario.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/short_trap.py",
+      "sha256": "0bf005fe734da29afc0767018a00bcd55bb55e8fee82ce61c976516516076aba",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/short_trap.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/statistics.py",
+      "sha256": "bb77d81dac81a81c01eeba0fb15d7ca040846068cb9dd44f7de3f1e7c03d814b",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/statistics.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/new_divergence/volume_climax.py",
+      "sha256": "be43dee4c1c3cb419898245779c830e7194017f7cbde213df1c837a4dd3cb501",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/new_divergence/volume_climax.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/raw_io/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/raw_io/__init__.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/raw_io/reader.py",
+      "sha256": "d0b9e1fb18d564f5903ff196ae995eb7365a43c69d2fde571d5485c833a9fb6a",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "v2_engine/raw_io/reader.py"
+    },
+    {
+      "path": "vendor/nifty/analyze.py",
+      "sha256": "1b89d7f1597b9240c2f0c54ed5964219fec722a611505b3e205a94d2e2cc7aef",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "analyze.py"
+    },
+    {
+      "path": "vendor/nifty/live_context.py",
+      "sha256": "a9dbff61eb4fe319b24aae3d6a3e884586d55d6938646800cd07b6e793cc13c6",
+      "source": "VPS source capture 2026-09-08",
+      "original_path": "live_context.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/runtime/__init__.py",
+      "sha256": "32cbb5ec2063778516f9fe57d00c11ecce7fc2931e332acd1251efe3eb8de8ef",
+      "source": "Existing package; exact hash verified against VPS inventory. Source capture excluded directories named runtime.",
+      "original_path": "v2_engine/runtime/__init__.py"
+    },
+    {
+      "path": "vendor/nifty/v2_engine/runtime/timestamps.py",
+      "sha256": "794b730e0b1f3c8e6bc7714e6524d14eb049057c813f0e377e2a32f9bde352b7",
+      "source": "Existing package; exact hash verified against VPS inventory. Source capture excluded directories named runtime.",
+      "original_path": "v2_engine/runtime/timestamps.py"
+    }
+  ]
+}

@@ -28,7 +28,7 @@ export function frameAt(data, now) {
     session:data.session, now, start:data.start, end:data.end, analysisStart:data.analysisStart,
     price, latest, oi, cash, call, state:atOrBefore(data.states,now), selection,
     controls:[...controls.values()].filter(row => row.status === "AVAILABLE"),
-    controlHistory:data.controls.filter(row => row.x <= now), prior:data.prior,
+    controlHistory:data.controls.filter(row => row.x <= now), prior:data.prior.filter(row=>!Number.isFinite(Date.parse(row.available_at))||Date.parse(row.available_at)<=now),
     options:options.filter(row => symbols.has(row.symbol)), snapshots:[...snapshots.values()],
     optionProfile:optionOIProfile([...snapshots.values()],latest?.i,selection.expiry,now),
     transitions:data.transitions.filter(row => row.x <= now),

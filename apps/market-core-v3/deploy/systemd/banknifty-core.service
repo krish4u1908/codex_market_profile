@@ -1,0 +1,27 @@
+[Unit]
+Description=BANKNIFTY V3 core
+After=network.target
+
+[Service]
+Type=simple
+User=bankadmin
+Group=bankadmin
+WorkingDirectory=/opt/market-workspace-v3/current/core
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+UMask=0027
+SupplementaryGroups=marketdata
+RuntimeDirectory=market-core-banknifty
+ReadOnlyPaths=/opt/banknifty-collector/data-prod-v4
+ReadWritePaths=/var/lib/market-workspace-v3/banknifty
+ExecStart=/opt/market-workspace-v3/current/.venv/bin/python -m market_core.server --config /opt/market-workspace-v3/current/config/banknifty.json
+TimeoutStopSec=180
+
+[Install]
+WantedBy=multi-user.target

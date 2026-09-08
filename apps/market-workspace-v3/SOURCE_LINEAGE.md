@@ -14,8 +14,10 @@ The adapter contracts were checked against these supplied independent-engine pac
 
 The NIFTY source uses a 50-point strike grid and 25-point profile bins. BANKNIFTY uses a 100-point strike grid and 25-point bins. These adapters validate retained selections and display published levels; they do not recompute either grid or bin allocations.
 
-Existing v1.0.62 and independent v2.0.0 engines keep their own verified semantics. Shared GUI components and shared read-only market inputs do not turn v1 calls into V2 calls. Changes to causal rules require a separately named research revision, as specified by the repository's CONTRIBUTING.md.
+The shared-core runtime reuses each instrument's frozen V2 authority and native context, retaining the verified v1.0.62 reference semantics. Shared GUI components and shared read-only market inputs do not turn v1 calls into V2 calls. Changes to causal rules require a separately named research revision, as specified by the repository's CONTRIBUTING.md.
 
 Local regression inputs were the BANKNIFTY 28 August v1.0.62 interface export, NIFTY 3 September v1.0.62 and V2 exports, BANKNIFTY 28 August V2 September-contract conversion, and the recorded BANKNIFTY V2 session of 7 September. The 3 September NIFTY data are historical minute/OI reconstruction without retained VIX/cash. The 7 September V2 session includes reconstructed morning charts with actual later context publications. Those distinctions remain visible in the adapters.
 
 Third-party packages remain dependencies in package-lock.json. The retained shadcn stylesheet includes its original license in `vendor/`.
+
+The live integration uses the active VPS source capture reconciled in [the core source lineage](../market-core-v3/SOURCE_LINEAGE.md). GUI startup configuration restricts each deployed service to its own instrument. The static preview continues to support all four recorded workspace profiles.

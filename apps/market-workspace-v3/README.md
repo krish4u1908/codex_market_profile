@@ -1,6 +1,6 @@
 # Market Workspace V3
 
-One responsive React GUI for BANKNIFTY and NIFTY, with separate adapters for the existing v1.0.62 and independent v2.0.0 engines. Changing the instrument or version selects a different data contract and cancels the previous session's workers. Opening another GUI does not create another calculation engine.
+One responsive React GUI for BANKNIFTY and NIFTY, with adapters for v1.0.62 reference publications and native V2.0.0 contexts. The shared-core deployment runs one GUI service per instrument. Changing the instrument or version selects a different data contract and cancels the previous session's workers. Opening another GUI does not create another calculation engine.
 
 | Workspace | URL query | Strike grid | Source |
 | --- | --- | --- | --- |
@@ -9,7 +9,7 @@ One responsive React GUI for BANKNIFTY and NIFTY, with separate adapters for the
 | BANKNIFTY v2.0.0 | `?workspace=banknifty-v200` | 100 points | Native BANKNIFTY V2 session |
 | NIFTY v2.0.0 | `?workspace=nifty-v200` | 50 points | Native NIFTY V2 session |
 
-V3 is the GUI version. It does not introduce a V3 calculation engine. V2 reference calls retain the v1.0.62 corrected rules already implemented by their own engines. No thresholds, scoring, inventory coordinates, lifecycle states or publication rules are changed here.
+V3 identifies the GUI and deployment runtime. The [shared cores](../market-core-v3/README.md) reuse the frozen calculation packages: one authority per instrument supplies both views. V2 reference calls retain the v1.0.62 corrected rules. No thresholds, scoring, inventory coordinates, lifecycle states or publication rules are changed here.
 
 ## Run
 
@@ -89,9 +89,11 @@ This copies only price, futures OI, cash/VIX and individual option receipts. It 
 
 ## Replay and live status
 
-This submitted build supports recorded replay, including sessions exported from live V2. It does **not** poll a live endpoint or submit orders.
+The [two-core deployment](../market-core-v3/DEPLOYMENT.md) supports Live and Replay for both instruments. Each GUI reads `/workspace-config.json`, exposes its two permitted version profiles, and polls its own core through a read-only proxy. The data worker fetches health and cached publications sequentially, retries failures, and cancels obsolete requests. Switching to replay reads saved publications while the core continues live ingestion. GUI restarts do not restart a core.
 
-A live GUI connection should consume snapshots from the already-running engine through a shared authenticated gateway. The backend owns ingestion, reference calculations, publication times and retained session extrema. Multiple desktop/mobile GUIs subscribe to that same service; they do not instantiate engines. Retain the version/instrument adapters and worker separation when wiring that transport. Existing v1 and independent V2 services remain authoritative for their own semantics.
+A static Vite build without that gateway continues to offer file/catalog replay. The earlier hosted static preview does not acquire live connectivity automatically. Live mode requires the accompanying backend deployment and running collectors.
+
+Native call/context timestamps and separate price, OI and cash/VIX receipt clocks are preserved. Feed age and core/context errors are visible. New-day metadata waiting clears the previous live session. Market Summary uses an independent worker and remains bound to the snapshot requested. No order placement is implemented.
 
 ## Verification
 

@@ -1,0 +1,23 @@
+[Unit]
+Description=BANKNIFTY V3 gui
+After=network.target
+
+[Service]
+Type=simple
+User=bankadmin
+Group=bankadmin
+WorkingDirectory=/opt/market-workspace-v3/current/core
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+UMask=0027
+ExecStart=/opt/market-workspace-v3/current/.venv/bin/python -m market_core.gui --instrument BANKNIFTY --root /opt/market-workspace-v3/current/gui --core-port 8922 --port 8920 --host 0.0.0.0
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

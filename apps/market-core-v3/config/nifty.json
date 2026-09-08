@@ -1,0 +1,11 @@
+{
+  "version": "3.0.0",
+  "instrument": "NIFTY",
+  "collector_root": "/opt/nifty-collector/data-prod-nifty",
+  "state_root": "/var/lib/market-workspace-v3/nifty",
+  "lock_path": "/run/market-core-nifty/core.lock",
+  "host": "127.0.0.1",
+  "port": 8923,
+  "poll_seconds": 10,
+  "futures_symbols_by_session": {}
+}
