@@ -78,7 +78,8 @@ This copies only price, futures OI, cash/VIX and individual option receipts. It 
 ## Preserved GUI behavior
 
 - Price chart with six signed OI-VPOC families, exact-value chips, persistent step lines and an explicit **Show lines** control.
-- V2 volume-climax diamonds on the price and volume-ratio charts, labeled with the retained ratio strictly above 4×. Exactly 4, missing values and future publications are excluded.
+- Red V2 futures volume-climax diamonds on the price and volume-ratio charts, labeled with the retained ratio strictly above 4×. Exactly 4, missing values and future publications are excluded; the ratio line stays amber.
+- V2 CE/PE volume and signed OI climax candidates on the price chart, with separate toggles, first-burst/all-point display and native publication timestamps. See the named display policy below.
 - Native V2 canonical, reconstructed cumulative and recent 15-minute volume VPOCs when retained, with distinct labels.
 - Index, basis and VIX high/low through the replay cursor. Values reflect available source coverage; minute-close exports are not presented as full tick extremes.
 - Nearby strike OI ladder: thick total bars, smaller cumulative positive/negative bars, potential support/resistance concentrations, source expiry and receipt times.
@@ -94,6 +95,14 @@ The [two-core deployment](../market-core-v3/DEPLOYMENT.md) supports Live and Rep
 A static Vite build without that gateway continues to offer file/catalog replay. The earlier hosted static preview does not acquire live connectivity automatically. Live mode requires the accompanying backend deployment and running collectors.
 
 Native call/context timestamps and separate price, OI and cash/VIX receipt clocks are preserved. Feed age and core/context errors are visible. New-day metadata waiting clears the previous live session. Market Summary uses an independent worker and remains bound to the snapshot requested. No order placement is implemented.
+
+## CE/PE climax display policy
+
+`CE_PE_CLIMAX_DISPLAY_V1` is a separately named GUI research policy. CE and PE volume each use **≥2.5×**; CE/PE OI additions and reductions each use **≥3×** plus **≥0.5% of starting basket OI**. The denominator is the median of the four exact prior five-minute windows for the same metric and fixed basket. Missing, zero-baseline, incomplete or inconsistent OI data cannot produce a marker. The worker computes annotations once per loaded snapshot; the main thread only filters the current frame.
+
+Amber markers identify CE and lavender identifies PE; circles mean volume, triangles mean OI additions/reductions. Coincident option events share a marker listing all their ratios. First qualifying publications mark bursts by default; **Every CE/PE point** includes subsequent qualifying windows. The expandable list retains exact event details when crowded chart labels are hidden. These trial settings reproduce the earlier one-session BANKNIFTY analysis; applying them to NIFTY is not an independent NIFTY calibration. They do not change any native call or frozen engine threshold.
+
+Both instrument GUIs support the annotations in Live and Replay. For the existing server, use the [GUI-only updater](../market-core-v3/GUI_UPDATE.md); it preserves the two core processes and their databases.
 
 ## Verification
 

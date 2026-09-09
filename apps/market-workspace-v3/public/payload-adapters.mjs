@@ -1,5 +1,6 @@
 import { getProfile, instrumentOf } from './profiles.mjs';
 import { unpack, stamp, withCumulativeOI } from './series.mjs';
+import { optionClimaxPoints } from './v2-option-climax.mjs';
 
 const finite = Number.isFinite;
 const later = (...times) => Math.max(...times.map(t => typeof t === 'number' ? t : Date.parse(t)).filter(finite));
@@ -145,6 +146,7 @@ function v2(payload, profile) {
     profile, session: payload.session, price, oi, cash, calls, options, controls,
     prior: inputs.inventory_context?.controls || [], selection, transitions: [], zones: [], states: [],
     config: {}, contexts, contextHistory: history, analysisStart,
+    optionClimaxes: optionClimaxPoints(contexts, price, payload.session, selection),
     start: price[0].x, end: Math.max(price.at(-1).x, contexts.at(-1)?.x || 0, calls.at(-1)?.x || 0),
     capabilities: { strikeReceipts: options.length > 0, cumulativeFutures: rawOI.length > 0 },
     provenance: { ...payload.provenance,

@@ -2,6 +2,7 @@
 import { atOrBefore } from './series.mjs';
 export const VOLUME_CLIMAX_THRESHOLD = 4;
 export const VOLUME_CLIMAX_COLOR = '#ffb357';
+export const FUTURES_CLIMAX_MARKER_COLOR = '#ff5f6d';
 
 export function volumeRatioLabel(ratio) {
   if (!Number.isFinite(ratio)) return '—';

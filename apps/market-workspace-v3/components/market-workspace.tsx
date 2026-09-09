@@ -13,6 +13,7 @@ import {OptionOIProfile,OptionOITotals} from './option-oi-profile';
 import {PROFILES,getProfile} from '../public/profiles.mjs';
 import {summaryInput} from '../public/market-data.mjs';
 import {climaxMarkers,V2VolumePanel} from './volume-climax';
+import {ClimaxControls,OptionClimaxDetails,optionClimaxMarkers,defaultClimaxVisibility} from './option-climax';
 import {V2Context,V2FlowCharts} from './v2-context';
 import {COLORS,STRIKES,LEVELS,clock,compact,fmt,signed,words,type Frame,type Row} from './market-types';
 
@@ -77,8 +78,10 @@ function LevelList({frame,scope}:{frame:Frame;scope:string}){
 }
 
 const MarketCharts=memo(function MarketCharts({frame,flags,scope,windowMinutes,onLevelsChange}:{frame:Frame;flags:Flags;scope:string;windowMinutes:number;onLevelsChange:(show:boolean)=>void}){
+  const [climaxVisible,setClimaxVisible]=useState(defaultClimaxVisibility),[allClimaxPoints,setAllClimaxPoints]=useState(false);
   const min=windowMinutes?Math.max(frame.start,frame.now-windowMinutes*60000):frame.start;
   const max=Math.max(min+60000,frame.now);
+  const optionPoints=useMemo(()=>frame.optionClimaxes.filter(row=>row.x>=min&&row.x<=max&&climaxVisible[row.key]&&(allClimaxPoints||row.isEpisodeStart)),[frame.optionClimaxes,min,max,climaxVisible,allClimaxPoints]);
   const visibleLevels=useMemo(()=>{
     if(!flags.levels)return [];
     const levels=scope==='ID'?frame.controls:frame.prior.filter(r=>r.scope===scope&&r.status==='AVAILABLE');
@@ -113,19 +116,23 @@ const MarketCharts=memo(function MarketCharts({frame,flags,scope,windowMinutes,o
         }),
       });
     }
-    if(frame.profile.version==='2.0.0')series.push(climaxMarkers(frame.volumeClimaxes.filter(row=>row.x>=min&&row.x<=max),'price'));
+    if(frame.profile.version==='2.0.0'){
+      if(climaxVisible.futures)series.push(climaxMarkers(frame.volumeClimaxes.filter(row=>row.x>=min&&row.x<=max),'price'));
+      series.push(optionClimaxMarkers(optionPoints));
+    }
     if(flags.zones)series[0].markArea={silent:true,data:frame.zones.map(z=>[{xAxis:Date.parse(z.confirmed_at),itemStyle:{color:z.colour==='GREEN'?'#46d8a412':'#ff768c12'}},{xAxis:z.ended_at?Date.parse(z.ended_at):frame.now}])};
     const basis={...baseChart(min,max),series:[line('Basis',frame.price,'b',COLORS.basis)]};
     const vix={...baseChart(min,max),series:[line('India VIX · value',frame.cash,'vix_close',COLORS.vix,{lineStyle:{color:COLORS.vix,width:1.8,type:'dashed'}})]};
     const cash={...baseChart(min,max),series:[line('Weighted cash · rolling %',frame.cash,'cash_rolling_pct',COLORS.cash)]};
     const oi:any={...baseChart(min,max),yAxis:[{...(baseChart(min,max).yAxis as object),position:'left'},{type:'value',show:false,scale:true}],series:[{name:'Futures ΔOI',type:'bar',yAxisIndex:1,barMaxWidth:5,data:frame.oi.map(r=>({value:[r.x,r.d],itemStyle:{color:r.d>=0?'#46d8a447':'#ff768c47'}}))},line('Futures OI',frame.oi,'oi',COLORS.oi,{z:3})]};
     return {price:{...priceBase,series},basis,vix,cash,oi};
-  },[frame,flags,scope,min,max,visibleLevels]);
+  },[frame,flags,scope,min,max,visibleLevels,climaxVisible,optionPoints]);
   return <div className="chart-stack">
     <ChartPanel title={frame.profile.label} subtitle="Index · 1m view" value={fmt(frame.latest?.i)} colour={COLORS.price} className="price-panel">
       <div className="price-level-legend" aria-label="OI-VPOC price overlays"><span className="price-level-caption">OI-VPOC · {scope==='ID'?'Intraday':scope}</span><label className="vpoc-visibility"><Checkbox checked={flags.levels} onCheckedChange={checked=>onLevelsChange(checked===true)}/><span>Show lines</span></label>{flags.levels?<>{oiLevels.map(level=><span className="price-level-chip" key={level.family} title={`${LEVELS[level.family]?.label} VPOC${level.x?' · published '+clock(level.x,true)+' IST':''}`}><i style={{background:LEVELS[level.family]?.color}}/><span>{LEVELS[level.family]?.label}</span><strong>{fmt(level.control_value,0)}</strong></span>)}{!oiLevels.length&&<span className="price-level-empty">{scope==='ID'?'Awaiting published levels':`No ${scope} reference levels available`}</span>}</>:<span className="price-level-empty">VPOC overlays are hidden</span>}</div>
-      {frame.profile.version==='2.0.0'&&<div className="climax-legend"><span aria-hidden="true">◆</span> Volume climax &gt;4× <small>Ratio labels · hover or tap for details</small></div>}
+      {frame.profile.version==='2.0.0'&&<ClimaxControls visible={climaxVisible} onChange={key=>setClimaxVisible(prev=>({...prev,[key]:!prev[key]}))} allPoints={allClimaxPoints} onAllPoints={setAllClimaxPoints}/>}
       <Plot label={`${frame.profile.label} index with labeled CE, PE and futures positive and negative OI-VPOC levels`} option={chartOptions.price} height={330}/><div className="chart-footer"><span><Focus size={13}/> Shared time cursor</span><span>Ctrl + scroll to zoom · pinch on touch</span><span>{clock(min)} – {clock(max)} IST</span></div>
+      {frame.profile.version==='2.0.0'&&<OptionClimaxDetails points={optionPoints} allPoints={allClimaxPoints}/>}
     </ChartPanel>
     {frame.profile.version==='2.0.0'&&<V2VolumePanel frame={frame} min={min} max={max}/>}
     {flags.vix&&<ChartPanel title="India VIX" subtitle="Actual value · dashed" value={fmt(frame.cash.at(-1)?.vix_close)} colour={COLORS.vix}><Plot option={chartOptions.vix} label="India VIX actual retained values" height={138}/></ChartPanel>}

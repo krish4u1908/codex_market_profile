@@ -1,15 +1,15 @@
 import type { EChartsOption } from 'echarts';
 import { ChartPanel, Plot, baseChart, line } from './market-chart';
 import { clock, compact, fmt, type Frame, type Row } from './market-types';
-import { VOLUME_CLIMAX_COLOR, volumeRatioLabel } from '../public/v2-volume.mjs';
+import { VOLUME_CLIMAX_COLOR, FUTURES_CLIMAX_MARKER_COLOR, volumeRatioLabel } from '../public/v2-volume.mjs';
 
 export function climaxMarkers(points:Row[], coordinate:'price'|'ratio'):any {
   return {
     id:`v2-volume-climax-${coordinate}`, name:'Volume climax >4×', type:'scatter',
     symbol:'diamond', symbolSize:11, z:20, clip:true,
-    itemStyle:{color:VOLUME_CLIMAX_COLOR,borderColor:'#231a0c',borderWidth:1},
+    itemStyle:{color:FUTURES_CLIMAX_MARKER_COLOR,borderColor:'#401d2a',borderWidth:1},
     label:{show:true,position:'top',distance:7,fontSize:11,fontWeight:600,
-      color:VOLUME_CLIMAX_COLOR,backgroundColor:'#16202ef2',borderRadius:3,padding:[2,4],
+      color:FUTURES_CLIMAX_MARKER_COLOR,backgroundColor:'#16202ef2',borderRadius:3,padding:[2,4],
       formatter:(p:any)=>volumeRatioLabel(p.data.volumeRatio)},
     labelLayout:{moveOverlap:'shiftY',hideOverlap:true},
     tooltip:{trigger:'item',formatter:(p:any)=>{
@@ -34,7 +34,7 @@ export function V2VolumePanel({frame,min,max}:{frame:Frame;min:number;max:number
     value={volumeRatioLabel(frame.context?.futures_volume_ratio)}>
     {available?<Plot option={options} label={`${frame.profile.label} futures volume ratio with marked climax points strictly above four`} height={190}/>
       :<p className="empty-chart">The source has no available volume-ratio readings at this replay time.</p>}
-    <p className="chart-source-note">Recorded 5m futures volume ÷ median of the previous four 5m windows. Diamonds mark ratios strictly greater than 4; markers appear at the V2 publication time.</p>
+    <p className="chart-source-note">Recorded 5m futures volume ÷ median of the previous four 5m windows. Red diamonds mark ratios strictly greater than 4; markers appear at the V2 publication time.</p>
     <details className="climax-details"><summary>{points.length} volume-climax {points.length===1?'point':'points'} in this view</summary>
       <div className="climax-list">{points.map((row,index)=><span key={`${row.x}-${index}`}><time>{clock(row.x,true)}</time><strong>{volumeRatioLabel(row.ratio)}</strong></span>)}</div>
     </details>

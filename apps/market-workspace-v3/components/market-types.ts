@@ -1,6 +1,6 @@
 export type Row = Record<string, any>;
 export type Frame = {
-  profile:Row; capabilities:{strikeReceipts:boolean;cumulativeFutures:boolean}; context:Row|null; contextHistory:Row[]; volumeHistory:Row[]; volumeClimaxes:Row[];
+  profile:Row; capabilities:{strikeReceipts:boolean;cumulativeFutures:boolean}; context:Row|null; contextHistory:Row[]; volumeHistory:Row[]; volumeClimaxes:Row[]; optionClimaxes:Row[];
   session:string; now:number; start:number; end:number; analysisStart:number;
   price:Row[]; latest:Row|null; oi:Row[]; cash:Row[]; call:Row|null; state:Row|null;
   selection:Row; controls:Row[]; controlHistory:Row[]; prior:Row[];

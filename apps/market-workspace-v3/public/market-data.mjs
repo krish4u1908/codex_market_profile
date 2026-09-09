@@ -24,6 +24,7 @@ export function frameAt(data, now) {
   return {
     volumeHistory:data.contexts.filter(row=>row.x<=now),
     volumeClimaxes:data.profile.version==='2.0.0'?volumeClimaxPoints(data.contexts,data.price,now):[],
+    optionClimaxes:data.profile.version==='2.0.0'?(data.optionClimaxes||[]).filter(row=>row.x<=now):[],
     profile:data.profile, capabilities:data.capabilities, context:atOrBefore(data.contexts,now), contextHistory:data.contextHistory.filter(row=>row.x<=now),
     session:data.session, now, start:data.start, end:data.end, analysisStart:data.analysisStart,
     price, latest, oi, cash, call, state:atOrBefore(data.states,now), selection,
