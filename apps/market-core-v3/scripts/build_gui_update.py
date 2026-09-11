@@ -8,7 +8,7 @@ import tempfile
 import zipfile
 
 CORE = Path(__file__).resolve().parents[1]
-RELEASE = '3.0.2-gui-basis-ribbon'
+RELEASE = '3.0.3-gui-price-ribbon'
 
 
 def build(deployment_bundle, output):

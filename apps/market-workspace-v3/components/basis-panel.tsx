@@ -11,8 +11,7 @@ const states:Record<string,{color:string;label:string}>={
   unavailable:{color:COLORS.muted,label:'Unavailable'},
 };
 
-export function basisChartOptions(frame:Frame,min:number,max:number):EChartsOption {
-  const base=baseChart(min,max);
+export function withPriceBasisRibbon(base:EChartsOption,frame:Frame,min:number,max:number):EChartsOption {
   const intervals=basisRibbonIntervals(frame.basisRibbon,min,Math.min(max,frame.now));
   const ribbon:any={
     id:'price-basis-3m-ribbon',name:'Price / basis · 3m',type:'custom',xAxisIndex:1,yAxisIndex:1,
@@ -39,22 +38,26 @@ export function basisChartOptions(frame:Frame,min:number,max:number):EChartsOpti
       {...(base.xAxis as object),gridIndex:1,splitLine:{show:false},axisLine:{show:false}}],
     yAxis:[base.yAxis as any,{type:'value',gridIndex:1,min:0,max:1,show:false}],
     dataZoom:[{...(base.dataZoom as any[])[0],xAxisIndex:[0,1]}],
-    series:[line('Basis',frame.price,'b',COLORS.basis),ribbon],
+    series:[...(Array.isArray(base.series)?base.series:base.series?[base.series]:[]),ribbon],
   };
 }
 
-export const BasisPanel=memo(function BasisPanel({frame,min,max}:{frame:Frame;min:number;max:number}) {
-  const options=useMemo(()=>basisChartOptions(frame,min,max),[frame,min,max]);
+export const PriceBasisRibbonCaption=memo(function PriceBasisRibbonCaption({frame}:{frame:Frame}) {
   const latest=frame.basisRibbonLatest,state=latest?.state||'unavailable';
-  return <ChartPanel title="Futures basis" subtitle="Futures − Index · points" value={signed(frame.latest?.b)} colour={COLORS.basis} className="basis-panel">
+  return <div className="price-ribbon-caption" title="Net change over three minutes. Blank during warm-up or data gaps. Hover or tap the ribbon for values.">
     <div className="basis-ribbon-legend" aria-label="Three-minute price and basis ribbon legend">
-      <strong>3m ribbon</strong>{['green','red','neutral'].map(key=><span key={key}><i style={{background:states[key].color}}/>{states[key].label}</span>)}
+      <strong>Price / basis · 3m</strong>{['green','red','neutral'].map(key=><span key={key}><i style={{background:states[key].color}}/>{states[key].label}</span>)}
     </div>
-    <Plot option={options} label={`${frame.profile.label} basis line with a three-minute price/basis ribbon: green for falling price and rising basis, red for rising price and falling basis`} height={182}/>
     <div className="basis-ribbon-reading" aria-label="Latest three-minute price and basis change">
       <span className="basis-ribbon-state" data-state={state} style={{color:states[state].color}}>{state==='unavailable'?(latest?.reason||'Waiting for price/basis history'):states[state].label}</span>
       {state!=='unavailable'&&<span>Δ price <b>{signed(latest?.priceChange)}</b> · Δ basis <b>{signed(latest?.basisChange)}</b> pts</span>}
     </div>
-    <p className="basis-ribbon-note">Net change over 3m · blank during warm-up or gaps · hover or tap the ribbon for values</p>
+  </div>;
+});
+
+export const BasisPanel=memo(function BasisPanel({frame,min,max}:{frame:Frame;min:number;max:number}) {
+  const options=useMemo(()=>({...baseChart(min,max),series:[line('Basis',frame.price,'b',COLORS.basis)]}),[frame,min,max]);
+  return <ChartPanel title="Futures basis" subtitle="Futures − Index · points" value={signed(frame.latest?.b)} colour={COLORS.basis} className="basis-panel">
+    <Plot option={options} label={`${frame.profile.label} futures basis line in points`} height={138}/>
   </ChartPanel>;
 });

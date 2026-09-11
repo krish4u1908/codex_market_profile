@@ -1,6 +1,6 @@
-# GUI update: three-minute basis ribbon and CE/PE climax annotations
+# GUI update: price-chart ribbon and CE/PE climax annotations
 
-This update targets the existing shared-core installation on **srv1913330**. It adds a three-minute ribbon to the basis panel for BANKNIFTY and NIFTY, in v1.0.62 and V2 Live/Replay, and includes the previous CE/PE climax changes. Apply this package once, either over the initial V3 installation or the previous GUI-only update. It stops and starts only `banknifty-gui.service` and `nifty-gui.service`, briefly interrupting GUI access. It keeps both core processes, their configuration and databases running in place. No unit files or collectors are changed.
+This update moves the existing three-minute price/basis ribbon directly below the main index price chart for BANKNIFTY and NIFTY, in v1.0.62 and V2 Live/Replay. It includes the previous ribbon and CE/PE climax changes. Apply this package once, either over the initial V3 installation or a previous GUI-only update, including `3.0.1-gui-climax-v1` and `3.0.2-gui-basis-ribbon`. It stops and starts only `banknifty-gui.service` and `nifty-gui.service`, briefly interrupting GUI access. It keeps both core processes, their configuration and databases running in place. No unit files or collectors are changed.
 
 ## Apply on the already-installed server
 
@@ -23,13 +23,13 @@ sudo python3 update_gui.py rollback --record /opt/market-workspace-v3/gui-update
 
 A rollback refuses to overwrite a newer GUI update; roll back the most recent one first. It retains the downloaded package, staged assets, update record and all market data.
 
-Hard-refresh the browser after apply. Existing ports are unchanged: BANKNIFTY GUI **8920**, NIFTY GUI **8921**; internal cores **8922** and **8923**. Both `/gui-release.json` endpoints should report `3.0.2-gui-basis-ribbon`. The core API version remains `3.0.0`.
+Hard-refresh the browser after apply. Existing ports are unchanged: BANKNIFTY GUI **8920**, NIFTY GUI **8921**; internal cores **8922** and **8923**. Both `/gui-release.json` endpoints should report `3.0.3-gui-price-ribbon` and `"basisRibbonPlacement":"price"`. The core API version remains `3.0.0`.
 
 **Do not rerun `core/deploy/install.py install` for this update.** That command is the first-install migration. Do not replace the current release directory manually or restart a core to refresh the charts.
 
-## Three-minute ribbon in the basis panel
+## Three-minute ribbon below the price chart
 
-The existing basis line stays visible. A time-aligned ribbon below it compares net index and basis changes against three minutes earlier:
+The ribbon sits directly below the main index price plot, inside the same chart frame. Its time axis and zoom are linked to price, including when the chart is expanded. OI-VPOC lines and climax markers remain on the price chart. The separate basis panel keeps its purple line; hiding that panel leaves the ribbon visible. The ribbon compares net index and basis changes against three minutes earlier:
 
 | Index change | Basis change | Ribbon |
 | --- | --- | --- |

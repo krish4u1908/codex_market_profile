@@ -82,7 +82,7 @@ This copies only price, futures OI, cash/VIX and individual option receipts. It 
 - V2 CE/PE volume and signed OI climax candidates on the price chart, with separate toggles, first-burst/all-point display and native publication timestamps. See the named display policy below.
 - Native V2 canonical, reconstructed cumulative and recent 15-minute volume VPOCs when retained, with distinct labels.
 - Index, basis and VIX high/low through the replay cursor. Values reflect available source coverage; minute-close exports are not presented as full tick extremes.
-- A three-minute price/basis ribbon inside the basis panel: green for falling index and rising basis, red for rising index and falling basis, gray otherwise. The basis line stays above the ribbon on the same time scale.
+- A three-minute price/basis ribbon directly below the index price chart, inside the same frame: green for falling index and rising basis, red for rising index and falling basis, gray otherwise. It shares the price chart's time axis and zoom. The separate basis panel retains its purple line.
 - Nearby strike OI ladder: thick total bars, smaller cumulative positive/negative bars, potential support/resistance concentrations, source expiry and receipt times.
 - Futures total OI, latest receipt delta and cumulative additions/removals in the same side panel. Missing receipt deltas remain unavailable.
 - Fixed ATM plus three OTM contracts per side, option premiums, OI/volume flows, inventory, recorded events, replay steps and speed controls.
@@ -99,9 +99,11 @@ Native call/context timestamps and separate price, OI and cash/VIX receipt clock
 
 ## Three-minute price/basis ribbon
 
-The basis panel compares each synchronized index/basis receipt with the last receipt available at its timestamp minus three minutes. Green means `Δindex < 0` and `Δbasis > 0`; red means `Δindex > 0` and `Δbasis < 0`. Same-direction or flat changes are neutral gray. This is the net change across the window; every intermediate tick need not move in the same direction.
+The ribbon below the main index chart compares each synchronized index/basis receipt with the last receipt available at its timestamp minus three minutes. Green means `Δindex < 0` and `Δbasis > 0`; red means `Δindex > 0` and `Δbasis < 0`. Same-direction or flat changes are neutral gray. This is the net change across the window; every intermediate tick need not move in the same direction.
 
 Both instruments and both version views use `PRICE_BASIS_RIBBON_3M_V1` in Live and Replay. The ribbon stays blank during initial warm-up, missing price/basis or feed gaps. Hover/tap shows both changes, the cutoff and the actual baseline receipt time. It draws forward only after the current receipt is available and stops at the replay cursor. The data worker computes the comparisons; native engine calls are unaffected.
+
+GUI release `3.0.3-gui-price-ribbon` moves the existing ribbon from the basis panel into the price chart frame without changing its calculation. OI-VPOC overlays and V2 climax markers stay on the price chart. The ribbon also stays visible when the separate basis panel is hidden, and remains with the price chart when expanded.
 
 ## CE/PE climax display policy
 

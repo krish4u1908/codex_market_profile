@@ -88,7 +88,7 @@ At each available receipt time `t`, calculate net changes against the last same-
 
 Missing/nonfinite index or basis, or a consecutive receipt gap exceeding 90 seconds, breaks continuity. A complete new three-minute history is required after the break. Different IST session dates cannot supply a baseline. Initial warm-up and unavailable history remain blank. A stale final receipt loses its active colored status after 90 seconds, and the ribbon is never extended beyond receipt freshness or the current cursor.
 
-The worker computes comparisons once per normalized snapshot. Each frame filters to available receipts, retaining all state transitions and the first/last receipt of each minute; a later minute close cannot move or erase an earlier color change or missing-data boundary. The main thread draws the ribbon under the basis line in the same panel, with identical horizontal bounds and linked zoom axes. No ribbon history is added to summary-worker messages.
+The worker computes comparisons once per normalized snapshot. Each frame filters to available receipts, retaining all state transitions and the first/last receipt of each minute; a later minute close cannot move or erase an earlier color change or missing-data boundary. The main thread draws the ribbon under the main index price chart in the same panel, with identical horizontal bounds and linked zoom axes. Price, OI-VPOC and climax series retain their existing price axis; the ribbon has its own hidden band axis. The separate basis panel retains its basis line, and hiding it does not hide the price-chart ribbon. No ribbon history is added to summary-worker messages.
 
 ## Shared live runtime
 
