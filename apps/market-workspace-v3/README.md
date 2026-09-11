@@ -1,3 +1,5 @@
+> **Preview branch:** use the separate [near real-time trial package](../market-realtime-preview/README.md). Do not install this branch with the normal GUI or data updater. The production branch stays unchanged.
+
 # Market Workspace V3
 
 One responsive React GUI for BANKNIFTY and NIFTY, with adapters for v1.0.62 reference publications and native V2.0.0 contexts. The shared-core deployment runs one GUI service per instrument. Changing the instrument or version selects a different data contract and cancels the previous session's workers. Opening another GUI does not create another calculation engine.

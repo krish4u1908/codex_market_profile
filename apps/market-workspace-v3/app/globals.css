@@ -175,3 +175,9 @@
 .live-feed-state strong{font-size:13px}
 .live-feed-state span{font-size:11px;color:#92a4bd;overflow-wrap:anywhere}
 @media(max-width:640px){.live-dock{gap:10px;flex-wrap:wrap}.live-feed-state{min-width:160px}.live-dock .secondary-button{margin-left:auto}}
+
+/* Separate trial: established market colours and density are retained. */
+.preview-status{display:flex;justify-content:space-between;gap:1rem;align-items:center;background:#102434;border:1px solid #28516a;border-radius:8px;padding:12px 16px;margin:12px 0;color:#cae9f8;font-size:14px}
+.preview-status strong,.preview-status span{display:block}.preview-status strong{font-weight:600;margin-bottom:4px}.preview-status span{color:#9fb9cc}.preview-status p{max-width:430px;margin:0;color:#a9bfd0;line-height:1.5}
+.preview-volume-tabs{display:flex;gap:4px}.preview-volume-tabs button{background:#142438;color:#b7cbe0;border:1px solid #2b3e55;padding:5px 9px;border-radius:4px;font-size:14px;cursor:pointer}.preview-volume-tabs button[aria-pressed=true]{border-color:#54cfff;color:#8ae1ff}.preview-volume-tabs button:focus-visible{outline:2px solid #8ae1ff;outline-offset:2px}
+@media(max-width:700px){.preview-status{display:block;padding:12px}.preview-status p{margin-top:8px}.preview-volume-tabs button{padding:5px 7px}.chart-heading:has(.preview-volume-tabs){flex-wrap:wrap;gap:8px}.chart-heading:has(.preview-volume-tabs) .chart-actions{margin-left:auto}}
