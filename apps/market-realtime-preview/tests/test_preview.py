@@ -7,6 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import sys
+import subprocess
 import tempfile
 import threading
 import time
@@ -191,6 +192,12 @@ class PreviewTests(unittest.TestCase):
         self.assertNotIn('Requires=', text)
         with self.assertRaises(ValueError):
             unit_text('NIFTY', 'root', Path('/a'), Path('/b'), Path('/c'), 8931, '127.0.0.1')
+        for code in (0, 1, 4):
+            with patch.object(installer.subprocess, 'run', return_value=subprocess.CompletedProcess([],code,'not-found\n','')):
+                self.assertTrue(installer.missing_unit('nifty-display-preview.service'))
+        with patch.object(installer.subprocess, 'run', return_value=subprocess.CompletedProcess([],1,'','manager unavailable')):
+            with self.assertRaises(ValueError):
+                installer.missing_unit('nifty-display-preview.service')
 
     def test_package_checks_detect_extra_files_and_changed_gui(self):
         with tempfile.TemporaryDirectory() as temporary:

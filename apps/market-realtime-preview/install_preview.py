@@ -56,6 +56,19 @@ def unit_state(unit):
     return dict(line.split('=', 1) for line in text.splitlines() if '=' in line)
 
 
+def missing_unit(unit):
+    # systemd versions can return a nonzero status for an absent unit. Accept
+    # only the explicit property value; other query failures must still stop check.
+    result = subprocess.run(['systemctl', 'show', unit, '--property=LoadState', '--value'],
+                            text=True, capture_output=True, check=False)
+    value = result.stdout.strip()
+    if value == 'not-found':
+        return True
+    if result.returncode:
+        raise ValueError('Cannot inspect preview service: ' + unit)
+    return False
+
+
 def quote(value):
     return json.dumps(str(value)).replace('%', '%%')
 
@@ -113,7 +126,7 @@ def check(args):
         if state.get('ActiveState') != 'active' or int(state.get('MainPID', '0')) <= 0:
             raise ValueError('Existing service must be healthy before adding a preview: ' + unit)
     for instrument, port, name in zip(('BANKNIFTY', 'NIFTY'), ports, PREVIEW):
-        if (UNIT_DIRECTORY / name).exists() or systemctl('show', name, '--property=LoadState', '--value') != 'not-found':
+        if (UNIT_DIRECTORY / name).exists() or not missing_unit(name):
             raise ValueError('Preview service name already exists: ' + name)
         config_path = base / 'config' / (instrument.lower() + '.json')
         config = json.loads(config_path.read_bytes())
