@@ -93,3 +93,7 @@ The worker computes comparisons once per normalized snapshot. Each frame filters
 ## Shared live runtime
 
 The V3 core emits these same contracts over a read-only cached transport. Both versions receive the same authority's chart inputs; the V2 decisions remain native. Prior-context rows may include `available_at`, which the GUI respects when replaying a later first publication. `live.server_time` describes transport availability and never replaces a source or call clock. See [API.md](../market-core-v3/API.md).
+
+## Versioned Cash/VIX indicator inputs
+
+`CASH_VIX_INDICATOR_INPUTS_V1` is a separate input revision alongside the unchanged native reference inputs. Each source minute can have immutable revisions with `available_at`. The GUI selects the latest revision available at its knowledge cutoff and plots it at `minute_end`. Replay knowledge is the cursor; Live knowledge is the snapshot publication time. Late recovery therefore cannot enter an earlier replay frame. Missing source minutes and invalid readings remain explicit nulls. VIX validity is independent of cash completeness, and cash rolling display requires five exact valid source minutes. Nominal source coverage is 09:15–15:29 IST; a source shortage remains missing. New GUI quality counts refer to the displayed input history. Native reference calls, VPOCs and their retained input fields are not rewritten. The core exposes the same revision stream through `/api/indicator-inputs`; see the core data-update contract for indicator gating and historical export rules.

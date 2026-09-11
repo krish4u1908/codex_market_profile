@@ -9,13 +9,14 @@ import threading
 from urllib.parse import parse_qs, urlsplit
 
 from .config import Config
+from . import VERSION
 from .runtime import Runtime
 from .storage import encode
 
 
 def handler_for(store):
     class Handler(BaseHTTPRequestHandler):
-        server_version = "MarketCore/3.0.0"
+        server_version = 'MarketCore/' + VERSION
 
         def log_message(self, format, *args):
             pass
@@ -50,10 +51,13 @@ def handler_for(store):
                         if health["poll_age_seconds"] > 3 * store.config.poll_seconds and health.get("status") == "ready":
                             health["status"] = "stale"
                     return self.send(encode(health))
-                if url.path not in {"/api/live", "/api/catalog", "/api/replay"}:
+                if url.path not in {"/api/live", "/api/catalog", "/api/replay", "/api/indicator-inputs"}:
                     return self.send(encode({"error": "Not found"}), 404)
                 profile = query.get("profile", [""])[0]
                 store.config.check_profile(profile)
+                if url.path == '/api/indicator-inputs':
+                    body = store.indicator_inputs()
+                    return self.send(body if body is not None else encode({'status':'WAITING'}), 200 if body is not None else 503)
                 if url.path == "/api/catalog":
                     return self.send(encode(store.catalog(profile)))
                 accepts_gzip = "gzip" in self.headers.get("Accept-Encoding", "")

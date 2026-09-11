@@ -59,6 +59,7 @@ class CoreTests(unittest.TestCase):
             with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
                 self.assertTrue(all(row==payload for row in pool.map(request,range(24))))
             self.assertEqual(store.live(profile),before)
+
             for endpoint in ['/api/live?profile=nifty-v200','/api/replay?profile=banknifty-v200&key=../../bad','/../no-such-file']:
                 with self.assertRaises(HTTPError) as error: urlopen(front+endpoint,timeout=5)
                 self.assertIn(error.exception.code,(400,404))
@@ -76,6 +77,24 @@ class CoreTests(unittest.TestCase):
             with self.assertRaises(HTTPError) as offline: urlopen(front+'/api/health',timeout=6)
             self.assertEqual(offline.exception.code,502)
             self.assertEqual(store.live(profile),before)
+
+    def test_indicator_endpoint_is_cached_scoped_and_cleared_on_rollover(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);config=Config('NIFTY',root/'collector',root/'state',root/'lock')
+            store=PublishedStore(config)
+            core,_=self.serve(core_handler(store))
+            _,front=self.serve(gui_handler(root,'NIFTY',core.server_port))
+            url=front+'/api/indicator-inputs?profile=nifty-v200'
+            with self.assertRaises(HTTPError) as pending:urlopen(url,timeout=5)
+            self.assertEqual(pending.exception.code,503)
+            feed={'schema':'CASH_VIX_INDICATOR_INPUTS_V1','instrument':'NIFTY','revisions':[{'vix_close':12.4}]}
+            store.publish_indicator_inputs(feed)
+            with urlopen(url,timeout=5) as response:self.assertEqual(json.load(response),feed)
+            with self.assertRaises(HTTPError):urlopen(front+'/api/indicator-inputs?profile=banknifty-v200',timeout=5)
+            store.reset_live()
+            with self.assertRaises(HTTPError) as reset:urlopen(url,timeout=5)
+            self.assertEqual(reset.exception.code,503)
+
 
 
 if __name__=='__main__': unittest.main(verbosity=2)

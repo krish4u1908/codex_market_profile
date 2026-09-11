@@ -35,6 +35,7 @@ class PublishedStore:
         self.config = config
         self.lock = threading.Lock()
         self.current = {}
+        self.indicator_current = None
         self.health = {"status": "starting", "instrument": config.instrument}
         self.catalogs = {p: [] for p in (config.profile("v1062"), config.profile("v200"))}
         self.reload_catalogs()
@@ -60,6 +61,16 @@ class PublishedStore:
     def reset_live(self):
         with self.lock:
             self.current = {}
+            self.indicator_current = None
+
+    def publish_indicator_inputs(self, feed):
+        body = encode(feed)
+        with self.lock:
+            self.indicator_current = body
+
+    def indicator_inputs(self):
+        with self.lock:
+            return self.indicator_current
 
     def publish(self, profile, payload, *, source="recorded", key=None, live=False):
         self.config.check_profile(profile)

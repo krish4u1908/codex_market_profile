@@ -1,9 +1,10 @@
 import {volumeClimaxPoints} from './v2-volume.mjs';
 import {atOrBefore,minuteClose,optionOIProfile} from './series.mjs';
 import {latestBasisRibbon,sampleBasisRibbon} from './price-basis-ribbon.mjs';
+import {cashVixAt} from './indicator-inputs.mjs';
 export * from './series.mjs';
 export {normalizePayload} from './payload-adapters.mjs';
-export function frameAt(data, now) {
+export function frameAt(data, now, {live=false}={}) {
   now = Math.min(Math.max(now, data.start), data.end);
   const pricePrefix = data.price.filter(row => row.x <= now);
   const price = minuteClose(pricePrefix);
@@ -18,7 +19,9 @@ export function frameAt(data, now) {
   const selection = now >= Math.max(data.analysisStart, selectedAt) ? data.selection : {available:false,CE:[],PE:[]};
   const symbols = new Set([...(selection.CE || []), ...(selection.PE || [])].map(c => c.symbol));
   const oi = data.oi.filter(row => row.x >= data.analysisStart && row.x <= now);
-  const cash = data.cash.filter(row => row.x <= now);
+  const knownAt=live&&Number.isFinite(data.liveKnowledgeAt)?data.liveKnowledgeAt:now;
+  const revised=data.indicatorInputs?cashVixAt(data.indicatorInputs,now,knownAt):null;
+  const cash = revised?revised.rows:data.cash.filter(row => row.x <= now);
   const vix = cash.filter(row => Number.isFinite(row.vix_close));
   const values = pricePrefix.map(row => row.i).filter(Number.isFinite);
   const basisValues = pricePrefix.map(row => row.b).filter(Number.isFinite);
@@ -30,6 +33,7 @@ export function frameAt(data, now) {
     profile:data.profile, capabilities:data.capabilities, context:atOrBefore(data.contexts,now), contextHistory:data.contextHistory.filter(row=>row.x<=now),
     session:data.session, now, start:data.start, end:data.end, analysisStart:data.analysisStart,
     price, latest, oi, cash, call, state:atOrBefore(data.states,now), selection,
+    cashVixQuality:revised?.quality||{verified:false,total:cash.length,valid:cash.filter(r=>Number.isFinite(r.vix_close)).length,missing:cash.filter(r=>!Number.isFinite(r.vix_close)).length,status:'LEGACY_RECEIPTS',sourceTime:false},
     basisRibbon, basisRibbonLatest:latestBasisRibbon(basisRibbon,now),
     controls:[...controls.values()].filter(row => row.status === "AVAILABLE"),
     controlHistory:data.controls.filter(row => row.x <= now), prior:data.prior.filter(row=>!Number.isFinite(Date.parse(row.available_at))||Date.parse(row.available_at)<=now),

@@ -163,8 +163,12 @@ function v2(payload, profile) {
   };
 }
 
+import {validateIndicatorInputs} from './indicator-inputs.mjs';
+
 export function normalizePayload(payload, profileId = payload.workspace_profile) {
   const profile = validatePayload(payload, profileId);
   const data = profile.version === '2.0.0' ? v2(payload, profile) : baseline(payload, profile);
-  return {...data,basisRibbon:priceBasisRibbon(data.price,data.session)};
+  return {...data,basisRibbon:priceBasisRibbon(data.price,data.session),
+    indicatorInputs:validateIndicatorInputs(payload.indicator_inputs,profile,payload.session),
+    liveKnowledgeAt:Date.parse(payload.live?.server_time)};
 }

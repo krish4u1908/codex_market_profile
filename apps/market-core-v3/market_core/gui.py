@@ -45,7 +45,7 @@ def handler_for(root, instrument, core_port):
                 if url.path == "/health":
                     return self.send(json.dumps({"status": "ok", "role": "gui", "instrument": instrument, "owns_engine": False}).encode())
                 if url.path.startswith("/api/"):
-                    if url.path not in {"/api/health", "/api/live", "/api/catalog", "/api/replay"}:
+                    if url.path not in {"/api/health", "/api/live", "/api/catalog", "/api/replay", "/api/indicator-inputs"}:
                         return self.send(b'{"error":"Not found"}', 404)
                     query = parse_qs(url.query)
                     if url.path != "/api/health" and query.get("profile", [""])[0] not in allowed_profiles:

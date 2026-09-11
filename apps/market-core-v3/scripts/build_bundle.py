@@ -26,6 +26,7 @@ def build(output):
                 if not path.is_file() or path.is_symlink() or path.suffix in {'.pyc','.zip','.gz','.sqlite','.sqlite3','.db'}: continue
                 dest=root/label/relative;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(path,dest)
         shutil.copyfile(CORE/'DEPLOYMENT.md',root/'INSTALL.md')
+        if (CORE/'DATA_UPDATE.md').is_file(): shutil.copyfile(CORE/'DATA_UPDATE.md',root/'DATA_UPDATE.md')
         notices=[]
         npm_lock=GUI/'node_modules/.package-lock.json'
         packages=json.loads(npm_lock.read_text()).get('packages',{}) if npm_lock.is_file() else {}

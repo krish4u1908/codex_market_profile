@@ -124,3 +124,7 @@ node scripts/verify-session.mjs nifty-v200 /path/to/imported-session.json.gz
 Tests use small synthetic contracts that are never served as market data. They exercise all four profiles, wrong-instrument rejection, delayed publications, missing VIX, cumulative reconciliation, retained VPOC gaps, independent summaries, obsolete worker loads and the read-only exporter. Private recordings can be checked separately with `verify-session.mjs`; none are required by CI.
 
 See [DATA_CONTRACT.md](DATA_CONTRACT.md) for adapter semantics and [SOURCE_LINEAGE.md](SOURCE_LINEAGE.md) for the reviewed source packages.
+
+## Cash/VIX data quality
+
+GUI `3.0.4-cash-vix-data` uses the versioned indicator input stream from core 3.0.1 when present. VIX is plotted at source-minute close, with availability time in the tooltip and explicit missing-minute counts. Replay selects only revisions known at the cursor; Live uses the current snapshot knowledge time. Original exports retain their receipt-based display. Cash rolling display requires five complete consecutive minutes. See [the combined data update](../market-core-v3/DATA_UPDATE.md); the GUI-only package does not install the corrected reader.

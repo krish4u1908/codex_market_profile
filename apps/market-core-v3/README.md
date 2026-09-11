@@ -107,3 +107,7 @@ permissions, performance on a full active session and actual market-hour
 publication continuity still require post-install verification.
 
 See [API.md](API.md) for read-only routes and caching.
+
+## Cash/VIX indicator data
+
+Core 3.0.1 adds `CASH_VIX_INDICATOR_INPUTS_V1` inside each existing core. It accepts late data as new observations, preserves native call inputs, and exposes full-session VIX with independent cash/VIX quality. See [DATA_UPDATE.md](DATA_UPDATE.md) for the combined update and a read-only historical audit.

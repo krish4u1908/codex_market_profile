@@ -8,7 +8,7 @@ import tempfile
 import zipfile
 
 CORE = Path(__file__).resolve().parents[1]
-RELEASE = '3.0.3-gui-price-ribbon'
+RELEASE = '3.0.4-cash-vix-data'
 
 
 def build(deployment_bundle, output):

@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from . import VERSION
 from .projection import baseline_payload, chart_inputs, v2_payload
 from .source import SharedSource, WaitingForMetadata
+from .indicator_inputs import IndicatorInputs, SCHEMA
 from .storage import atomic_write, encode, PublishedStore
 from .vendor import load
 
@@ -55,6 +56,8 @@ class Runtime:
         self.thread = self.maintenance_thread = None
         self.error = self.context_error = self.last_poll = self.last_price = None
         self.waiting_reason = None
+        self.indicator_reader = None
+        self.indicator_status = {'schema': SCHEMA, 'status': 'WAITING'}
         self.last_session = self.prior = None
         self.prior_generation = -1
         self.maintenance_generation = 0
@@ -87,7 +90,7 @@ class Runtime:
             price_age_seconds=age, error=self.error, waiting_reason=self.waiting_reason, v2_context_error=self.context_error,
             session=self.last_session, pid=os.getpid(), authority_instances=1 if self.source.authority else 0,
             gui_independent=True, baseline_rules="1.0.62", v2_context_version="2.0.0",
-            overnight_context=self.maintenance_status))
+            overnight_context=self.maintenance_status, indicator_inputs=self.indicator_status))
 
     def tick(self, now=None):
         wall = now or datetime.now(timezone.utc)
@@ -95,6 +98,8 @@ class Runtime:
         if day != self.last_session:
             self.store.reset_live()
             self.last_session, self.prior, self.last_price = day, None, None
+            self.indicator_reader = None
+            self.indicator_status = {'schema': SCHEMA, 'status': 'WAITING'}
         try:
             snapshot = self.source.snapshot(wall)
             self.waiting_reason = None
@@ -110,6 +115,16 @@ class Runtime:
                 self.prior = self._prior(day)
                 self.prior_generation = self.maintenance_generation
             inputs = chart_inputs(self.source, snapshot, self.config, self.prior)
+            indicator_inputs = None
+            try:
+                if self.indicator_reader is None:
+                    self.indicator_reader = IndicatorInputs(self.config, day)
+                indicator_inputs = self.indicator_reader.poll()
+                self.indicator_status = {key: indicator_inputs[key] for key in ('schema', 'status', 'error', 'quality', 'as_of')}
+                self.store.publish_indicator_inputs(indicator_inputs)
+            except Exception as exc:
+                self.indicator_status = {'schema': SCHEMA, 'status': 'ERROR', 'error': type(exc).__name__ + ': ' + str(exc)}
+                self.store.publish_indicator_inputs(self.indicator_status)
             if snapshot["observations"]:
                 self.last_price = self.vendor.clock.parse_instant(snapshot["observations"][-1]["timestamp"])
                 for profile, payload in [
@@ -118,6 +133,10 @@ class Runtime:
                 ]:
                     payload["live"] = dict(session=day, server_time=datetime.now(timezone.utc).isoformat(),
                         sequence=snapshot["sequence"], publication_clock="ACTUAL_LIVE_CALCULATION_COMPLETION")
+                    if indicator_inputs is not None:
+                        payload['indicator_inputs'] = indicator_inputs
+                    else:
+                        payload['indicator_inputs'] = dict(self.indicator_status, instrument=self.config.instrument, session=day)
                     self.store.publish(profile, payload, live=True)
             self.error = None
         except WaitingForMetadata as exc:

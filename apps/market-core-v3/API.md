@@ -33,3 +33,7 @@ has stalled. All transport responses use `Cache-Control:no-store`.
 No order placement, broker credentials, alert transmission or authentication
 changes are part of this runtime. Existing collector/auth services keep their
 own configuration.
+
+## Indicator inputs: CASH_VIX_INDICATOR_INPUTS_V1
+
+`GET /api/indicator-inputs?profile=nifty-v200` (or a matching BANKNIFTY profile) returns the cached, versioned Cash/VIX feed. It is also included as `indicator_inputs` in new live and replay payloads. HTTP readers do not open collector files or run calculations. Read `revisions` with both source-minute and availability clocks; do not use a later revision in an earlier indicator evaluation. See [DATA_UPDATE.md](DATA_UPDATE.md) for schema, completeness checks, update and audit commands.

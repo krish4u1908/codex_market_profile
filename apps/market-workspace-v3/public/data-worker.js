@@ -47,7 +47,7 @@ async function pollLive(id, profileId, interval, generation) {
     liveEtag = response.headers.get('ETag');
     self.postMessage({id, kind:'live-frame', health,
       meta:{session:data.session,start:data.start,end:data.end,analysisStart:data.analysisStart,provenance:data.provenance},
-      frame:frameAt(data, data.end)});
+      frame:frameAt(data, data.end, {live:true})});
   } catch (error) {
     if (generation === loadGeneration && error.name !== 'AbortError') {
       self.postMessage({id, kind:'live-error', error:error.message || String(error)});
