@@ -30,7 +30,7 @@ export function V2VolumePanel({frame,min,max}:{frame:Frame;min:number;max:number
   ratioLine.markLine={symbol:'none',silent:true,lineStyle:{color:'#ffb35780',type:'dashed'},
     label:{formatter:'4× threshold',position:'insideStartTop',color:'#b3a38e'},data:[{yAxis:4}]};
   const options:EChartsOption={...baseChart(min,max),series:[ratioLine,climaxMarkers(points,'ratio')]};
-  return <ChartPanel title="Futures volume ratio" subtitle="Volume climax >4×" colour={VOLUME_CLIMAX_COLOR}
+  return <ChartPanel title="Futures volume ratio" subtitle="Confirmed · completed-minute cutoff · >4×" colour={VOLUME_CLIMAX_COLOR}
     value={volumeRatioLabel(frame.context?.futures_volume_ratio)}>
     {available?<Plot option={options} label={`${frame.profile.label} futures volume ratio with marked climax points strictly above four`} height={190}/>
       :<p className="empty-chart">The source has no available volume-ratio readings at this replay time.</p>}

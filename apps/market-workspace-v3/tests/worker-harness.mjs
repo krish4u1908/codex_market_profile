@@ -1,6 +1,6 @@
 import { parentPort, workerData } from 'node:worker_threads';
 globalThis.self={postMessage:message=>parentPort.postMessage(message)};
-if (workerData.module==='data') {
+if (workerData.module==='data'||workerData.module==='preview') {
   const calls={};
   globalThis.fetch=async (url,options={})=>{
     const entries=workerData.sources[url];
@@ -13,7 +13,7 @@ if (workerData.module==='data') {
     return new Response([304,204].includes(source.status)?null:JSON.stringify(source.payload),{status:source.status||200,headers:source.headers});
   };
 }
-await import(workerData.module==='data'?'../public/data-worker.js':'../public/summary-worker.js');
+await import(workerData.module==='preview'?'../public/display-preview-worker.js':workerData.module==='data'?'../public/data-worker.js':'../public/summary-worker.js');
 parentPort.on('message',async message=>{
   if(workerData.delay) await new Promise(resolve=>setTimeout(resolve,workerData.delay));
   self.onmessage({data:message});
