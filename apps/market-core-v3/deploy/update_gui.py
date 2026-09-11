@@ -20,7 +20,7 @@ EXPECTED_HOST = 'srv1913330'
 GUI_UNITS = ('banknifty-gui.service', 'nifty-gui.service')
 CORE_UNITS = ('banknifty-core.service', 'nifty-core.service')
 PORTS = {'BANKNIFTY': (8920, 8922), 'NIFTY': (8921, 8923)}
-RELEASE = '3.0.1-gui-climax-v1'
+RELEASE = '3.0.2-gui-basis-ribbon'
 MANIFEST = 'GUI-UPDATE-MANIFEST.json'
 
 

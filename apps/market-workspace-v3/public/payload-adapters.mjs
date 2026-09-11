@@ -1,6 +1,7 @@
 import { getProfile, instrumentOf } from './profiles.mjs';
 import { unpack, stamp, withCumulativeOI } from './series.mjs';
 import { optionClimaxPoints } from './v2-option-climax.mjs';
+import { priceBasisRibbon } from './price-basis-ribbon.mjs';
 
 const finite = Number.isFinite;
 const later = (...times) => Math.max(...times.map(t => typeof t === 'number' ? t : Date.parse(t)).filter(finite));
@@ -164,5 +165,6 @@ function v2(payload, profile) {
 
 export function normalizePayload(payload, profileId = payload.workspace_profile) {
   const profile = validatePayload(payload, profileId);
-  return profile.version === '2.0.0' ? v2(payload, profile) : baseline(payload, profile);
+  const data = profile.version === '2.0.0' ? v2(payload, profile) : baseline(payload, profile);
+  return {...data,basisRibbon:priceBasisRibbon(data.price,data.session)};
 }

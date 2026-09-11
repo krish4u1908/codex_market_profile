@@ -15,6 +15,7 @@ import {summaryInput} from '../public/market-data.mjs';
 import {climaxMarkers,V2VolumePanel} from './volume-climax';
 import {ClimaxControls,OptionClimaxDetails,optionClimaxMarkers,defaultClimaxVisibility} from './option-climax';
 import {V2Context,V2FlowCharts} from './v2-context';
+import {BasisPanel} from './basis-panel';
 import {COLORS,STRIKES,LEVELS,clock,compact,fmt,signed,words,type Frame,type Row} from './market-types';
 
 type Meta={session:string;start:number;end:number;analysisStart:number;provenance:Row};
@@ -121,11 +122,10 @@ const MarketCharts=memo(function MarketCharts({frame,flags,scope,windowMinutes,o
       series.push(optionClimaxMarkers(optionPoints));
     }
     if(flags.zones)series[0].markArea={silent:true,data:frame.zones.map(z=>[{xAxis:Date.parse(z.confirmed_at),itemStyle:{color:z.colour==='GREEN'?'#46d8a412':'#ff768c12'}},{xAxis:z.ended_at?Date.parse(z.ended_at):frame.now}])};
-    const basis={...baseChart(min,max),series:[line('Basis',frame.price,'b',COLORS.basis)]};
     const vix={...baseChart(min,max),series:[line('India VIX · value',frame.cash,'vix_close',COLORS.vix,{lineStyle:{color:COLORS.vix,width:1.8,type:'dashed'}})]};
     const cash={...baseChart(min,max),series:[line('Weighted cash · rolling %',frame.cash,'cash_rolling_pct',COLORS.cash)]};
     const oi:any={...baseChart(min,max),yAxis:[{...(baseChart(min,max).yAxis as object),position:'left'},{type:'value',show:false,scale:true}],series:[{name:'Futures ΔOI',type:'bar',yAxisIndex:1,barMaxWidth:5,data:frame.oi.map(r=>({value:[r.x,r.d],itemStyle:{color:r.d>=0?'#46d8a447':'#ff768c47'}}))},line('Futures OI',frame.oi,'oi',COLORS.oi,{z:3})]};
-    return {price:{...priceBase,series},basis,vix,cash,oi};
+    return {price:{...priceBase,series},vix,cash,oi};
   },[frame,flags,scope,min,max,visibleLevels,climaxVisible,optionPoints]);
   return <div className="chart-stack">
     <ChartPanel title={frame.profile.label} subtitle="Index · 1m view" value={fmt(frame.latest?.i)} colour={COLORS.price} className="price-panel">
@@ -137,7 +137,7 @@ const MarketCharts=memo(function MarketCharts({frame,flags,scope,windowMinutes,o
     {frame.profile.version==='2.0.0'&&<V2VolumePanel frame={frame} min={min} max={max}/>}
     {flags.vix&&<ChartPanel title="India VIX" subtitle="Actual value · dashed" value={fmt(frame.cash.at(-1)?.vix_close)} colour={COLORS.vix}><Plot option={chartOptions.vix} label="India VIX actual retained values" height={138}/></ChartPanel>}
     {flags.cash&&<ChartPanel title="Weighted cash" subtitle="5m rolling %" value={signed(frame.cash.at(-1)?.cash_rolling_pct)} colour={COLORS.cash}><Plot option={chartOptions.cash} label="Weighted cash rolling percentage" height={138}/></ChartPanel>}
-    {flags.basis&&<ChartPanel title="Futures basis" subtitle="Futures − Index · points" value={signed(frame.latest?.b)} colour={COLORS.basis}><Plot option={chartOptions.basis} label="Synchronized futures basis" height={138}/></ChartPanel>}
+    {flags.basis&&<BasisPanel frame={frame} min={min} max={max}/>}
     {flags.oi&&<ChartPanel title="Futures open interest" subtitle="Yellow line · signed ΔOI bars" value={compact(frame.oi.at(-1)?.oi)} colour={COLORS.oi}><Plot option={chartOptions.oi} label="Futures open interest and signed OI changes" height={160}/></ChartPanel>}
     {flags.flows&&(frame.profile.version==='2.0.0'&&!frame.capabilities.strikeReceipts?<V2FlowCharts frame={frame} min={min} max={max}/>:<><OptionFlow frame={frame} side="CE" metric="d" min={min} max={max}/><OptionFlow frame={frame} side="PE" metric="d" min={min} max={max}/></>)}
   </div>;

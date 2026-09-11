@@ -8,7 +8,7 @@ import tempfile
 import zipfile
 
 CORE = Path(__file__).resolve().parents[1]
-RELEASE = '3.0.1-gui-climax-v1'
+RELEASE = '3.0.2-gui-basis-ribbon'
 
 
 def build(deployment_bundle, output):

@@ -80,6 +80,16 @@ Only the first native publication of an input cutoff is used. Reconstructed char
 
 The default chart shows the first qualifying publication of each per-metric burst. Qualifying cutoffs separated by at most five minutes share a burst; later peaks never move its first marker. The all-point control shows every qualifying publication. Coincident option metrics are grouped visually at their original time and price, with all values retained in their tooltip and event list. Futures use their existing native `>4` rule and red diamonds; the underlying futures ratio line remains amber.
 
+## Price/basis ribbon: PRICE_BASIS_RIBBON_3M_V1
+
+This named display revision applies to both instruments and both version profiles. It uses the existing synchronized `price` series (`i` for index and `b` for basis); it does not change native synchronization, scoring, calls or VPOCs.
+
+At each available receipt time `t`, calculate net changes against the last same-session receipt at or before `t - 180 seconds`. The baseline may precede that cutoff by at most 60 seconds to accommodate minute snapshots and receipt jitter. Later receipts are never interpolated into the baseline. The tooltip exposes the cutoff and actual baseline receipt time. A negative index change with positive basis change is green; a positive index change with negative basis change is red. All other finite combinations, including either zero change, are neutral gray. The rule does not require a monotonic path within the three minutes.
+
+Missing/nonfinite index or basis, or a consecutive receipt gap exceeding 90 seconds, breaks continuity. A complete new three-minute history is required after the break. Different IST session dates cannot supply a baseline. Initial warm-up and unavailable history remain blank. A stale final receipt loses its active colored status after 90 seconds, and the ribbon is never extended beyond receipt freshness or the current cursor.
+
+The worker computes comparisons once per normalized snapshot. Each frame filters to available receipts, retaining all state transitions and the first/last receipt of each minute; a later minute close cannot move or erase an earlier color change or missing-data boundary. The main thread draws the ribbon under the basis line in the same panel, with identical horizontal bounds and linked zoom axes. No ribbon history is added to summary-worker messages.
+
 ## Shared live runtime
 
 The V3 core emits these same contracts over a read-only cached transport. Both versions receive the same authority's chart inputs; the V2 decisions remain native. Prior-context rows may include `available_at`, which the GUI respects when replaying a later first publication. `live.server_time` describes transport availability and never replaces a source or call clock. See [API.md](../market-core-v3/API.md).

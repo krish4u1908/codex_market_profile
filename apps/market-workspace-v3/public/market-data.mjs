@@ -1,5 +1,6 @@
 import {volumeClimaxPoints} from './v2-volume.mjs';
 import {atOrBefore,minuteClose,optionOIProfile} from './series.mjs';
+import {latestBasisRibbon,sampleBasisRibbon} from './price-basis-ribbon.mjs';
 export * from './series.mjs';
 export {normalizePayload} from './payload-adapters.mjs';
 export function frameAt(data, now) {
@@ -21,6 +22,7 @@ export function frameAt(data, now) {
   const vix = cash.filter(row => Number.isFinite(row.vix_close));
   const values = pricePrefix.map(row => row.i).filter(Number.isFinite);
   const basisValues = pricePrefix.map(row => row.b).filter(Number.isFinite);
+  const basisRibbon = sampleBasisRibbon((data.basisRibbon||[]).filter(row=>row.x<=now));
   return {
     volumeHistory:data.contexts.filter(row=>row.x<=now),
     volumeClimaxes:data.profile.version==='2.0.0'?volumeClimaxPoints(data.contexts,data.price,now):[],
@@ -28,6 +30,7 @@ export function frameAt(data, now) {
     profile:data.profile, capabilities:data.capabilities, context:atOrBefore(data.contexts,now), contextHistory:data.contextHistory.filter(row=>row.x<=now),
     session:data.session, now, start:data.start, end:data.end, analysisStart:data.analysisStart,
     price, latest, oi, cash, call, state:atOrBefore(data.states,now), selection,
+    basisRibbon, basisRibbonLatest:latestBasisRibbon(basisRibbon,now),
     controls:[...controls.values()].filter(row => row.status === "AVAILABLE"),
     controlHistory:data.controls.filter(row => row.x <= now), prior:data.prior.filter(row=>!Number.isFinite(Date.parse(row.available_at))||Date.parse(row.available_at)<=now),
     options:options.filter(row => symbols.has(row.symbol)), snapshots:[...snapshots.values()],

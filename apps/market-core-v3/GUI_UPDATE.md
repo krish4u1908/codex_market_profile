@@ -1,6 +1,6 @@
-# GUI update: CE/PE climax annotations
+# GUI update: three-minute basis ribbon and CE/PE climax annotations
 
-This update targets the existing shared-core installation on **srv1913330**. It changes both BANKNIFTY and NIFTY V2 charts. It stops and starts only `banknifty-gui.service` and `nifty-gui.service`, briefly interrupting GUI access. It keeps both core processes, their configuration and databases running in place. No unit files or collectors are changed.
+This update targets the existing shared-core installation on **srv1913330**. It adds a three-minute ribbon to the basis panel for BANKNIFTY and NIFTY, in v1.0.62 and V2 Live/Replay, and includes the previous CE/PE climax changes. Apply this package once, either over the initial V3 installation or the previous GUI-only update. It stops and starts only `banknifty-gui.service` and `nifty-gui.service`, briefly interrupting GUI access. It keeps both core processes, their configuration and databases running in place. No unit files or collectors are changed.
 
 ## Apply on the already-installed server
 
@@ -23,11 +23,24 @@ sudo python3 update_gui.py rollback --record /opt/market-workspace-v3/gui-update
 
 A rollback refuses to overwrite a newer GUI update; roll back the most recent one first. It retains the downloaded package, staged assets, update record and all market data.
 
-Hard-refresh the browser after apply. Existing ports are unchanged: BANKNIFTY GUI **8920**, NIFTY GUI **8921**; internal cores **8922** and **8923**. Both `/gui-release.json` endpoints should report `3.0.1-gui-climax-v1`. The core API version remains `3.0.0`.
+Hard-refresh the browser after apply. Existing ports are unchanged: BANKNIFTY GUI **8920**, NIFTY GUI **8921**; internal cores **8922** and **8923**. Both `/gui-release.json` endpoints should report `3.0.2-gui-basis-ribbon`. The core API version remains `3.0.0`.
 
 **Do not rerun `core/deploy/install.py install` for this update.** That command is the first-install migration. Do not replace the current release directory manually or restart a core to refresh the charts.
 
-## New V2 chart behavior
+## Three-minute ribbon in the basis panel
+
+The existing basis line stays visible. A time-aligned ribbon below it compares net index and basis changes against three minutes earlier:
+
+| Index change | Basis change | Ribbon |
+| --- | --- | --- |
+| Down | Up | Green |
+| Up | Down | Red |
+
+Any other finite combination, including either unchanged value, is neutral gray. Missing history, initial warm-up and feed gaps stay blank.
+
+Both instruments and both version views support the ribbon in Live and Replay. Hover/tap shows the changes and the retained baseline receipt time. No color appears before its receipt becomes available, and the ribbon stops at the current cursor. The comparison uses the last available receipt at or before the three-minute cutoff; stale baselines and broken receipt continuity are excluded. These are display rules; no core calculations are changed.
+
+## Retained V2 climax behavior
 
 - CE and PE volume: ratio **≥2.5×**; circular price-chart markers.
 - CE and PE OI additions/reductions: ratio **≥3×** and amount **≥0.5% of starting basket OI**; up/down triangle price-chart markers.

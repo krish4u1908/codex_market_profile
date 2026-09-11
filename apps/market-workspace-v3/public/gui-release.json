@@ -1,1 +1,1 @@
-{"version":"3.0.1-gui-climax-v1","optionClimaxPolicy":"CE_PE_CLIMAX_DISPLAY_V1","profiles":["banknifty-v1062","banknifty-v200","nifty-v1062","nifty-v200"]}
+{"version":"3.0.2-gui-basis-ribbon","optionClimaxPolicy":"CE_PE_CLIMAX_DISPLAY_V1","profiles":["banknifty-v1062","banknifty-v200","nifty-v1062","nifty-v200"],"basisRibbonPolicy":"PRICE_BASIS_RIBBON_3M_V1"}
