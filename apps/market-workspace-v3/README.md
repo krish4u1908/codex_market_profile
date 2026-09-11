@@ -128,3 +128,9 @@ See [DATA_CONTRACT.md](DATA_CONTRACT.md) for adapter semantics and [SOURCE_LINEA
 ## Cash/VIX data quality
 
 GUI `3.0.4-cash-vix-data` uses the versioned indicator input stream from core 3.0.1 when present. VIX is plotted at source-minute close, with availability time in the tooltip and explicit missing-minute counts. Replay selects only revisions known at the cursor; Live uses the current snapshot knowledge time. Original exports retain their receipt-based display. Cash rolling display requires five complete consecutive minutes. See [the combined data update](../market-core-v3/DATA_UPDATE.md); the GUI-only package does not install the corrected reader.
+
+## VIX ribbon marks: VIX_RIBBON_5M_PCT_V1
+
+GUI 3.0.5 adds translucent vertical marks to the existing price/basis ribbon for both instruments and both version views. A five-minute VIX percentage change of at least +0.4% is red; at most −0.4% is green. Smaller changes have no mark. The percentage uses the close five elapsed minutes earlier as its denominator and requires six consecutive finite, positive one-minute VIX closes. Cash completeness is independent.
+
+Marks use actual observation availability on the x-axis. The worker processes revisions in arrival order; after-session repairs cannot create earlier intraday marks. Rewinding preserves the original observations. Repeated cash-only revisions cannot duplicate a VIX mark, and a batch produces one assessment for the latest eligible five-minute window. Hover/tap shows endpoint values, source-minute close times and availability. This display-only policy does not alter reference calls, indicators in the core, or the three-minute basis ribbon. Installation is described in [GUI_UPDATE.md](../market-core-v3/GUI_UPDATE.md).

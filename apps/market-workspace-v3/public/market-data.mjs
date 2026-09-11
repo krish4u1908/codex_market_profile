@@ -2,6 +2,7 @@ import {volumeClimaxPoints} from './v2-volume.mjs';
 import {atOrBefore,minuteClose,optionOIProfile} from './series.mjs';
 import {latestBasisRibbon,sampleBasisRibbon} from './price-basis-ribbon.mjs';
 import {cashVixAt} from './indicator-inputs.mjs';
+import {latestVixRibbon} from './vix-ribbon.mjs';
 export * from './series.mjs';
 export {normalizePayload} from './payload-adapters.mjs';
 export function frameAt(data, now, {live=false}={}) {
@@ -26,6 +27,7 @@ export function frameAt(data, now, {live=false}={}) {
   const values = pricePrefix.map(row => row.i).filter(Number.isFinite);
   const basisValues = pricePrefix.map(row => row.b).filter(Number.isFinite);
   const basisRibbon = sampleBasisRibbon((data.basisRibbon||[]).filter(row=>row.x<=now));
+  const vixRibbon=(data.vixRibbon||[]).filter(row=>row.x<=Math.min(now,knownAt));
   return {
     volumeHistory:data.contexts.filter(row=>row.x<=now),
     volumeClimaxes:data.profile.version==='2.0.0'?volumeClimaxPoints(data.contexts,data.price,now):[],
@@ -35,6 +37,8 @@ export function frameAt(data, now, {live=false}={}) {
     price, latest, oi, cash, call, state:atOrBefore(data.states,now), selection,
     cashVixQuality:revised?.quality||{verified:false,total:cash.length,valid:cash.filter(r=>Number.isFinite(r.vix_close)).length,missing:cash.filter(r=>!Number.isFinite(r.vix_close)).length,status:'LEGACY_RECEIPTS',sourceTime:false},
     basisRibbon, basisRibbonLatest:latestBasisRibbon(basisRibbon,now),
+    vixRibbon:vixRibbon.filter(row=>row.state==='red'||row.state==='green'),
+    vixRibbonLatest:latestVixRibbon(vixRibbon,now),
     controls:[...controls.values()].filter(row => row.status === "AVAILABLE"),
     controlHistory:data.controls.filter(row => row.x <= now), prior:data.prior.filter(row=>!Number.isFinite(Date.parse(row.available_at))||Date.parse(row.available_at)<=now),
     options:options.filter(row => symbols.has(row.symbol)), snapshots:[...snapshots.values()],

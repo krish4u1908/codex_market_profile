@@ -1,4 +1,4 @@
-# GUI update: Cash/VIX quality, price-chart ribbon and climax annotations
+# GUI update 3.0.5: translucent VIX ribbon marks
 
 For the Cash/VIX data correction, install the combined core and GUI update described in [DATA_UPDATE.md](DATA_UPDATE.md). A GUI-only update displays the new input feed when the core already supplies it.
 
@@ -6,13 +6,23 @@ This GUI retains the existing three-minute price/basis ribbon directly below the
 
 ## Apply on the already-installed server
 
-Upload `market-workspace-v3-gui-update.zip` to a new working directory on the server, then run:
+Download the **market-workspace-v3-gui-update** Actions artifact and upload it to `~/divergence/releases/shared_engine/market-workspace-v3-gui-update.zip`. The Actions download can wrap an inner ZIP with the same name. This block handles either form and keeps ZIPs outside the verified package:
 
-```sh
-unzip market-workspace-v3-gui-update.zip
-cd market-workspace-v3-gui-update
-sudo python3 update_gui.py check
-sudo python3 update_gui.py apply
+```bash
+(
+set -eu
+cd "$HOME/divergence/releases/shared_engine"
+vix_gui_dir=$(mktemp -d "$PWD/vix-ribbon-XXXXXX")
+unzip market-workspace-v3-gui-update.zip -d "$vix_gui_dir"
+if [ -f "$vix_gui_dir/market-workspace-v3-gui-update.zip" ]; then
+  unzip "$vix_gui_dir/market-workspace-v3-gui-update.zip" -d "$vix_gui_dir/package"
+  cd "$vix_gui_dir/package/market-workspace-v3-gui-update"
+else
+  cd "$vix_gui_dir/market-workspace-v3-gui-update"
+fi
+sudo python3 -B update_gui.py check
+sudo python3 -B update_gui.py apply
+)
 ```
 
 The check verifies package hashes, current installation paths, running core processes and the reviewed GUI commands. Apply stages versioned assets, saves the old GUI, switches the two GUIs, verifies their identities and release, and checks that both core PIDs are unchanged. The original `/opt/market-workspace-v3/current` symlink is retained. New assets and update records live under `gui-releases/` and `gui-update-records/` in that installation.
@@ -25,9 +35,25 @@ sudo python3 update_gui.py rollback --record /opt/market-workspace-v3/gui-update
 
 A rollback refuses to overwrite a newer GUI update; roll back the most recent one first. It retains the downloaded package, staged assets, update record and all market data.
 
-Hard-refresh the browser after apply. Existing ports are unchanged: BANKNIFTY GUI **8920**, NIFTY GUI **8921**; internal cores **8922** and **8923**. Both `/gui-release.json` endpoints should report `3.0.4-cash-vix-data` and `"basisRibbonPlacement":"price"`. This GUI-only command leaves the installed core version unchanged.
+Hard-refresh the browser after apply. Existing ports are unchanged: BANKNIFTY GUI **8920**, NIFTY GUI **8921**; internal cores **8922** and **8923**. Both `/gui-release.json` endpoints should report `3.0.5-gui-vix-ribbon` and `"basisRibbonPlacement":"price"`. This GUI-only command leaves the installed core version unchanged.
 
 **Do not rerun `core/deploy/install.py install` for this update.** That command is the first-install migration. Do not replace the current release directory manually or restart a core to refresh the charts.
+
+## Five-minute VIX marks on the same ribbon
+
+GUI policy `VIX_RIBBON_5M_PCT_V1` adds narrow, translucent vertical marks over the existing price/basis ribbon:
+
+- **Red:** VIX increases by **at least 0.4%** over five minutes.
+- **Green:** VIX decreases by **at least 0.4%** over five minutes.
+- No mark for a smaller move, an unchanged value or an incomplete window.
+
+The percentage is `100 × (VIX_now − VIX_5_minutes_earlier) / VIX_5_minutes_earlier`. It compares two one-minute closes five elapsed minutes apart and requires all six consecutive closes. This is a percentage change, not a 0.4-point VIX movement. Marks appear at each qualifying observation; successive qualifying minutes can show successive marks. Hover/tap shows the exact change, endpoint VIX values, source-minute closes and availability time. The two colors use 48% opacity.
+
+The marks share the price/ribbon time axis and zoom in desktop, mobile and expanded charts. They remain visible when the separate VIX or basis panel is hidden. A compact legend distinguishes VIX marks from the existing three-minute price/basis strip.
+
+Observations are processed in arrival order. The corrected input feed retains original observations and later revisions; a later repair cannot create an earlier mark or rewrite a previously observed mark. Historical repairs received after the plotted session do not generate intraday signals. Consequently, a complete corrected VIX line can have fewer marks than a calculation that assumes every correction was known during trading. Replay and Live use the same causal mark history. Native calls, core calculations, input journals and existing ribbon rules are unchanged.
+
+Older exports can supply marks when source-minute and arrival timestamps are retained. Missing source-minute timestamps or incomplete VIX windows produce no mark. Complete cash data is not required for a VIX-only mark.
 
 ## Three-minute ribbon below the price chart
 

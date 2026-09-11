@@ -1,10 +1,12 @@
 # Cash/VIX indicator data update
 
-Core **3.0.1**, GUI **3.0.4-cash-vix-data**, input contract **CASH_VIX_INDICATOR_INPUTS_V1**.
+Core **3.0.1**, GUI **3.0.5-gui-vix-ribbon**, input contract **CASH_VIX_INDICATOR_INPUTS_V1**.
 
 This adds an observed Cash/VIX input stream inside each existing instrument core. It rereads changed collector minutes and appends later observations instead of permanently retaining an initially empty minute. Both GUIs use the new input history when present. VIX and cash validity are independent. No synthetic values, forward filling or interpolation are used to make a window complete.
 
 The new stream is available to your indicator through `/api/indicator-inputs`. The retained v1.0.62/V2 reference calls and their original `cash_vix` inputs remain unchanged. Use the new endpoint for the new indicator. This is a separately named data contract, not a retrospective rewrite of the verified reference calculation.
+
+If core 3.0.1 is already installed, the VIX ribbon marks need only the [GUI update](GUI_UPDATE.md). Use the combined procedure below only when installing the Cash/VIX reader itself.
 
 ## Install on the existing workspace
 
@@ -46,7 +48,7 @@ curl -fsS 'http://127.0.0.1:8920/api/indicator-inputs?profile=banknifty-v200' -o
 curl -fsS 'http://127.0.0.1:8921/api/indicator-inputs?profile=nifty-v200' -o /tmp/nifty-indicator-inputs.json
 ```
 
-Both health responses should show core `3.0.1` and the input schema. Inspect the input `status`, `quality`, and `vix_window_5m` fields. A running core alone does not imply complete VIX data. A new session without collector metadata remains waiting. Refresh both GUIs with Ctrl+F5; `/gui-release.json` should report `3.0.4-cash-vix-data`.
+Both health responses should show core `3.0.1` and the input schema. Inspect the input `status`, `quality`, and `vix_window_5m` fields. A running core alone does not imply complete VIX data. A new session without collector metadata remains waiting. Refresh both GUIs with Ctrl+F5; `/gui-release.json` should report `3.0.5-gui-vix-ribbon`.
 
 This read-only audit compares the native retained receipts with the actual collector CSV for an earlier session and exports a new dataset outside production state:
 

@@ -2,6 +2,7 @@ import { getProfile, instrumentOf } from './profiles.mjs';
 import { unpack, stamp, withCumulativeOI } from './series.mjs';
 import { optionClimaxPoints } from './v2-option-climax.mjs';
 import { priceBasisRibbon } from './price-basis-ribbon.mjs';
+import { vixRibbonPoints } from './vix-ribbon.mjs';
 
 const finite = Number.isFinite;
 const later = (...times) => Math.max(...times.map(t => typeof t === 'number' ? t : Date.parse(t)).filter(finite));
@@ -168,7 +169,11 @@ import {validateIndicatorInputs} from './indicator-inputs.mjs';
 export function normalizePayload(payload, profileId = payload.workspace_profile) {
   const profile = validatePayload(payload, profileId);
   const data = profile.version === '2.0.0' ? v2(payload, profile) : baseline(payload, profile);
+  const indicatorInputs=validateIndicatorInputs(payload.indicator_inputs,profile,payload.session);
   return {...data,basisRibbon:priceBasisRibbon(data.price,data.session),
-    indicatorInputs:validateIndicatorInputs(payload.indicator_inputs,profile,payload.session),
+    vixRibbon:vixRibbonPoints(indicatorInputs?.revisions||data.cash,data.session,{
+      finalizeDelaySeconds:indicatorInputs?.finalize_delay_seconds??8,
+      asOf:indicatorInputs?Date.parse(indicatorInputs.as_of):Infinity}),
+    indicatorInputs,
     liveKnowledgeAt:Date.parse(payload.live?.server_time)};
 }

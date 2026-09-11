@@ -3,6 +3,7 @@ import type {EChartsOption} from 'echarts';
 import {ChartPanel,Plot,baseChart,line} from './market-chart';
 import {COLORS,clock,signed,type Frame,type Row} from './market-types';
 import {basisRibbonIntervals} from '../public/price-basis-ribbon.mjs';
+import {vixRibbonMarks,VixRibbonCaption} from './vix-ribbon';
 
 const states:Record<string,{color:string;label:string}>={
   green:{color:COLORS.positive,label:'Price ↓ · basis ↑'},
@@ -21,7 +22,7 @@ export function withPriceBasisRibbon(base:EChartsOption,frame:Frame,min:number,m
       const first=api.coord([api.value(0),0]),last=api.coord([api.value(1),1]);
       const area=params.coordSys,left=Math.max(first[0],area.x),right=Math.min(last[0],area.x+area.width);
       if(right<=left)return null;
-      return {type:'rect',shape:{x:left,y:area.y,width:right-left,height:area.height},
+      return {type:'rect',shape:{x:left,y:area.y+(area.height-12)/2,width:right-left,height:12},
         style:{fill:api.visual('color')}};
     },
     tooltip:{trigger:'item',formatter:(p:any)=>{
@@ -33,18 +34,19 @@ export function withPriceBasisRibbon(base:EChartsOption,frame:Frame,min:number,m
     data:intervals.map((row:Row)=>({...row,value:[row.start,row.end,.5],itemStyle:{color:states[row.state].color}})),
   };
   return {...base,
-    grid:[{...(base.grid as object),bottom:64},{left:66,right:22,bottom:28,height:12,show:true,backgroundColor:'#172536',borderWidth:0}],
+    grid:[{...(base.grid as object),bottom:78},{left:66,right:22,bottom:28,height:28,show:false}],
     xAxis:[{...(base.xAxis as object),gridIndex:0,axisLabel:{show:false}},
       {...(base.xAxis as object),gridIndex:1,splitLine:{show:false},axisLine:{show:false}}],
     yAxis:[base.yAxis as any,{type:'value',gridIndex:1,min:0,max:1,show:false}],
     dataZoom:[{...(base.dataZoom as any[])[0],xAxisIndex:[0,1]}],
-    series:[...(Array.isArray(base.series)?base.series:base.series?[base.series]:[]),ribbon],
+    series:[...(Array.isArray(base.series)?base.series:base.series?[base.series]:[]),ribbon,
+      vixRibbonMarks(frame.vixRibbon||[],min,Math.min(max,frame.now))],
   };
 }
 
 export const PriceBasisRibbonCaption=memo(function PriceBasisRibbonCaption({frame}:{frame:Frame}) {
   const latest=frame.basisRibbonLatest,state=latest?.state||'unavailable';
-  return <div className="price-ribbon-caption" title="Net change over three minutes. Blank during warm-up or data gaps. Hover or tap the ribbon for values.">
+  return <><div className="price-ribbon-caption" title="Net change over three minutes. Blank during warm-up or data gaps. Hover or tap the ribbon for values.">
     <div className="basis-ribbon-legend" aria-label="Three-minute price and basis ribbon legend">
       <strong>Price / basis · 3m</strong>{['green','red','neutral'].map(key=><span key={key}><i style={{background:states[key].color}}/>{states[key].label}</span>)}
     </div>
@@ -52,7 +54,7 @@ export const PriceBasisRibbonCaption=memo(function PriceBasisRibbonCaption({fram
       <span className="basis-ribbon-state" data-state={state} style={{color:states[state].color}}>{state==='unavailable'?(latest?.reason||'Waiting for price/basis history'):states[state].label}</span>
       {state!=='unavailable'&&<span>Δ price <b>{signed(latest?.priceChange)}</b> · Δ basis <b>{signed(latest?.basisChange)}</b> pts</span>}
     </div>
-  </div>;
+  </div><VixRibbonCaption latest={frame.vixRibbonLatest}/></>;
 });
 
 export const BasisPanel=memo(function BasisPanel({frame,min,max}:{frame:Frame;min:number;max:number}) {

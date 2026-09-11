@@ -10,6 +10,7 @@ export type Frame = {
   vixRange:{high:number|null;low:number|null;from:number|null};
   basisRange:{high:number|null;low:number|null};
   basisRibbon:Row[]; basisRibbonLatest:Row|null;
+  vixRibbon:Row[]; vixRibbonLatest:Row|null;
   cashVixQuality:Row;
 };
 export const COLORS={price:'#54cfff',basis:'#bb9cff',oi:'#f6cc6b',vix:'#f3a77c',cash:'#69d3bb',positive:'#46d8a4',negative:'#ff768c',muted:'#92a4bd'};
