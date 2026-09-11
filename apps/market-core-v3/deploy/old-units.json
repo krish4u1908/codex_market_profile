@@ -1,0 +1,186 @@
+[
+  {
+    "scope": "system",
+    "name": "banknifty-live-dashboard.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-gui.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-live-rollover.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-live-rollover.timer"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-live.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-nightly.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-nightly.timer"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-replay-v1047.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-replay-v1055.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-replay-v1056.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-samples.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-samples.timer"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1035-staging.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1039-paper.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1040-paper.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1042-alerts.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1043-alerts.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1044-alerts.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1045-alerts.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1046-alerts.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1047-alerts.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1048-alerts.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1049-alerts.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1049-rollover.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1049-rollover.timer"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1050-alerts.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1051-alerts.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1052-alerts.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1053-alerts.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1053-rollover.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-new-divergence-v1053-rollover.timer"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-v2-alerts.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-v2-gui.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-v200-live.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-v200-replay.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-v3-dashboard.service"
+  },
+  {
+    "scope": "system",
+    "name": "banknifty-v5-crowd.service"
+  },
+  {
+    "scope": "user:codexuser",
+    "name": "banknifty-inventory-horizon-replay.service"
+  },
+  {
+    "scope": "user:codexuser",
+    "name": "banknifty-live-market-profiler-v1.service"
+  },
+  {
+    "scope": "user:codexuser",
+    "name": "banknifty-v200-study-gui.service"
+  },
+  {
+    "scope": "user:codexuser",
+    "name": "nifty-v1062-live.service"
+  },
+  {
+    "scope": "user:codexuser",
+    "name": "nifty-v1062-replay.service"
+  },
+  {
+    "scope": "user:codexuser",
+    "name": "nifty-v1062-rollover.service"
+  },
+  {
+    "scope": "user:codexuser",
+    "name": "nifty-v1062-rollover.timer"
+  },
+  {
+    "scope": "user:codexuser",
+    "name": "nifty-v200-live.service"
+  },
+  {
+    "scope": "user:codexuser",
+    "name": "nifty-v200-replay.service"
+  }
+]

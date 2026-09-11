@@ -1,0 +1,36 @@
+{
+  "expected_host": "srv1913330",
+  "service_user": "bankadmin",
+  "service_group": "bankadmin",
+  "collector_group": "marketdata",
+  "install_root": "/opt/market-workspace-v3",
+  "state_root": "/var/lib/market-workspace-v3",
+  "instruments": {
+    "BANKNIFTY": {
+      "collector_root": "/opt/banknifty-collector/data-prod-v4",
+      "core_port": 8922,
+      "gui_port": 8920,
+      "old_state": "/var/lib/banknifty-v200-independent",
+      "prior": "/home/bankadmin/divergence/new-divergence-context-v1.0.12",
+      "prepared": {
+        "v1062": "/home/bankadmin/divergence/new-divergence-gui-v1.0.58-replay",
+        "v200": "/home/bankadmin/divergence/releases/banknifty-v2.0.0-independent/gui_data"
+      },
+      "futures_symbols_by_session": {
+        "2026-09-07": "NSE:BANKNIFTY26SEPFUT"
+      }
+    },
+    "NIFTY": {
+      "collector_root": "/opt/nifty-collector/data-prod-nifty",
+      "core_port": 8923,
+      "gui_port": 8921,
+      "old_state": "/home/codexuser/nifty-upgrade-bundle-v1062-v200/runtime/v200-independent",
+      "prior": null,
+      "prepared": {
+        "v1062": "/home/codexuser/nifty-upgrade-bundle-v1062-v200/nifty-v1.0.62/prepared_replay",
+        "v200": "/home/codexuser/nifty-upgrade-bundle-v1062-v200/nifty-v2.0.0-independent/gui_data"
+      },
+      "futures_symbols_by_session": {}
+    }
+  }
+}
