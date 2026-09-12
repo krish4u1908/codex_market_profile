@@ -3,6 +3,7 @@ import { unpack, stamp, withCumulativeOI } from './series.mjs';
 import { optionClimaxPoints } from './v2-option-climax.mjs';
 import { priceBasisRibbon } from './price-basis-ribbon.mjs';
 import { vixRibbonPoints } from './vix-ribbon.mjs';
+import { oiEntryBubbles } from './oi-entry-bubbles.mjs';
 
 const finite = Number.isFinite;
 const later = (...times) => Math.max(...times.map(t => typeof t === 'number' ? t : Date.parse(t)).filter(finite));
@@ -170,10 +171,15 @@ export function normalizePayload(payload, profileId = payload.workspace_profile)
   const profile = validatePayload(payload, profileId);
   const data = profile.version === '2.0.0' ? v2(payload, profile) : baseline(payload, profile);
   const indicatorInputs=validateIndicatorInputs(payload.indicator_inputs,profile,payload.session);
-  return {...data,basisRibbon:priceBasisRibbon(data.price,data.session),
-    vixRibbon:vixRibbonPoints(indicatorInputs?.revisions||data.cash,data.session,{
+  const vixRibbon=vixRibbonPoints(indicatorInputs?.revisions||data.cash,data.session,{
       finalizeDelaySeconds:indicatorInputs?.finalize_delay_seconds??8,
-      asOf:indicatorInputs?Date.parse(indicatorInputs.as_of):Infinity}),
+      asOf:indicatorInputs?Date.parse(indicatorInputs.as_of):Infinity});
+  // Preserve pre-09:45 reports for the spike baseline, without changing the
+  // existing fixed-basket cumulative-flow display or its analysis start.
+  const rawOptions=series((payload.chart_inputs||payload).option_strike_oi);
+  const entryAnalysis=oiEntryBubbles(data,rawOptions,vixRibbon,indicatorInputs);
+  return {...data,basisRibbon:priceBasisRibbon(data.price,data.session),vixRibbon,entryAnalysis,
+    end:Math.max(data.end,entryAnalysis.assessments.at(-1)?.x||0),
     indicatorInputs,
     liveKnowledgeAt:Date.parse(payload.live?.server_time)};
 }

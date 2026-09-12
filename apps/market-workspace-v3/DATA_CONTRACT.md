@@ -103,3 +103,13 @@ The V3 core emits these same contracts over a read-only cached transport. Both v
 GUI 3.0.5 adds translucent vertical marks to the existing price/basis ribbon for both instruments and both version views. A five-minute VIX percentage change of at least +0.4% is red; at most −0.4% is green. Smaller changes have no mark. The percentage uses the close five elapsed minutes earlier as its denominator and requires six consecutive finite, positive one-minute VIX closes. Cash completeness is independent.
 
 Marks use actual observation availability on the x-axis. The worker processes revisions in arrival order; after-session repairs cannot create earlier intraday marks. Rewinding preserves the original observations. Repeated cash-only revisions cannot duplicate a VIX mark, and a batch produces one assessment for the latest eligible five-minute window. Hover/tap shows endpoint values, source-minute close times and availability. This display-only policy does not alter reference calls, indicators in the core, or the three-minute basis ribbon. Installation is described in [GUI_UPDATE.md](../market-core-v3/GUI_UPDATE.md).
+## Near-OTM OI entry bubbles: NEAR_OTM_OI_ENTRY_V1
+
+GUI 3.0.6 adds a separately named research overlay on V2 only, for both indices.
+The complete rule, quality gates, short-side VIX assumption, receipt clocks and
+replay audit are specified in [OI_ENTRY_REPLAY.md](OI_ENTRY_REPLAY.md).
+The new worker calculation reads the full individual-strike ledger, including
+pre-09:45 baseline reports, without changing the existing fixed-basket flows.
+The full session is evaluated in receipt order; frames expose only entries and
+filtered-spike assessments already available at the cursor. No new broker feed,
+core service, native decision or order operation is added.

@@ -104,7 +104,7 @@ self.onmessage = async event => {
       self.postMessage({ id, kind: 'frame', frame: frameAt(data, now) });
     } else if (action === 'seek-event') {
       if (!data) throw new Error('Select a session first.');
-      const events = [...data.transitions, ...data.controls].sort((a, b) => a.x - b.x)
+      const events = [...data.transitions, ...data.controls, ...(data.entryAnalysis?.events||[])].sort((a, b) => a.x - b.x)
         .filter(r => direction > 0 ? r.x > now : r.x < now);
       const target = direction > 0 ? events[0] : events.at(-1);
       self.postMessage({ id, kind: 'seek', now: target?.x ?? now });

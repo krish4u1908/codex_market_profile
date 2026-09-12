@@ -21,7 +21,7 @@ except ImportError:
     import update_gui as gui
 
 CORE_VERSION = '3.0.1'
-GUI_VERSION = '3.0.5-gui-vix-ribbon'
+GUI_VERSION = '3.0.6-gui-oi-entry-bubbles'
 SCHEMA = 'CASH_VIX_INDICATOR_INPUTS_V1'
 UNITS = gui.CORE_UNITS + gui.GUI_UNITS
 

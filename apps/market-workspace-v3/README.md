@@ -134,3 +134,11 @@ GUI `3.0.4-cash-vix-data` uses the versioned indicator input stream from core 3.
 GUI 3.0.5 adds translucent vertical marks to the existing price/basis ribbon for both instruments and both version views. A five-minute VIX percentage change of at least +0.4% is red; at most −0.4% is green. Smaller changes have no mark. The percentage uses the close five elapsed minutes earlier as its denominator and requires six consecutive finite, positive one-minute VIX closes. Cash completeness is independent.
 
 Marks use actual observation availability on the x-axis. The worker processes revisions in arrival order; after-session repairs cannot create earlier intraday marks. Rewinding preserves the original observations. Repeated cash-only revisions cannot duplicate a VIX mark, and a batch produces one assessment for the latest eligible five-minute window. Hover/tap shows endpoint values, source-minute close times and availability. This display-only policy does not alter reference calls, indicators in the core, or the three-minute basis ribbon. Installation is described in [GUI_UPDATE.md](../market-core-v3/GUI_UPDATE.md).
+## GUI 3.0.6: near-OTM OI entry bubbles
+
+V2 adds small translucent green/red circles above the shared price/basis/VIX
+ribbon for the proposed long/short entry conditions. The worker checks
+individual near-OTM OI spikes, a recent VIX/premium setup and the published
+market context. Hover/tap shows evidence; expandable review shows filtered
+spikes and can seek replay. See [the rule and replay walkthrough](OI_ENTRY_REPLAY.md)
+and [GUI-only installation](../market-core-v3/GUI_UPDATE.md).

@@ -26,6 +26,24 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - name: Verify entry bubbles in desktop and mobile replay
+        run: |
+          npm install --prefix "$RUNNER_TEMP/entry-browser" --no-save --package-lock=false playwright@1.62.1
+          export ENTRY_PLAYWRIGHT_MODULE="$RUNNER_TEMP/entry-browser/node_modules/playwright/index.mjs"
+          export ENTRY_UI_OUTPUT="$RUNNER_TEMP/entry-ui"
+          if command -v google-chrome >/dev/null; then
+            export ENTRY_CHROME="$(command -v google-chrome)"
+          else
+            node "$RUNNER_TEMP/entry-browser/node_modules/playwright/cli.js" install --with-deps chromium
+          fi
+          node scripts/check-entry-ui.mjs
+      - name: Upload entry replay screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: oi-entry-browser-checks
+          path: ${{ runner.temp }}/entry-ui
+          if-no-files-found: error
+          retention-days: 30
       - run: python -m pip install -r ../market-core-v3/requirements.txt
       - run: python -m unittest discover -s tests -v
         working-directory: apps/market-core-v3

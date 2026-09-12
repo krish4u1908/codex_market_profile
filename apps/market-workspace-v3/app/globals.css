@@ -175,3 +175,19 @@
 .live-feed-state strong{font-size:13px}
 .live-feed-state span{font-size:11px;color:#92a4bd;overflow-wrap:anywhere}
 @media(max-width:640px){.live-dock{gap:10px;flex-wrap:wrap}.live-feed-state{min-width:160px}.live-dock .secondary-button{margin-left:auto}}
+/* OI entry bubbles occupy their own small lane above the existing ribbon. */
+.entry-bubble-review{padding:0 18px 10px;color:#a9b9ce;font-size:11px}
+.entry-bubble-caption{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:6px 0}
+.entry-bubble-caption label,.entry-bubble-caption>span{display:inline-flex;align-items:center;gap:6px}
+.entry-bubble-caption label{cursor:pointer;color:#dce8f7}
+.entry-dot{display:inline-block;width:12px;height:12px;border-radius:50%;border:1px solid}
+.entry-dot.green{background:rgba(70,216,164,.22);border-color:rgba(70,216,164,.72)}
+.entry-dot.red{background:rgba(255,118,140,.22);border-color:rgba(255,118,140,.72)}
+.entry-green{color:#46d8a4}.entry-red{color:#ff768c}
+.entry-policy-note{color:#90a4bf}.entry-audit summary{cursor:pointer;padding:4px 0}
+.entry-audit>p{margin:8px 0;line-height:1.5;max-width:950px}
+.entry-audit-list{max-height:260px;overflow:auto}
+.entry-audit-row{display:flex;gap:12px;border-top:1px solid #26364a;padding:9px 0;align-items:flex-start}
+.entry-audit-row button{color:#a9c9ee;font-variant-numeric:tabular-nums;min-width:62px;cursor:pointer}
+.entry-audit-row button:disabled{cursor:default}.entry-audit-row p{margin:3px 0;line-height:1.5}
+@media(max-width:600px){.entry-bubble-review{padding:0 12px 8px}.entry-bubble-caption{gap:8px}.entry-policy-note{width:100%}.entry-audit-row{gap:8px}}

@@ -1,8 +1,10 @@
-# GUI update 3.0.5: translucent VIX ribbon marks
+# GUI update 3.0.6: near-OTM OI entry bubbles
 
 For the Cash/VIX data correction, install the combined core and GUI update described in [DATA_UPDATE.md](DATA_UPDATE.md). A GUI-only update displays the new input feed when the core already supplies it.
 
 This GUI retains the existing three-minute price/basis ribbon directly below the main index price chart for BANKNIFTY and NIFTY, in v1.0.62 and V2 Live/Replay. It includes the previous ribbon and CE/PE climax changes. Apply this package once, either over the initial V3 installation or a previous GUI-only update, including `3.0.1-gui-climax-v1` and `3.0.2-gui-basis-ribbon`. It stops and starts only `banknifty-gui.service` and `nifty-gui.service`, briefly interrupting GUI access. It keeps both core processes, their configuration and databases running in place. No unit files or collectors are changed.
+
+V2 now adds small translucent green long-setup and red short-setup bubbles above this ribbon. See [the rule and replay walkthrough](../market-workspace-v3/OI_ENTRY_REPLAY.md). The detailed walkthrough is also included in this update package as `OI_ENTRY_REPLAY.md`.
 
 ## Apply on the already-installed server
 
@@ -12,13 +14,13 @@ Download the **market-workspace-v3-gui-update** Actions artifact and upload it t
 (
 set -eu
 cd "$HOME/divergence/releases/shared_engine"
-vix_gui_dir=$(mktemp -d "$PWD/vix-ribbon-XXXXXX")
-unzip market-workspace-v3-gui-update.zip -d "$vix_gui_dir"
-if [ -f "$vix_gui_dir/market-workspace-v3-gui-update.zip" ]; then
-  unzip "$vix_gui_dir/market-workspace-v3-gui-update.zip" -d "$vix_gui_dir/package"
-  cd "$vix_gui_dir/package/market-workspace-v3-gui-update"
+entry_gui_dir=$(mktemp -d "$PWD/oi-entry-XXXXXX")
+unzip market-workspace-v3-gui-update.zip -d "$entry_gui_dir"
+if [ -f "$entry_gui_dir/market-workspace-v3-gui-update.zip" ]; then
+  unzip "$entry_gui_dir/market-workspace-v3-gui-update.zip" -d "$entry_gui_dir/package"
+  cd "$entry_gui_dir/package/market-workspace-v3-gui-update"
 else
-  cd "$vix_gui_dir/market-workspace-v3-gui-update"
+  cd "$entry_gui_dir/market-workspace-v3-gui-update"
 fi
 sudo python3 -B update_gui.py check
 sudo python3 -B update_gui.py apply
@@ -35,7 +37,7 @@ sudo python3 update_gui.py rollback --record /opt/market-workspace-v3/gui-update
 
 A rollback refuses to overwrite a newer GUI update; roll back the most recent one first. It retains the downloaded package, staged assets, update record and all market data.
 
-Hard-refresh the browser after apply. Existing ports are unchanged: BANKNIFTY GUI **8920**, NIFTY GUI **8921**; internal cores **8922** and **8923**. Both `/gui-release.json` endpoints should report `3.0.5-gui-vix-ribbon` and `"basisRibbonPlacement":"price"`. This GUI-only command leaves the installed core version unchanged.
+Hard-refresh the browser after apply. Existing ports are unchanged: BANKNIFTY GUI **8920**, NIFTY GUI **8921**; internal cores **8922** and **8923**. Both `/gui-release.json` endpoints should report `3.0.6-gui-oi-entry-bubbles` and `"basisRibbonPlacement":"price"`. This GUI-only command leaves the installed core version unchanged.
 
 **Do not rerun `core/deploy/install.py install` for this update.** That command is the first-install migration. Do not replace the current release directory manually or restart a core to refresh the charts.
 
