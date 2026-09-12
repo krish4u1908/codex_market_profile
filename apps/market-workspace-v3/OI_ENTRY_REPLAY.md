@@ -1,4 +1,4 @@
-# Near-OTM OI entry bubbles — GUI 3.0.6
+# Near-OTM OI entry bubbles — GUI 3.0.7
 
 V2 pages for NIFTY and BANKNIFTY show small translucent circles immediately
 above the price/basis/VIX ribbon. Green means the proposed long-entry condition
@@ -7,10 +7,15 @@ passed; red means the proposed short-entry condition passed. Fill opacity is
 remain visible. These are research annotations, not order instructions or
 changes to the existing reference calls.
 
-## Frozen first test rule
+## Current test rule
 
-Policy: `NEAR_OTM_OI_ENTRY_V1`. Settings are starting hypotheses, not optimized
+Policy: `NEAR_OTM_OI_ENTRY_V2`. Settings are starting hypotheses, not optimized
 parameters or evidence of profitability.
+
+GUI 3.0.7 removes the automated VPOC condition from both long and short
+bubbles at the user's request. The available VPOC remains in the tooltip for
+manual review. Price below, equal to or above VPOC, and an unavailable VPOC,
+cannot suppress an otherwise eligible bubble. The remaining rules are unchanged.
 
 | Requirement | Long | Short |
 | --- | --- | --- |
@@ -22,7 +27,7 @@ parameters or evidence of profitability.
 | Setup age | Setup was available within the preceding three elapsed minutes | Same |
 | Broader trend | Latest published V2 `broader_leg = +1` | Latest published V2 `broader_leg = -1` |
 | Cash filter | Complete configured cash basket above its session open | Complete configured cash basket below its session open |
-| VPOC filter | Index strictly above published intraday canonical futures-volume VPOC | Index strictly below that VPOC |
+| VPOC | Manual review only; no automated filter | Manual review only; no automated filter |
 
 The short VIX sign has not been established by this research. This first version
 explicitly accepts either sign and retains the actual percentage in the tooltip.
@@ -71,9 +76,10 @@ own strike/expiry history. The existing fixed 09:45 option basket is unchanged.
   120 seconds. Price receipt and synchronization ages are checked in
   milliseconds against 15 seconds. Cash source-minute age is at most 120
   seconds and the complete configured basket is required.
-- The VPOC is the current published `volume_cumulative_mode_canonical`, never
-  a final-session profile or a chosen prior-day chart overlay. Changing visible
-  chart lines does not change the tested entry rule.
+- The informational VPOC is the current published
+  `volume_cumulative_mode_canonical`, never a final-session profile or a chosen
+  prior-day chart overlay. It is retained for manual review and is not an entry
+  requirement. Changing visible chart lines does not change bubble eligibility.
 - Multiple qualifying strikes in one OI report share one bubble per direction.
   Hover/tap lists their OI changes, ratios, premium/VIX changes, market filters
   and timestamps. Separate qualifying reports remain separate observations;
@@ -94,28 +100,35 @@ with this update. This combines the user's original session and indicator feed
 without changing either source's availability timestamps. The file stays
 outside the GitHub repository and the installed application assets.
 
-With the rule above, the supplied session has **four LONG bubbles and zero
+With the rule above, the supplied session has **five LONG bubbles and zero
 SHORT bubbles**, from **71 OI-spike report/side assessments**:
 
 | OI receipt time, IST | Qualifying PEs |
 | --- | --- |
+| 13:42:55.139 | 23,300; 23,250; 23,200 |
 | 14:46:55.247 | 23,350; 23,400 |
 | 14:48:55.241 | 23,350 |
 | 14:49:55.112 | 23,350; 23,400 |
 | 14:55:55.121 | 23,350 |
 
-1. Seek to **14:46:54**: there is no green bubble yet.
-2. Seek to **14:46:56**: the first green bubble appears above the ribbon.
-3. Seek backward to **14:46:54**: it disappears.
-4. Seek to **15:00:00**: all four are visible; hover or tap each circle.
-5. Seek to **13:43:00** and expand the review. At **13:42:55.139**, PE 23,300,
-   23,250 and 23,200 satisfy the OI and recent VIX/premium tests. The available
-   index is **23,331.80**, below volume VPOC **23,350**, so the long bubble is
-   filtered. The earlier illustrated 23,500 PE is ITM and is excluded.
+1. Seek to **13:42:54**: there is no green bubble yet.
+2. Seek to **13:42:56**: the first green bubble appears above the ribbon.
+3. Seek backward to **13:42:54**: it disappears.
+4. Seek to **15:00:00**: all five are visible; hover or tap each circle.
+5. At **13:42:55.139**, PE 23,300, 23,250 and 23,200 satisfy the OI and recent
+   VIX/premium tests. The available index is **23,331.80**, below volume VPOC
+   **23,350**. This now produces a long bubble because VPOC is for manual
+   review. GUI 3.0.6 filtered this report. The earlier illustrated 23,500 PE is
+   ITM and remains excluded.
+
+The noon examples still fail other conditions: the largest near-OTM PE
+single-report OI fall in 12:10–12:20 is 0.908%, below the 1% floor. At 12:43:55,
+23,350 PE passes the OI spike but its five-minute premium change at the VIX
+setup is negative. Removing VPOC does not relax those tests.
 
 This audit establishes rule reproduction and availability timing, not trading
-performance. The four accepted observations occur after 14:45; no earlier
-entries are manufactured to match the hand-marked examples.
+performance. The four previously accepted observations remain; the newly
+eligible 13:42:55 report is the only additional bubble in this session.
 
 Automated reproduction from the source workspace:
 
@@ -127,7 +140,7 @@ node scripts/audit-entry-replay.mjs \
   --output /tmp/nifty-entry-replay-audit.json
 ```
 
-The audit verifies full-history frames against inputs truncated at ten replay
+The audit verifies full-history frames against inputs truncated at twelve replay
 checkpoints, including immediately before and at every bubble, and verifies
 backward seeking and live/replay annotation parity. Outputs remain local.
 
@@ -141,6 +154,6 @@ that instrument's market-data replay verification.
 
 Use the GUI-only procedure in [GUI_UPDATE.md](../market-core-v3/GUI_UPDATE.md).
 The package restarts only the two GUI services and verifies unchanged core
-PIDs. Expected `/gui-release.json`: `3.0.6-gui-oi-entry-bubbles` with
-`entryBubblePolicy: NEAR_OTM_OI_ENTRY_V1`. No VPS deployment is performed by
+PIDs. Expected `/gui-release.json`: `3.0.7-gui-oi-entry-manual-vpoc` with
+`entryBubblePolicy: NEAR_OTM_OI_ENTRY_V2`. No VPS deployment is performed by
 the source build or replay checks.

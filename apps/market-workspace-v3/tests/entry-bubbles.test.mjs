@@ -90,9 +90,8 @@ test('premium rebound must be known at the VIX setup, not learned afterwards',()
 });
 
 test('context and cash must be available, fresh, and on the required side',()=>{
-  for(const change of ['vpoc','late','stale','trend','cash','cashPartial','priceStale']) {
+  for(const change of ['late','stale','trend','cash','cashPartial','priceStale']) {
     const f=entryFixture(),c=f.payload.decisions[0];
-    if(change==='vpoc')c.volume_cumulative_mode_canonical=f.spot;
     if(change==='late')c.t=c.context_published_at=f.iso(f.event+1000);
     if(change==='stale')c.t=c.context_published_at=f.iso(f.event-120001);
     if(change==='trend')c.broader_leg=0;
@@ -100,6 +99,25 @@ test('context and cash must be available, fresh, and on the required side',()=>{
     if(change==='cashPartial')f.payload.chart_inputs.cash_vix.at(-1).cash_names=9;
     if(change==='priceStale')f.payload.chart_inputs.price=f.payload.chart_inputs.price.filter(r=>Date.parse(r.t)<f.event-15000);
     assert.equal(run(f).entryAnalysis.events.length,0,change);
+  }
+});
+
+for(const instrument of ['NIFTY','BANKNIFTY'])for(const side of ['PE','CE'])test(`${instrument} ${side}: VPOC is manual context at any price relation or when unavailable`,()=>{
+  for(const relation of ['below','equal','above','missing']) {
+    const f=entryFixture(instrument,side),c=f.payload.decisions[0];
+    c.volume_cumulative_mode_canonical=relation==='missing'?null:
+      f.spot+(relation==='below'?-f.step:relation==='above'?f.step:0);
+    const data=run(f);
+    assert.equal(data.entryAnalysis.policy.id,'NEAR_OTM_OI_ENTRY_V2');
+    assert.equal(data.entryAnalysis.policy.vpoc,'MANUAL_REVIEW_ONLY');
+    assert.equal(data.entryAnalysis.events.length,1,relation);
+    assert.equal(data.entryAnalysis.events[0].state,side==='PE'?'green':'red');
+    for(const spike of data.entryAnalysis.events[0].spikes) {
+      assert.equal(spike.vpoc,c.volume_cumulative_mode_canonical);
+      assert.deepEqual(spike.reasons,[]);
+    }
+    assert.equal(frameAt(data,f.event-1).entryBubbles.length,0);
+    assert.equal(frameAt(data,f.event).entryBubbles.length,1);
   }
 });
 

@@ -20,7 +20,7 @@ EXPECTED_HOST = 'srv1913330'
 GUI_UNITS = ('banknifty-gui.service', 'nifty-gui.service')
 CORE_UNITS = ('banknifty-core.service', 'nifty-core.service')
 PORTS = {'BANKNIFTY': (8920, 8922), 'NIFTY': (8921, 8923)}
-RELEASE = '3.0.6-gui-oi-entry-bubbles'
+RELEASE = '3.0.7-gui-oi-entry-manual-vpoc'
 MANIFEST = 'GUI-UPDATE-MANIFEST.json'
 
 

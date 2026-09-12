@@ -8,7 +8,7 @@ import tempfile
 import zipfile
 
 CORE = Path(__file__).resolve().parents[1]
-RELEASE = '3.0.6-gui-oi-entry-bubbles'
+RELEASE = '3.0.7-gui-oi-entry-manual-vpoc'
 
 
 def build(deployment_bundle, output):

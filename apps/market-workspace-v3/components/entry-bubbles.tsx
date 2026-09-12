@@ -11,7 +11,8 @@ export function entryBubbleTooltip(row:Row) {
     +`<br/>OI ${fmt(s.oiFrom,0)} → ${fmt(s.oiTo,0)}`
     +`<br/>VIX ${signed(s.setup?.vixChangePct)}% / 5m · premium ${signed(s.setup?.premium?.changePct)}%`
     +`<br/>Setup available ${clock(s.setup?.at,true)} IST`
-    +`<br/>Index ${fmt(s.index)} · volume VPOC ${fmt(s.vpoc,0)} · cash ${signed(s.cashPct)}%`);
+    +`<br/>Index ${fmt(s.index)} · cash ${signed(s.cashPct)}%`
+    +`<br/>Volume VPOC ${fmt(s.vpoc,0)} · manual review only`);
   return `<strong>${row.direction==='LONG'?'Long':'Short'} entry setup · research</strong>`
     +`<br/>OI report received ${clock(row.x,true)} IST<br/>${lines.join('<br/><br/>')}`;
 }
@@ -44,11 +45,11 @@ export const EntryBubbleReview=memo(function EntryBubbleReview({frame,min,show,o
     <div className="entry-bubble-caption">
       <label><Checkbox checked={show} onCheckedChange={v=>onShow(v===true)}/><strong>Entry bubbles</strong><span className="mini-label">Research</span></label>
       <span><i className="entry-dot green"/> Long {longs}</span><span><i className="entry-dot red"/> Short {shorts}</span>
-      <span className="entry-policy-note">Near OTM · OI fall ≥1% · ≥3× normal</span>
+      <span className="entry-policy-note">Near OTM · OI fall ≥1% · ≥3× normal · VPOC: manual</span>
     </div>
     <details className="entry-audit"><summary>Review {assessments.length} OI-spike reports in view</summary>
       <p>Three nearest OTM strikes. Long: VIX rise ≥0.4%. Short: either VIX move ≥0.4%. Premium rebound within the preceding 3 minutes; VIX uses completed-minute closes.</p>
-      <p>Market filters: published broader trend, cash basket above/below its open, and index above/below intraday futures-volume VPOC. Bubbles appear at OI receipt time.</p>
+      <p>Market filters: published broader trend and cash basket above/below its open. VPOC is for manual review only. Bubbles appear at OI receipt time.</p>
       {!assessments.length&&<p>No eligible near-OTM OI spikes with complete input history in this view.</p>}
       <div className="entry-audit-list">{[...assessments].reverse().map(row=><div key={row.id} className="entry-audit-row">
         <button disabled={!canSeek} onClick={()=>onSeek(row.x)} title={canSeek?'Replay from this OI report':'Open replay to seek'}>{clock(row.x,true)}</button>

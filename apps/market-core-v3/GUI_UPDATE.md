@@ -1,10 +1,17 @@
-# GUI update 3.0.6: near-OTM OI entry bubbles
+# GUI update 3.0.7: manual VPOC review for entry bubbles
 
 For the Cash/VIX data correction, install the combined core and GUI update described in [DATA_UPDATE.md](DATA_UPDATE.md). A GUI-only update displays the new input feed when the core already supplies it.
 
 This GUI retains the existing three-minute price/basis ribbon directly below the main index price chart for BANKNIFTY and NIFTY, in v1.0.62 and V2 Live/Replay. It includes the previous ribbon and CE/PE climax changes. Apply this package once, either over the initial V3 installation or a previous GUI-only update, including `3.0.1-gui-climax-v1` and `3.0.2-gui-basis-ribbon`. It stops and starts only `banknifty-gui.service` and `nifty-gui.service`, briefly interrupting GUI access. It keeps both core processes, their configuration and databases running in place. No unit files or collectors are changed.
 
 V2 now adds small translucent green long-setup and red short-setup bubbles above this ribbon. See [the rule and replay walkthrough](../market-workspace-v3/OI_ENTRY_REPLAY.md). The detailed walkthrough is also included in this update package as `OI_ENTRY_REPLAY.md`.
+
+This update removes the automated VPOC filter for both directions and both
+indices. VPOC remains available in the charts and bubble tooltip for manual
+review. All other bubble conditions are retained. The September 11 NIFTY replay
+now has five long bubbles and zero short bubbles, including 13:42:55 IST.
+The GUI release reports `entryBubblePolicy: NEAR_OTM_OI_ENTRY_V2` and
+`entryVpocFilter: false`.
 
 ## Apply on the already-installed server
 
@@ -37,7 +44,7 @@ sudo python3 update_gui.py rollback --record /opt/market-workspace-v3/gui-update
 
 A rollback refuses to overwrite a newer GUI update; roll back the most recent one first. It retains the downloaded package, staged assets, update record and all market data.
 
-Hard-refresh the browser after apply. Existing ports are unchanged: BANKNIFTY GUI **8920**, NIFTY GUI **8921**; internal cores **8922** and **8923**. Both `/gui-release.json` endpoints should report `3.0.6-gui-oi-entry-bubbles` and `"basisRibbonPlacement":"price"`. This GUI-only command leaves the installed core version unchanged.
+Hard-refresh the browser after apply. Existing ports are unchanged: BANKNIFTY GUI **8920**, NIFTY GUI **8921**; internal cores **8922** and **8923**. Both `/gui-release.json` endpoints should report `3.0.7-gui-oi-entry-manual-vpoc` and `"basisRibbonPlacement":"price"`. This GUI-only command leaves the installed core version unchanged.
 
 **Do not rerun `core/deploy/install.py install` for this update.** That command is the first-install migration. Do not replace the current release directory manually or restart a core to refresh the charts.
 

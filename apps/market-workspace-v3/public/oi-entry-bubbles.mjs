@@ -2,12 +2,12 @@
 import {atOrBefore} from './series.mjs';
 
 export const OI_ENTRY_POLICY=Object.freeze({
-  id:'NEAR_OTM_OI_ENTRY_V1',version:'research-1',strikesPerSide:3,
+  id:'NEAR_OTM_OI_ENTRY_V2',version:'research-2',strikesPerSide:3,
   minimumDropPct:1,spikeMultiple:3,baselineUpdates:20,
   setupLookbackMs:180000,premiumWindowMs:300000,maxOiGapMs:90000,
   maxPriceAgeMs:15000,maxContextAgeMs:90000,maxCashAgeMs:120000,
   vixThresholdPct:.4,longVix:'rise',shortVix:'either',
-  vixSource:'CAUSAL_COMPLETED_MINUTE_CLOSES',vpoc:'INTRADAY_CANONICAL_FUTURES_VOLUME',
+  vixSource:'CAUSAL_COMPLETED_MINUTE_CLOSES',vpoc:'MANUAL_REVIEW_ONLY',
 });
 const finite=Number.isFinite,positive=n=>finite(n)&&n>0;
 const time=value=>typeof value==='number'?value:Date.parse(value);
@@ -108,8 +108,7 @@ function contextAt(data,feed,at,price,side,policy) {
   if(!current)reasons.push('Fresh published V2 context unavailable');
   else if(c.broader_leg!==direction)reasons.push(side==='PE'?'Broader price trend is not UP':'Broader price trend is not DOWN');
   const vpoc=current&&positive(c.volume_cumulative_mode_canonical)?c.volume_cumulative_mode_canonical:null;
-  if(vpoc===null)reasons.push('Published intraday futures-volume VPOC unavailable');
-  else if(direction*(price.i-vpoc)<=0)reasons.push(side==='PE'?'Index is not above volume VPOC':'Index is not below volume VPOC');
+  // Retain the available VPOC for manual review; it never gates a bubble.
   if(!cash)reasons.push('Complete recent cash basket unavailable');
   else if(direction*cash.value<=0)reasons.push(side==='PE'?'Cash basket is not above its open':'Cash basket is not below its open');
   return {reasons,contextAt:c?.x??null,broaderLeg:current?c.broader_leg:null,vpoc,
