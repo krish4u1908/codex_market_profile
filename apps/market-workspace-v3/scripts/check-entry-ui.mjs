@@ -39,7 +39,7 @@ try {
     const fraction=(25*60+55)/(29*60);
     for(const side of ['PE','CE']) {
       await page.mouse.move(box.x+66+fraction*(box.width-88),box.y+box.height-28-(side==='PE'?51:9));
-      await page.getByText(`${side} OI fall · VIX ${arrow}`,{exact:true}).waitFor({timeout:5000});
+      await page.locator('.price-panel .plot').getByText(`${side} OI fall · VIX ${arrow}`,{exact:true}).waitFor({timeout:5000});
       await page.mouse.move(1,1);
     }
     await page.locator('.price-panel').screenshot({path:path.join(output,`${instrument}-${vixSign}-desktop.png`)});
