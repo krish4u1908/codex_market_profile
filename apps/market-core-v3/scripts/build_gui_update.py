@@ -8,7 +8,7 @@ import tempfile
 import zipfile
 
 CORE = Path(__file__).resolve().parents[1]
-RELEASE = '3.0.8-basic-oi-vix-bubbles'
+RELEASE = '3.0.9-oi-vix-research'
 
 
 def build(deployment_bundle, output):
@@ -34,7 +34,8 @@ def build(deployment_bundle, output):
                 path.write_bytes(content)
         for source, name in [(CORE / 'deploy/update_gui.py', 'update_gui.py'),
                              (CORE / 'GUI_UPDATE.md', 'GUI_UPDATE.md'),
-                             (CORE.parent / 'market-workspace-v3/OI_ENTRY_REPLAY.md', 'OI_ENTRY_REPLAY.md')]:
+                             (CORE.parent / 'market-workspace-v3/OI_ENTRY_REPLAY.md', 'OI_ENTRY_REPLAY.md'),
+                             (CORE.parent / 'market-workspace-v3/BUBBLE_OUTCOMES.md', 'BUBBLE_OUTCOMES.md')]:
             (root / name).write_bytes(source.read_bytes())
         files = [{'path': p.relative_to(root).as_posix(), 'sha256': hashlib.sha256(p.read_bytes()).hexdigest()}
                  for p in sorted(root.rglob('*')) if p.is_file()]

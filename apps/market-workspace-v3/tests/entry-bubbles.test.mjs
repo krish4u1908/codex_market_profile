@@ -9,7 +9,10 @@ for(const instrument of ['NIFTY','BANKNIFTY'])for(const side of ['PE','CE'])for(
   test(`${instrument} ${side} VIX ${vixSign}: receipt timing, position, colour and replay parity`,()=>{
     const f=entryFixture(instrument,side,{vixSign}),d=run(f),e=d.entryAnalysis.events;
     assert.equal(e.length,1);assert.equal(e[0].spikes.length,3);assert.equal(e[0].x,f.event);
-    assert.equal(e[0].placement,side==='PE'?'ABOVE':'BELOW');assert.equal(e[0].state,vixSign>0?'red':'green');
+    assert.equal(e[0].placement,side==='PE'?'ABOVE':'BELOW');
+    assert.equal(e[0].state,side==='PE'&&vixSign>0?'green':side==='CE'&&vixSign<0?'red':'yellow');
+    assert.equal(e[0].watch,side==='PE'&&vixSign>0?'LONG_WATCH':side==='CE'&&vixSign<0?'SHORT_WATCH':'RESEARCH');
+    assert.equal(e[0].reason,'');
     assert.equal(frameAt(d,f.event-1).entryBubbles.length,0);assert.equal(frameAt(d,f.event).entryBubbles.length,1);
     assert.deepEqual(frameAt(d,f.event,{live:true}).entryBubbles,frameAt(d,f.event).entryBubbles);
     assert.equal(frameAt(d,f.event-1).entryBubbles.length,0);

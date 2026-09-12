@@ -183,7 +183,8 @@
 .entry-dot{display:inline-block;width:12px;height:12px;border-radius:50%;border:1px solid}
 .entry-dot.green{background:rgba(70,216,164,.22);border-color:rgba(70,216,164,.72)}
 .entry-dot.red{background:rgba(255,118,140,.22);border-color:rgba(255,118,140,.72)}
-.entry-green{color:#46d8a4}.entry-red{color:#ff768c}
+.entry-dot.yellow{background:rgba(250,204,85,.26);border-color:rgba(250,204,85,.9)}
+.entry-green{color:#46d8a4}.entry-red{color:#ff768c}.entry-yellow{color:#facc55}
 .entry-policy-note{color:#90a4bf}.entry-audit summary{cursor:pointer;padding:4px 0}
 .entry-audit>p{margin:8px 0;line-height:1.5;max-width:950px}
 .entry-audit-list{max-height:260px;overflow:auto}

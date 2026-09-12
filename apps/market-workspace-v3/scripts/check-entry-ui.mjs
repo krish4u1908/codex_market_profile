@@ -30,9 +30,11 @@ try {
     const seek=async t=>{const input=page.getByRole('textbox',{name:'Jump to IST time'});await input.fill(t);await input.press('Enter');
       await page.waitForFunction(t=>document.querySelector('.replay-time strong')?.textContent===t,t);};
     const caption=async()=> (await page.locator('.entry-bubble-caption').innerText()).replace(/\s+/g,' ');
-    await seek('10:00:54');assert.ok((await caption()).includes('PE above · ↑ 0 · ↓ 0'));
-    await seek('10:00:56');for(const lane of ['PE above','CE below'])assert.ok((await caption()).includes(`${lane} · ↑ ${vixSign>0?1:0} · ↓ ${vixSign<0?1:0}`));
-    await seek('10:00:54');assert.ok((await caption()).includes('PE above · ↑ 0 · ↓ 0'));
+    await seek('10:00:54');assert.ok((await caption()).includes('PE above · Long 0 · Research 0'));
+    await seek('10:00:56');
+    assert.ok((await caption()).includes(`PE above · Long ${vixSign>0?1:0} · Research ${vixSign<0?1:0}`));
+    assert.ok((await caption()).includes(`CE below · Short ${vixSign<0?1:0} · Research ${vixSign>0?1:0}`));
+    await seek('10:00:54');assert.ok((await caption()).includes('PE above · Long 0 · Research 0'));
     await seek('10:04:00');await page.locator('.price-panel').scrollIntoViewIfNeeded();
     await page.waitForFunction(()=>!!document.querySelector('.price-panel canvas'));
     const box=await page.locator('.price-panel .plot').boundingBox();
@@ -40,6 +42,8 @@ try {
     for(const side of ['PE','CE']) {
       await page.mouse.move(box.x+66+fraction*(box.width-88),box.y+box.height-28-(side==='PE'?51:9));
       await page.locator('.price-panel .plot').getByText(`${side} OI fall · VIX ${arrow}`,{exact:true}).waitFor({timeout:5000});
+      const expected=side==='PE'&&vixSign>0?'Long watch · green':side==='CE'&&vixSign<0?'Short watch · red':'Research · yellow';
+      await page.locator('.price-panel .plot').getByText(`${expected} bubble`,{exact:false}).waitFor({timeout:5000});
       await page.mouse.move(1,1);
     }
     await page.locator('.price-panel').screenshot({path:path.join(output,`${instrument}-${vixSign}-desktop.png`)});

@@ -1,13 +1,13 @@
-# Basic near-OTM OI / VIX bubbles — 3.0.8
+# Basic near-OTM OI / VIX bubbles — 3.0.9
 
 This replaces the older gated entry setup. The four user-selected combinations
-are displayed for NIFTY and BANKNIFTY V2.0.0. Colours express VIX direction;
-they are condition markers, not a generated trade recommendation.
+are displayed for NIFTY and BANKNIFTY V2.0.0. Colours follow the user-defined long/short watch conditions. The other two
+combinations remain visible in yellow for research. Eligibility is unchanged.
 
 | OI-fall side | Location | VIX rises ≥0.4% | VIX falls ≥0.4% |
 | --- | --- | --- | --- |
-| PE | Above the price/basis ribbon | Transparent red | Transparent green |
-| CE | Below the price/basis ribbon | Transparent red | Transparent green |
+| PE | Above the price/basis ribbon | Transparent green (long watch) | Transparent yellow (research) |
+| CE | Below the price/basis ribbon | Transparent yellow (research) | Transparent red (short watch) |
 
 ## Exact rule
 
@@ -75,7 +75,7 @@ The production calculation was checked against all 15 supplied NIFTY sessions:
 before and exactly at its receipt (944 prefix checks). No date or timestamp is
 encoded in the production condition.
 
-| Session | PE red | PE green | CE red | CE green | Total |
+| Session | PE green | PE yellow | CE yellow | CE red | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | 2026-09-10 | 4 | 2 | 0 | 6 | 12 |
 | 2026-09-11 | 2 | 6 | 1 | 11 | 20 |
@@ -92,7 +92,13 @@ node scripts/audit-entry-replay.mjs --input SESSION.json --profile nifty-v200 --
 
 ## Installation
 
-Use the full 3.0.8 update bundle and `core/deploy/update_data.py`, as explained
-in `apps/market-core-v3/DATA_UPDATE.md`. This updates core 3.0.2 and GUI 3.0.8
-on the existing four services. A GUI-only update is valid only after core
-3.0.2 is already installed; the GUI updater checks that requirement.
+For an existing core 3.0.2 installation, use the GUI-only 3.0.9 package and
+`update_gui.py check`, then `update_gui.py apply`. Follow `GUI_UPDATE.md`. Only
+the two GUI services restart; both core engines remain running. The full
+bundle is available for older cores and uses `core/deploy/update_data.py`.
+
+## Outcome research
+
+See `BUBBLE_OUTCOMES.md` for the reproducible 5/10/15-minute index observations
+and nearest-OTM option 20-point target/stop experiment. Outcome calculations
+are offline and never feed into bubble eligibility, colours or replay timing.

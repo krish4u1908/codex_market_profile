@@ -1,16 +1,21 @@
 # Basic OI / VIX bubble update
 
-Installs core **3.0.2** and GUI **3.0.8-basic-oi-vix-bubbles** on the existing
+Installs core **3.0.2** and GUI **3.0.9-oi-vix-research** on the existing
 BANKNIFTY/NIFTY shared workspace. PE bubbles sit above the ribbon and CE below;
-red means VIX rise ≥0.4%, green means VIX fall ≥0.4%, with the approved OI spike.
+green means PE OI fall with VIX rise, red means CE OI fall with VIX fall, and
+the other two combinations are yellow for research. VIX threshold remains
+0.4% over five minute slots, with the existing OI spike rule.
 
 The raw report-quote feed is necessary to reproduce the approved September 10
 and 11 timestamps. Completed-minute VIX closes cannot substitute for those
 quotes. The configured collector roots must retain `oi/YYYY-MM-DD/oi_*.jsonl`.
 
+For cores already on 3.0.2, prefer the GUI-only package in `GUI_UPDATE.md`.
+The commands below are the full update path for older installations.
+
 ## Existing VPS installation
 
-Download `market-workspace-v3-basic-oi-vix-3.0.8.zip` into
+Download `market-workspace-v3-oi-vix-research-3.0.9.zip` into
 `/home/bankadmin/divergence/releases/shared_engine`. Run this in a subshell so a
 failed command cannot accidentally apply an older updater in the current folder:
 
@@ -18,8 +23,8 @@ failed command cannot accidentally apply an older updater in the current folder:
 (
 set -eu
 cd /home/bankadmin/divergence/releases/shared_engine
-bubble_update_dir=$(mktemp -d "$PWD/basic-oi-vix-3.0.8-XXXXXX")
-unzip -q market-workspace-v3-basic-oi-vix-3.0.8.zip -d "$bubble_update_dir"
+bubble_update_dir=$(mktemp -d "$PWD/oi-vix-research-3.0.9-XXXXXX")
+unzip -q market-workspace-v3-oi-vix-research-3.0.9.zip -d "$bubble_update_dir"
 cd "$bubble_update_dir/market-workspace-v3"
 sudo python3 -B core/deploy/update_data.py check
 sudo python3 -B core/deploy/update_data.py apply
@@ -50,7 +55,7 @@ curl -fsS http://127.0.0.1:8920/api/health | python3 -m json.tool
 curl -fsS http://127.0.0.1:8921/api/health | python3 -m json.tool
 ```
 
-Expected GUI version: `3.0.8-basic-oi-vix-bubbles`, policy `BASIC_OTM_OI_VIX_V1`.
+Expected GUI version: `3.0.9-oi-vix-research`, policy `BASIC_OTM_OI_VIX_V2`.
 Both cores should show version `3.0.2` and
 `option_report_inputs.schema: OPTION_REPORT_INPUTS_V1`. An out-of-hours/current
 session with no archive can show pending/missing data without preventing older
@@ -61,7 +66,7 @@ port **8921**, choose V2.0.0 → Replay → September 10 or 11. Keep “OI / VIX
 bubbles” checked. The old replay opens immediately; report quotes load in the
 background. Move the replay slider to the session end to see the complete totals:
 
-| NIFTY session | PE red above | PE green above | CE red below | CE green below |
+| NIFTY session | PE green above | PE yellow above | CE yellow below | CE red below |
 | --- | ---: | ---: | ---: | ---: |
 | September 10 | 4 | 2 | 0 | 6 |
 | September 11 | 2 | 6 | 1 | 11 |
