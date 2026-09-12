@@ -1,0 +1,53 @@
+{
+  "id": "NIFTY_BULLISH_CONTEXT_RESEARCH_V1",
+  "purpose": "Test whether an independently defined upward price context improves the existing green PE-OI-fall / VIX-rise bubble observations.",
+  "frozenBeforeOutcomeCalculation": true,
+  "instrument": "NIFTY",
+  "input": "BUBBLE_RESEARCH_INPUTS_V1 from the supplied minute(1).zip; minute-spaced option-report spot/VIX observations, not exchange one-minute OHLC closes",
+  "context": {
+    "eventWindowMinutes": 5,
+    "trendMinutes": 30,
+    "signedEfficiencyThreshold": 0.3,
+    "formula": "s = t - 5 minute slots; E = (P[s] - P[s-30]) / sum(abs(diff(P[s-30:s]))); A = mean(P[s-29:s]); BULLISH iff E >= 0.30 and P[s] > A and P[t] > A",
+    "zeroMovementEfficiency": 0,
+    "missingOrInvalidPrices": "UNKNOWN; require all 36 consecutive minute slots with positive prices, ordered receipts and gaps <= 90 seconds",
+    "bearish": "Symmetric E <= -0.30, P[s] < A and P[t] < A; otherwise MIXED",
+    "sensitivityThresholds": [0.2, 0.3, 0.4],
+    "sensitivityPurpose": "Robustness only; do not select a replacement threshold on these outcomes"
+  },
+  "bubble": "Unchanged BASIC_OTM_OI_VIX_V2 green PE_UP event: at least one of nearest three strict OTM puts has one-update OI fall >=1% and >=3x median absolute percentage OI change over prior 20 updates; report VIX rises >=0.4% over five minute slots",
+  "primary": {
+    "phase": "Signal before 15:15 IST, consistent with the previous study's continuous-session boundary",
+    "case": "BULLISH context and unchanged green bubble",
+    "deduplication": "First qualifying case, then require at least 15 minute slots since the last selected case, separately each session",
+    "subgroups": "P[t] > P[s]: PRICE_UP_WITH_VIX; P[t] < P[s]: PULLBACK_WITH_VIX; equality: FLAT_WITH_VIX",
+    "horizons": [5, 10, 15],
+    "horizonEligibility": "Recorded consecutive positive report prices; endpoint before 15:15 IST; future prices used only in outcome evaluation"
+  },
+  "controls": {
+    "pools": ["BULLISH_NO_GREEN", "BULLISH_VIX_UP_NO_GREEN"],
+    "eligibility": "Same primary price context, continuous-session time, no green bubble at this report; valid six-slot VIX history and computable prior OI history for all three current near-OTM puts",
+    "sameVix": "Second pool additionally requires VIX rise >=0.4% over the same five-slot window",
+    "matching": "Same session, IST clock hour, and sign of the five-slot price change. Average all eligible controls in that stratum for each case; give every matched case equal weight. Do not use future outcomes to choose controls.",
+    "unmatched": "Retain and report; never substitute another day/hour or direction",
+    "interpretation": "Observational comparison, not randomized or causal; control windows may overlap"
+  },
+  "optionTest": {
+    "position": "BUY nearest strict OTM CE at signal-time spot, same expiry; keep that contract fixed",
+    "entry": "Next minute's first recorded LTP (bar open); gross indicative execution proxy",
+    "targetPremiumPoints": 20,
+    "stopPremiumPoints": 20,
+    "policy": "Reuse OI_VIX_OUTCOMES_V1 without alteration: reject bad entry bars or premium <=20; censor at first missing/flagged bar; retain both-hit ambiguity; stop gaps may exceed 20; cap at target; stop reading at 15:40 IST",
+    "costs": "Excluded: spread, slippage, brokerage, taxes and latency",
+    "portfolio": "Independent observations; options may remain open across later signals"
+  },
+  "reporting": {
+    "primary": "Episode cases, raw and matched 5/10/15-minute index changes, full option outcome categories",
+    "secondary": "All green bubbles and all bullish green bubbles, day breakdown, both price-response subgroups, threshold sensitivity, late-session/unknown exclusions",
+    "uncertainty": "95% percentile bootstrap intervals for matched index differences, resampling the 15 sessions as clusters, 2000 replicates, fixed seed 20260912",
+    "chronology": "First 10 sessions versus last 5 as a stability check, explicitly not an untouched holdout because the archive was used earlier",
+    "limitations": "15 supplied sessions only; retrospective research, no demonstrated trading edge or parameter optimality"
+  },
+  "excludedInputs": ["international markets", "VPOC", "VIX or OI inside the price-context classifier", "full-day high/low computed using future observations", "constituent breadth unavailable in these inputs"],
+  "liveGuiChanges": false
+}
