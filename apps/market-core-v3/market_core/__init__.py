@@ -1,3 +1,3 @@
 """One collector/calculation authority per instrument, shared by GUI profiles."""
 
-VERSION = "3.0.1"
+VERSION = "3.0.2"

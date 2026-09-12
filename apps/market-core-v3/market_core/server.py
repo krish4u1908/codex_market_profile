@@ -51,10 +51,17 @@ def handler_for(store):
                         if health["poll_age_seconds"] > 3 * store.config.poll_seconds and health.get("status") == "ready":
                             health["status"] = "stale"
                     return self.send(encode(health))
-                if url.path not in {"/api/live", "/api/catalog", "/api/replay", "/api/indicator-inputs"}:
+                if url.path not in {"/api/live", "/api/catalog", "/api/replay", "/api/indicator-inputs", "/api/option-report-inputs"}:
                     return self.send(encode({"error": "Not found"}), 404)
                 profile = query.get("profile", [""])[0]
                 store.config.check_profile(profile)
+                if url.path == '/api/option-report-inputs':
+                    if store.option_reports is None:
+                        return self.send(encode({'status':'UNAVAILABLE'}), 503)
+                    entry = store.option_reports.request(query.get('session', [''])[0])
+                    zipped = 'gzip' in self.headers.get('Accept-Encoding', '')
+                    return self.send(entry['compressed'] if zipped else entry['body'], entry['code'],
+                                     {'Content-Encoding':'gzip'} if zipped else {})
                 if url.path == '/api/indicator-inputs':
                     body = store.indicator_inputs()
                     return self.send(body if body is not None else encode({'status':'WAITING'}), 200 if body is not None else 503)

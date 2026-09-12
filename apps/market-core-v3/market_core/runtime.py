@@ -12,6 +12,7 @@ from . import VERSION
 from .projection import baseline_payload, chart_inputs, v2_payload
 from .source import SharedSource, WaitingForMetadata
 from .indicator_inputs import IndicatorInputs, SCHEMA
+from .option_reports import OptionReportCache, SCHEMA as REPORT_SCHEMA
 from .storage import atomic_write, encode, PublishedStore
 from .vendor import load
 
@@ -52,6 +53,9 @@ class Runtime:
         # second collector and authority. We supply the one shared snapshot.
         self.source = SharedSource(config, self.vendor)
         self.store = PublishedStore(config)
+        self.option_reports = OptionReportCache(config)
+        self.store.option_reports = self.option_reports
+        self.option_report_status = dict(schema=REPORT_SCHEMA, status="PENDING")
         self.stop = threading.Event()
         self.thread = self.maintenance_thread = None
         self.error = self.context_error = self.last_poll = self.last_price = None
@@ -90,11 +94,13 @@ class Runtime:
             price_age_seconds=age, error=self.error, waiting_reason=self.waiting_reason, v2_context_error=self.context_error,
             session=self.last_session, pid=os.getpid(), authority_instances=1 if self.source.authority else 0,
             gui_independent=True, baseline_rules="1.0.62", v2_context_version="2.0.0",
-            overnight_context=self.maintenance_status, indicator_inputs=self.indicator_status))
+            overnight_context=self.maintenance_status, indicator_inputs=self.indicator_status, option_report_inputs=self.option_report_status))
 
     def tick(self, now=None):
         wall = now or datetime.now(timezone.utc)
         day = wall.astimezone(IST).date().isoformat()
+        option_reports = self.option_reports.request(day)['feed']
+        self.option_report_status = {k: option_reports[k] for k in ('schema', 'status', 'quality') if k in option_reports}
         if day != self.last_session:
             self.store.reset_live()
             self.last_session, self.prior, self.last_price = day, None, None
@@ -133,6 +139,8 @@ class Runtime:
                 ]:
                     payload["live"] = dict(session=day, server_time=datetime.now(timezone.utc).isoformat(),
                         sequence=snapshot["sequence"], publication_clock="ACTUAL_LIVE_CALCULATION_COMPLETION")
+                    if profile.endswith('-v200'):
+                        payload['option_report_inputs'] = option_reports
                     if indicator_inputs is not None:
                         payload['indicator_inputs'] = indicator_inputs
                     else:
@@ -179,6 +187,7 @@ class Runtime:
         if self.thread:
             raise RuntimeError("Core already started")
         self.thread = threading.Thread(target=self._run, name="shared-market-authority", daemon=True)
+        self.option_reports.start()
         self.maintenance_thread = threading.Thread(target=self._overnight, name="prior-context", daemon=True)
         self.thread.start()
         self.maintenance_thread.start()
@@ -190,4 +199,5 @@ class Runtime:
         if self.maintenance_thread:
             self.maintenance_thread.join()
         self.context.close()
+        self.option_reports.close()
         self.instance_lock.close()

@@ -39,6 +39,7 @@ export function frameAt(data, now, {live=false}={}) {
     basisRibbon, basisRibbonLatest:latestBasisRibbon(basisRibbon,now),
     vixRibbon:vixRibbon.filter(row=>row.state==='red'||row.state==='green'),
     vixRibbonLatest:latestVixRibbon(vixRibbon,now),
+    entryStatus:{status:data.entryAnalysis?.status,reason:data.entryAnalysis?.reason},
     entryBubbles:(data.entryAnalysis?.events||[]).filter(row=>row.x<=Math.min(now,knownAt)),
     entryAssessments:(data.entryAnalysis?.assessments||[]).filter(row=>row.x<=Math.min(now,knownAt)),
     controls:[...controls.values()].filter(row => row.status === "AVAILABLE"),

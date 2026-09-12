@@ -1,6 +1,8 @@
 import { normalizePayload, validatePayload } from './payload-adapters.mjs';
 import { frameAt } from './market-data.mjs';
+import { oiEntryBubbles } from './oi-entry-bubbles.mjs';
 let data = null, loadGeneration = 0, fetchController = null, liveTimer = null, liveEtag = null;
+let lastFrameRequest = null;
 
 function cancelLoad() {
   loadGeneration++;
@@ -9,7 +11,34 @@ function cancelLoad() {
   fetchController?.abort();
   fetchController = new AbortController();
   liveEtag = null;
+  lastFrameRequest = null;
   return loadGeneration;
+}
+
+// Historical native replay stays usable while its quote archive loads. This
+// path is used only for this server's catalog, never for a local file import.
+async function enrichReplay(profileId, session, generation, candidate) {
+  let feed;
+  const signal = fetchController.signal;
+  try {
+    for(let attempt=0;attempt<30;attempt++) {
+      if(generation!==loadGeneration)return;
+      const response=await fetch(`/api/option-report-inputs?profile=${encodeURIComponent(profileId)}&session=${encodeURIComponent(session)}`,{cache:'no-store',signal});
+      if(!response.ok)throw new Error('Raw option-report quotes unavailable. Core 3.0.2 is required.');
+      feed=await response.json();
+      if(response.status!==202)break;
+      await new Promise(resolve=>setTimeout(resolve,1000));
+    }
+  } catch(error) {
+    if(error.name==='AbortError')return;
+    feed={schema:'OPTION_REPORT_INPUTS_V1',instrument:candidate.profile.instrument,session,status:'UNAVAILABLE',error:error.message};
+  }
+  if(generation!==loadGeneration||data!==candidate)return;
+  if(feed?.status==='PENDING')feed={...feed,status:'UNAVAILABLE',error:'Option-report archive is still loading. Reopen this session to retry.'};
+  data.entryAnalysis=oiEntryBubbles(data,feed);
+  data.end=Math.max(data.end,data.entryAnalysis.lastReportAt||0);
+  if(lastFrameRequest)self.postMessage({id:lastFrameRequest.id,kind:'frame',frame:frameAt(data,lastFrameRequest.now),
+    meta:{session:data.session,start:data.start,end:data.end,analysisStart:data.analysisStart,provenance:data.provenance}});
 }
 
 async function pollLive(id, profileId, interval, generation) {
@@ -99,8 +128,13 @@ self.onmessage = async event => {
         session: data.session, start: data.start, end: data.end,
         analysisStart: data.analysisStart, provenance: data.provenance,
       } });
+      if(action==='load'&&String(url).startsWith('/api/replay?')&&profileId.endsWith('-v200')&&payload.option_report_inputs?.status!=='AVAILABLE') {
+        data.entryAnalysis={...data.entryAnalysis,status:'PENDING',reason:'Loading option-report quotes…'};
+        void enrichReplay(profileId,data.session,generation,data);
+      }
     } else if (action === 'frame') {
       if (!data) throw new Error('Select a session first.');
+      lastFrameRequest={id,now};
       self.postMessage({ id, kind: 'frame', frame: frameAt(data, now) });
     } else if (action === 'seek-event') {
       if (!data) throw new Error('Select a session first.');

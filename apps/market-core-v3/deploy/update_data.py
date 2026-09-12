@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the Cash/VIX data revision on the existing four-service workspace."""
+"""Install the report-quote data and bubble revision on the existing four-service workspace."""
 from __future__ import annotations
 
 import argparse
@@ -20,8 +20,8 @@ try:
 except ImportError:
     import update_gui as gui
 
-CORE_VERSION = '3.0.1'
-GUI_VERSION = '3.0.7-gui-oi-entry-manual-vpoc'
+CORE_VERSION = '3.0.2'
+GUI_VERSION = '3.0.8-basic-oi-vix-bubbles'
 SCHEMA = 'CASH_VIX_INDICATOR_INPUTS_V1'
 UNITS = gui.CORE_UNITS + gui.GUI_UNITS
 
@@ -97,7 +97,7 @@ class DataUpdater(gui.GuiUpdater):
                     health=gui.read_json(f'http://127.0.0.1:{port}/health')
                     if health.get('instrument') != instrument or health.get('error') or health.get('authority_instances',0)>1:
                         raise RuntimeError('Core identity or health check failed')
-                    if expected and (health.get('version') != CORE_VERSION or health.get('indicator_inputs',{}).get('schema') != SCHEMA):
+                    if expected and (health.get('version') != CORE_VERSION or health.get('indicator_inputs',{}).get('schema') != SCHEMA or health.get('option_report_inputs',{}).get('schema') != 'OPTION_REPORT_INPUTS_V1'):
                         raise RuntimeError('Core data revision not active')
                 self.healthy(GUI_VERSION if expected else None)
                 return

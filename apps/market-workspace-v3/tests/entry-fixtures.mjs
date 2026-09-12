@@ -21,7 +21,9 @@ export function entryFixture(instrument='NIFTY',side='PE',{vixSign=side==='PE'?1
     session,broader_leg:direction,volume_cumulative_mode_canonical:spot-direction*step,
     corrected_direction:direction===1?'UP':'DOWN',cash_raw:direction*.2};
   const selection={available:true,selected_at:iso(ms('09:45:00')),expiry,CE:[],PE:[]};
+  const reports=Array.from({length:26},(_,i)=>{const x=ms('09:35:55')+i*60000;return {x,t:iso(x),expiry,spot,vix:i===25?100+vixSign*.5:100,contracts:options.filter(r=>Date.parse(r.t)===x).map(r=>({symbol:r.symbol,side:r.k,strike:r.s,oi:r.oi}))};});
   return {event,ms,iso,options,spot,step,payload:{version:'2.0.0',baseline_version:'1.0.62',instrument,session,
+    option_report_inputs:{schema:'OPTION_REPORT_INPUTS_V1',source:'OPTION_CHAIN_REPORT_QUOTES',instrument,session,status:'AVAILABLE',reports},
     decisions:[context],chart_inputs:{session,instrument,price,cash_vix:cash,
       option_strike_oi:{fields:Object.keys(options[0]),rows:options.map(Object.values),strike_selection:selection}}}};
 }

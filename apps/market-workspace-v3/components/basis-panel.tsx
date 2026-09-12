@@ -36,7 +36,7 @@ export function withPriceBasisRibbon(base:EChartsOption,frame:Frame,min:number,m
     data:intervals.map((row:Row)=>({...row,value:[row.start,row.end,.5],itemStyle:{color:states[row.state].color}})),
   };
   return {...base,
-    grid:[{...(base.grid as object),bottom:entryLane?92:78},{left:66,right:22,bottom:28,height:entryLane?42:28,show:false}],
+    grid:[{...(base.grid as object),bottom:entryLane?110:78},{left:66,right:22,bottom:28,height:entryLane?60:28,show:false}],
     xAxis:[{...(base.xAxis as object),gridIndex:0,axisLabel:{show:false}},
       {...(base.xAxis as object),gridIndex:1,splitLine:{show:false},axisLine:{show:false}}],
     yAxis:[base.yAxis as any,{type:'value',gridIndex:1,min:0,max:1,show:false}],

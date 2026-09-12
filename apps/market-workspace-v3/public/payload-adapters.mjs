@@ -176,10 +176,9 @@ export function normalizePayload(payload, profileId = payload.workspace_profile)
       asOf:indicatorInputs?Date.parse(indicatorInputs.as_of):Infinity});
   // Preserve pre-09:45 reports for the spike baseline, without changing the
   // existing fixed-basket cumulative-flow display or its analysis start.
-  const rawOptions=series((payload.chart_inputs||payload).option_strike_oi);
-  const entryAnalysis=oiEntryBubbles(data,rawOptions,vixRibbon,indicatorInputs);
+  const entryAnalysis=oiEntryBubbles(data,payload.option_report_inputs);
   return {...data,basisRibbon:priceBasisRibbon(data.price,data.session),vixRibbon,entryAnalysis,
-    end:Math.max(data.end,entryAnalysis.assessments.at(-1)?.x||0),
+    end:Math.max(data.end,entryAnalysis.lastReportAt||0),
     indicatorInputs,
     liveKnowledgeAt:Date.parse(payload.live?.server_time)};
 }

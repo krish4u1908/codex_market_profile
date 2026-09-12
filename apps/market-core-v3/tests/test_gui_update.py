@@ -59,6 +59,17 @@ class GuiUpdateTests(unittest.TestCase):
             self.assertEqual((root / 'current').readlink(), before)
             self.assertEqual(calls, [(action, *updater.GUI_UNITS) for action in ('stop', 'start', 'stop', 'start')])
 
+    def test_report_quote_gui_rejects_old_core_before_stopping_services(self):
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            root, release, bundle = self.setup_install(tmp)
+            calls = self.mocks(stack, root)
+            (bundle/'gui/gui-release.json').write_text(json.dumps({'version':updater.RELEASE,'minimumCoreVersion':'3.0.2'}))
+            self.manifest(bundle)
+            stack.enter_context(patch.object(updater,'read_json',return_value={'version':'3.0.1','instrument':'BANKNIFTY'}))
+            with self.assertRaisesRegex(RuntimeError,'full bundle'):
+                updater.GuiUpdater(root).apply(bundle)
+            self.assertEqual(calls,[])
+
     def test_bad_package_or_missing_core_fails_before_service_changes(self):
         with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
             root, release, bundle = self.setup_install(tmp)

@@ -20,7 +20,7 @@ EXPECTED_HOST = 'srv1913330'
 GUI_UNITS = ('banknifty-gui.service', 'nifty-gui.service')
 CORE_UNITS = ('banknifty-core.service', 'nifty-core.service')
 PORTS = {'BANKNIFTY': (8920, 8922), 'NIFTY': (8921, 8923)}
-RELEASE = '3.0.7-gui-oi-entry-manual-vpoc'
+RELEASE = '3.0.8-basic-oi-vix-bubbles'
 MANIFEST = 'GUI-UPDATE-MANIFEST.json'
 
 
@@ -114,6 +114,14 @@ class GuiUpdater:
     def check(self, bundle):
         bundle = verify_package(bundle)
         state = self.inspect()
+        required = json.loads((bundle / 'gui/gui-release.json').read_text()).get('minimumCoreVersion')
+        if required:
+            for instrument, (_, port) in PORTS.items():
+                health = read_json(f'http://127.0.0.1:{port}/health')
+                if (health.get('instrument') != instrument or
+                    tuple(map(int, health.get('version', '0').split('.'))) < tuple(map(int, required.split('.'))) or
+                    health.get('option_report_inputs', {}).get('schema') != 'OPTION_REPORT_INPUTS_V1'):
+                    raise RuntimeError('This GUI requires core '+required+' and report quotes. Apply the full bundle with core/deploy/update_data.py first.')
         gui = Path(state['release']) / 'gui'
         if not gui.is_dir() or not gui.resolve().is_relative_to(self.root):
             raise RuntimeError('Installed GUI path is missing or outside the installation')
