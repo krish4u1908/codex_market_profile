@@ -4,6 +4,7 @@ import {ChartPanel,Plot,baseChart,line} from './market-chart';
 import {COLORS,clock,signed,type Frame,type Row} from './market-types';
 import {basisRibbonIntervals} from '../public/price-basis-ribbon.mjs';
 import {vixRibbonMarks,VixRibbonCaption} from './vix-ribbon';
+import {entryBubbleMarks} from './entry-bubbles';
 
 const states:Record<string,{color:string;label:string}>={
   green:{color:COLORS.positive,label:'Price ↓ · basis ↑'},
@@ -12,7 +13,8 @@ const states:Record<string,{color:string;label:string}>={
   unavailable:{color:COLORS.muted,label:'Unavailable'},
 };
 
-export function withPriceBasisRibbon(base:EChartsOption,frame:Frame,min:number,max:number):EChartsOption {
+export function withPriceBasisRibbon(base:EChartsOption,frame:Frame,min:number,max:number,showEntries=true):EChartsOption {
+  const entryLane=frame.profile.version==='2.0.0';
   const intervals=basisRibbonIntervals(frame.basisRibbon,min,Math.min(max,frame.now));
   const ribbon:any={
     id:'price-basis-3m-ribbon',name:'Price / basis · 3m',type:'custom',xAxisIndex:1,yAxisIndex:1,
@@ -34,13 +36,14 @@ export function withPriceBasisRibbon(base:EChartsOption,frame:Frame,min:number,m
     data:intervals.map((row:Row)=>({...row,value:[row.start,row.end,.5],itemStyle:{color:states[row.state].color}})),
   };
   return {...base,
-    grid:[{...(base.grid as object),bottom:78},{left:66,right:22,bottom:28,height:28,show:false}],
+    grid:[{...(base.grid as object),bottom:entryLane?110:78},{left:66,right:22,bottom:28,height:entryLane?60:28,show:false}],
     xAxis:[{...(base.xAxis as object),gridIndex:0,axisLabel:{show:false}},
       {...(base.xAxis as object),gridIndex:1,splitLine:{show:false},axisLine:{show:false}}],
     yAxis:[base.yAxis as any,{type:'value',gridIndex:1,min:0,max:1,show:false}],
     dataZoom:[{...(base.dataZoom as any[])[0],xAxisIndex:[0,1]}],
     series:[...(Array.isArray(base.series)?base.series:base.series?[base.series]:[]),ribbon,
-      vixRibbonMarks(frame.vixRibbon||[],min,Math.min(max,frame.now))],
+      vixRibbonMarks(frame.vixRibbon||[],min,Math.min(max,frame.now)),
+      entryBubbleMarks(showEntries?(frame.entryBubbles||[]):[],min,Math.min(max,frame.now))],
   };
 }
 

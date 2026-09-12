@@ -1,96 +1,73 @@
-# GUI update 3.0.5: translucent VIX ribbon marks
+# GUI 3.0.9 OI/VIX research bubbles
 
-For the Cash/VIX data correction, install the combined core and GUI update described in [DATA_UPDATE.md](DATA_UPDATE.md). A GUI-only update displays the new input feed when the core already supplies it.
+Requires existing core **3.0.2** and `OPTION_REPORT_INPUTS_V1`. The updater
+checks both cores before modifying the GUI. Cores below 3.0.2 require the full
+update described in `DATA_UPDATE.md`.
 
-This GUI retains the existing three-minute price/basis ribbon directly below the main index price chart for BANKNIFTY and NIFTY, in v1.0.62 and V2 Live/Replay. It includes the previous ribbon and CE/PE climax changes. Apply this package once, either over the initial V3 installation or a previous GUI-only update, including `3.0.1-gui-climax-v1` and `3.0.2-gui-basis-ribbon`. It stops and starts only `banknifty-gui.service` and `nifty-gui.service`, briefly interrupting GUI access. It keeps both core processes, their configuration and databases running in place. No unit files or collectors are changed.
-
-## Apply on the already-installed server
-
-Download the **market-workspace-v3-gui-update** Actions artifact and upload it to `~/divergence/releases/shared_engine/market-workspace-v3-gui-update.zip`. The Actions download can wrap an inner ZIP with the same name. This block handles either form and keeps ZIPs outside the verified package:
+Download `market-workspace-v3-gui-oi-vix-3.0.9.zip` to
+`/home/bankadmin/divergence/releases/shared_engine` and run:
 
 ```bash
 (
 set -eu
-cd "$HOME/divergence/releases/shared_engine"
-vix_gui_dir=$(mktemp -d "$PWD/vix-ribbon-XXXXXX")
-unzip market-workspace-v3-gui-update.zip -d "$vix_gui_dir"
-if [ -f "$vix_gui_dir/market-workspace-v3-gui-update.zip" ]; then
-  unzip "$vix_gui_dir/market-workspace-v3-gui-update.zip" -d "$vix_gui_dir/package"
-  cd "$vix_gui_dir/package/market-workspace-v3-gui-update"
-else
-  cd "$vix_gui_dir/market-workspace-v3-gui-update"
-fi
+cd /home/bankadmin/divergence/releases/shared_engine
+bubble_update_dir=$(mktemp -d "$PWD/gui-oi-vix-3.0.9-XXXXXX")
+unzip -q market-workspace-v3-gui-oi-vix-3.0.9.zip -d "$bubble_update_dir"
+cd "$bubble_update_dir/market-workspace-v3-gui-update"
 sudo python3 -B update_gui.py check
 sudo python3 -B update_gui.py apply
 )
 ```
 
-The check verifies package hashes, current installation paths, running core processes and the reviewed GUI commands. Apply stages versioned assets, saves the old GUI, switches the two GUIs, verifies their identities and release, and checks that both core PIDs are unchanged. The original `/opt/market-workspace-v3/current` symlink is retained. New assets and update records live under `gui-releases/` and `gui-update-records/` in that installation.
+Use a fresh extraction directory. Do not copy recordings or the ZIP into the
+verified update directory. `-B` prevents Python cache files from affecting the
+package manifest. `check` is read-only; `apply` performs installation.
 
-Keep the `record` path printed by apply. A failed update attempts to restore the previous GUI automatically and records the outcome. If interrupted, inspect that record before repeating an update. The explicit rollback also supports a prepared update whose GUI directory was moved before interruption:
+Only `banknifty-gui.service` and `nifty-gui.service` restart. The updater keeps
+both core PIDs and records the previous GUI for rollback. No collector, runtime
+strategy, configuration or database changes are required.
 
-```sh
-sudo python3 update_gui.py rollback --record /opt/market-workspace-v3/gui-update-records/REPLACE_WITH_PRINTED_RECORD.json
+```bash
+curl -fsS http://127.0.0.1:8920/gui-release.json
+curl -fsS http://127.0.0.1:8921/gui-release.json
 ```
 
-A rollback refuses to overwrite a newer GUI update; roll back the most recent one first. It retains the downloaded package, staged assets, update record and all market data.
+Expect `3.0.9-oi-vix-research` and policy `BASIC_OTM_OI_VIX_V2` on both ports.
+Hard refresh with Ctrl+F5, choose V2.0.0 and Replay. Standard BANKNIFTY is on
+8920; NIFTY on 8921. The separate real-time preview has its own GUI assets.
 
-Hard-refresh the browser after apply. Existing ports are unchanged: BANKNIFTY GUI **8920**, NIFTY GUI **8921**; internal cores **8922** and **8923**. Both `/gui-release.json` endpoints should report `3.0.5-gui-vix-ribbon` and `"basisRibbonPlacement":"price"`. This GUI-only command leaves the installed core version unchanged.
-
-**Do not rerun `core/deploy/install.py install` for this update.** That command is the first-install migration. Do not replace the current release directory manually or restart a core to refresh the charts.
-
-## Five-minute VIX marks on the same ribbon
-
-GUI policy `VIX_RIBBON_5M_PCT_V1` adds narrow, translucent vertical marks over the existing price/basis ribbon:
-
-- **Red:** VIX increases by **at least 0.4%** over five minutes.
-- **Green:** VIX decreases by **at least 0.4%** over five minutes.
-- No mark for a smaller move, an unchanged value or an incomplete window.
-
-The percentage is `100 × (VIX_now − VIX_5_minutes_earlier) / VIX_5_minutes_earlier`. It compares two one-minute closes five elapsed minutes apart and requires all six consecutive closes. This is a percentage change, not a 0.4-point VIX movement. Marks appear at each qualifying observation; successive qualifying minutes can show successive marks. Hover/tap shows the exact change, endpoint VIX values, source-minute closes and availability time. The two colors use 48% opacity.
-
-The marks share the price/ribbon time axis and zoom in desktop, mobile and expanded charts. They remain visible when the separate VIX or basis panel is hidden. A compact legend distinguishes VIX marks from the existing three-minute price/basis strip.
-
-Observations are processed in arrival order. The corrected input feed retains original observations and later revisions; a later repair cannot create an earlier mark or rewrite a previously observed mark. Historical repairs received after the plotted session do not generate intraday signals. Consequently, a complete corrected VIX line can have fewer marks than a calculation that assumes every correction was known during trading. Replay and Live use the same causal mark history. Native calls, core calculations, input journals and existing ribbon rules are unchanged.
-
-Older exports can supply marks when source-minute and arrival timestamps are retained. Missing source-minute timestamps or incomplete VIX windows produce no mark. Complete cash data is not required for a VIX-only mark.
-
-## Three-minute ribbon below the price chart
-
-The ribbon sits directly below the main index price plot, inside the same chart frame. Its time axis and zoom are linked to price, including when the chart is expanded. OI-VPOC lines and climax markers remain on the price chart. The separate basis panel keeps its purple line; hiding that panel leaves the ribbon visible. The ribbon compares net index and basis changes against three minutes earlier:
-
-| Index change | Basis change | Ribbon |
+| Bubble | Rule | Position |
 | --- | --- | --- |
-| Down | Up | Green |
-| Up | Down | Red |
+| Green | PE OI spike down + VIX rise >=0.4% | Above |
+| Red | CE OI spike down + VIX fall >=0.4% | Below |
+| Yellow | PE OI spike down + VIX fall >=0.4% | Above |
+| Yellow | CE OI spike down + VIX rise >=0.4% | Below |
 
-Any other finite combination, including either unchanged value, is neutral gray. Missing history, initial warm-up and feed gaps stay blank.
+The OI rule remains a fall of at least 1%, at least 3 times its prior 20-update
+median absolute change. VIX uses five report-minute slots. VPOC and other
+trend gates remain excluded. Standalone VIX vertical ribbon marks keep their
+existing red-rise/green-fall meaning; bubble colours express the table above.
 
-Both instruments and both version views support the ribbon in Live and Replay. Hover/tap shows the changes and the retained baseline receipt time. No color appears before its receipt becomes available, and the ribbon stops at the current cursor. The comparison uses the last available receipt at or before the three-minute cutoff; stale baselines and broken receipt continuity are excluded. These are display rules; no core calculations are changed.
+In NIFTY replay, use Open session to load the supplied September 10 or 11
+JSON.gz files. These copies include raw option-report inputs and retain the
+original recorded V2 decisions. Server-catalog replays also load report inputs
+through the existing core endpoint.
 
-## Retained V2 climax behavior
+| Session at recording end | Green above | Red below | Yellow above | Yellow below |
+| --- | ---: | ---: | ---: | ---: |
+| September 10 | 4 | 6 | 2 | 0 |
+| September 11 | 2 | 11 | 6 | 1 |
 
-- CE and PE volume: ratio **≥2.5×**; circular price-chart markers.
-- CE and PE OI additions/reductions: ratio **≥3×** and amount **≥0.5% of starting basket OI**; up/down triangle price-chart markers.
-- Each ratio compares a native five-minute amount with the median at the four exact previous five-minute cutoffs. Additions and reductions use separate baselines.
-- Native futures volume ratios **>4×**: **red diamonds** on both price and futures-volume-ratio charts. The ratio line remains amber.
-- Separate toggles isolate all six CE/PE metrics and futures. First burst markers are the default; **Every CE/PE point** reveals every qualifying publication. Coincident option events share one marker with all ratios in its label/tooltip.
-- OI-VPOC lines remain available through the existing Show lines control.
+At 11:15:55.113 IST on September 10, the CE/VIX-fall bubble is now red below
+the ribbon. It is absent before that report arrives. At 13:02:55.226, the
+PE/VIX-rise bubble is green above. At 15:24:55.064, PE/VIX-fall is yellow above.
 
-The same display policy runs in Live and Replay. Markers appear only at native publication time and require complete basket windows. Historical chart reconstruction does not create earlier climax events. These are trial display thresholds from one BANKNIFTY session; they have not been independently calibrated for NIFTY or established as profitable trading signals. Native v1.0.62/V2 calls and frozen calculations are unchanged.
+Rollback from the same extracted package using the exact `record` path printed
+by apply (under `/opt/market-workspace-v3/gui-update-records/`):
 
-## Build this update from source
-
-From the repository root:
-
-```sh
-cd apps/market-workspace-v3
-npm ci
-npm test
-npm run build
-cd ../market-core-v3
-python3 scripts/build_bundle.py --output /tmp/market-workspace-v3.zip
-python3 scripts/build_gui_update.py --deployment-bundle /tmp/market-workspace-v3.zip --output /tmp/market-workspace-v3-gui-update.zip
+```bash
+sudo python3 -B update_gui.py rollback --record /opt/market-workspace-v3/gui-update-records/RECORD_FROM_APPLY.json
 ```
 
-GitHub Actions uploads a separate `market-workspace-v3-gui-update` artifact. If downloading the Actions artifact wrapper, extract it first to obtain `market-workspace-v3-gui-update.zip`, then follow the server commands above. Session archives and databases are excluded from both bundles.
+Replace the placeholder with the actual record. Results and paper trade tests
+are research observations; they do not modify live core calls.

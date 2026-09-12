@@ -37,3 +37,16 @@ own configuration.
 ## Indicator inputs: CASH_VIX_INDICATOR_INPUTS_V1
 
 `GET /api/indicator-inputs?profile=nifty-v200` (or a matching BANKNIFTY profile) returns the cached, versioned Cash/VIX feed. It is also included as `indicator_inputs` in new live and replay payloads. HTTP readers do not open collector files or run calculations. Read `revisions` with both source-minute and availability clocks; do not use a later revision in an earlier indicator evaluation. See [DATA_UPDATE.md](DATA_UPDATE.md) for schema, completeness checks, update and audit commands.
+
+## Option-chain report quotes (core 3.0.2)
+
+`GET /api/option-report-inputs?profile=nifty-v200&session=YYYY-MM-DD` returns
+`OPTION_REPORT_INPUTS_V1` for that core's instrument. Initial HTTP 202/PENDING
+queues a bounded background archive read; subsequent requests return cached
+JSON (gzip supported). `AVAILABLE`, `MISSING` and `ERROR` are explicit.
+
+Each report carries collector receipt `x` (milliseconds), original `t`, expiry,
+underlying `spot`, the report's `vix`, and contract `symbol/side/strike/oi`.
+V2 live payloads retain this as `option_report_inputs`. Historical native replays
+are not rewritten: their GUI requests the same feed asynchronously. The core
+never computes GUI bubble rules, and HTTP handlers never scan raw archives.

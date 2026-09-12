@@ -36,6 +36,7 @@ class PublishedStore:
         self.lock = threading.Lock()
         self.current = {}
         self.indicator_current = None
+        self.option_reports = None
         self.health = {"status": "starting", "instrument": config.instrument}
         self.catalogs = {p: [] for p in (config.profile("v1062"), config.profile("v200"))}
         self.reload_catalogs()
