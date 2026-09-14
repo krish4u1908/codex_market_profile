@@ -37,6 +37,7 @@ jobs:
             node "$RUNNER_TEMP/entry-browser/node_modules/playwright/cli.js" install --with-deps chromium
           fi
           node scripts/check-entry-ui.mjs
+          node scripts/check-replay-switch-ui.mjs
       - name: Upload entry replay screenshots
         uses: actions/upload-artifact@v4
         with:
