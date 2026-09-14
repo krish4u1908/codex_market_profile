@@ -202,7 +202,7 @@ function EventWorkspace({frame,onSeek,canSeek}:{frame:Frame;onSeek:(n:number)=>v
 
 export default function MarketWorkspace({profileId,onProfileChange,workspaceConfig}:{profileId:string;onProfileChange:(id:string)=>void;workspaceConfig:Row}){
   const profile=getProfile(profileId);
-  const imported=useRef(false);
+  const imported=useRef(false),replayReady=useRef(false);
   const [mode,setMode]=useState(()=>workspaceConfig.live?(new URLSearchParams(location.search).get('mode')==='replay'?'replay':workspaceConfig.defaultMode):'replay');
   const [liveStatus,setLiveStatus]=useState<Row|null>(null);
   const [catalog,setCatalog]=useState<Row[]>([]),[session,setSession]=useState(''),[meta,setMeta]=useState<Meta|null>(null),[frame,setFrame]=useState<Frame|null>(null);
@@ -214,7 +214,7 @@ export default function MarketWorkspace({profileId,onProfileChange,workspaceConf
     const w=new Worker('/data-worker.js',{type:'module'});worker.current=w;
     w.onmessage=e=>{
       const r=e.data;if(r.id!==request.current)return;
-      if(r.kind==='loaded'){setMeta(r.meta);setCursor(Math.min(r.meta.end,Date.parse(`${r.meta.session}T12:15:08+05:30`)));}
+      if(r.kind==='loaded'){replayReady.current=true;setMeta(r.meta);setCursor(Math.min(r.meta.end,Date.parse(`${r.meta.session}T12:15:08+05:30`)));}
       else if(r.kind==='frame'){if(r.meta)setMeta(r.meta);setFrame(r.frame);setLoading(false);setError('');}
       else if(r.kind==='live-frame'){setFrame(r.frame);setMeta(r.meta);setCursor(r.frame.now);setLiveStatus(r.health);setLoading(false);setError('');}
       else if(r.kind==='live-status'){setLiveStatus(r.health);setLoading(false);}
@@ -231,7 +231,7 @@ export default function MarketWorkspace({profileId,onProfileChange,workspaceConf
   useEffect(()=>{
     if(!worker.current)return;
     const abort=new AbortController();
-    imported.current=false;setPlaying(false);setFrame(null);setMeta(null);setError('');setLoading(true);setSession('');setCatalog([]);setLiveStatus(null);
+    imported.current=false;replayReady.current=false;setPlaying(false);setFrame(null);setMeta(null);setError('');setLoading(true);setSession('');setCatalog([]);setLiveStatus(null);
     const url=new URL(location.href);url.searchParams.set('mode',mode);history.replaceState(null,'',url);
     if(mode==='live')worker.current.postMessage({id:++request.current,action:'live',profileId,interval:workspaceConfig.pollMilliseconds});
     else{
@@ -244,19 +244,21 @@ export default function MarketWorkspace({profileId,onProfileChange,workspaceConf
     }
     return()=>{abort.abort();worker.current?.postMessage({id:++request.current,action:'stop'});};
   },[mode]);
-  useEffect(()=>{if(mode==='live'||!session||!worker.current)return;const entry=catalog.find(r=>(r.id||r.session)===session);if(!entry)return;setPlaying(false);setLoading(true);setError('');setFrame(null);setMeta(null);worker.current.postMessage({id:++request.current,action:'load',url:entry.payload,profileId});},[session,catalog,mode]);
-  useEffect(()=>{if(mode==='live'||!meta||!worker.current)return;worker.current.postMessage({id:++request.current,action:'frame',now:cursor});},[cursor,meta,session,mode]);
+  // The frame effect in this render can still see the previous session's meta.
+  // Clear readiness synchronously, before posting load; only its loaded reply reopens it.
+  useEffect(()=>{if(mode==='live'||!session||!worker.current)return;const entry=catalog.find(r=>(r.id||r.session)===session);if(!entry)return;replayReady.current=false;setPlaying(false);setLoading(true);setError('');setFrame(null);setMeta(null);worker.current.postMessage({id:++request.current,action:'load',url:entry.payload,profileId});},[session,catalog,mode]);
+  useEffect(()=>{if(mode==='live'||!replayReady.current||!meta||!worker.current)return;worker.current.postMessage({id:++request.current,action:'frame',now:cursor});},[cursor,meta,session,mode]);
   useEffect(()=>{if(!playing||!meta)return;const timer=setInterval(()=>setCursor(prev=>{const next=Math.min(meta.end,prev+60000);if(next>=meta.end)setPlaying(false);return next;}),1000/Number(speed));return()=>clearInterval(timer);},[playing,meta,speed]);
   useEffect(()=>{try{localStorage.setItem(`market-v3-display-${profileId}`,JSON.stringify({...flags,vpocVisibilityVersion:1}));}catch{}},[flags]);
   useEffect(()=>{setSeekText(clock(cursor));},[cursor]);
-  const seek=useCallback((value:number)=>{if(meta&&mode==='replay'){setPlaying(false);setCursor(Math.max(meta.start,Math.min(meta.end,value)));}},[meta,mode]);
+  const seek=useCallback((value:number)=>{if(replayReady.current&&meta&&mode==='replay'){setPlaying(false);setCursor(Math.max(meta.start,Math.min(meta.end,value)));}},[meta,mode]);
   const advance=(direction:number)=>seek(cursor+direction*Number(step)*60000);
   const jumpEvent=(direction:number)=>{
-    if(!worker.current||!meta)return;setPlaying(false);
+    if(!worker.current||!meta||!replayReady.current)return;setPlaying(false);
     worker.current.postMessage({id:++request.current,action:'seek-event',now:cursor,direction});
   };
-  const changeSession=(v:string)=>{imported.current=false;setSession(v);setSeekError('');};
-  const openFile=(file:File|undefined)=>{if(!file||!worker.current)return;imported.current=true;setSession('');setMeta(null);setFrame(null);setPlaying(false);setLoading(true);setError('');setSeekError('');worker.current.postMessage({id:++request.current,action:'file',file,profileId});};
+  const changeSession=(v:string)=>{if(v===session)return;replayReady.current=false;imported.current=false;setSession(v);setSeekError('');};
+  const openFile=(file:File|undefined)=>{if(!file||!worker.current)return;replayReady.current=false;imported.current=true;setSession('');setMeta(null);setFrame(null);setPlaying(false);setLoading(true);setError('');setSeekError('');worker.current.postMessage({id:++request.current,action:'file',file,profileId});};
   const submitTime=()=>{const value=Date.parse(`${meta?.session||session}T${seekText.length===5?seekText+':00':seekText}+05:30`);if(!meta||!Number.isFinite(value)||value<meta.start||value>meta.end){setSeekError('Enter a time within this recorded session.');return;}setSeekError('');seek(value);};
   const latest=frame?.latest,first=frame?.range.open,change=latest&&first!=null?latest.i-first:null;
   return <div className="market-app">
