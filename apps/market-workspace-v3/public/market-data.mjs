@@ -42,6 +42,8 @@ export function frameAt(data, now, {live=false}={}) {
     entryStatus:{status:data.entryAnalysis?.status,reason:data.entryAnalysis?.reason},
     entryBubbles:(data.entryAnalysis?.events||[]).filter(row=>row.x<=Math.min(now,knownAt)),
     entryAssessments:(data.entryAnalysis?.assessments||[]).filter(row=>row.x<=Math.min(now,knownAt)),
+    optionOiFlowStatus:{status:data.optionOiFlowAnalysis?.status,reason:data.optionOiFlowAnalysis?.reason},
+    optionOiFlow:(data.optionOiFlowAnalysis?.points||[]).filter(row=>row.x<=Math.min(now,knownAt)),
     controls:[...controls.values()].filter(row => row.status === "AVAILABLE"),
     controlHistory:data.controls.filter(row => row.x <= now), prior:data.prior.filter(row=>!Number.isFinite(Date.parse(row.available_at))||Date.parse(row.available_at)<=now),
     options:options.filter(row => symbols.has(row.symbol)), snapshots:[...snapshots.values()],

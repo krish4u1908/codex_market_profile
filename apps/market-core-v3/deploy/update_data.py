@@ -21,7 +21,7 @@ except ImportError:
     import update_gui as gui
 
 CORE_VERSION = '3.0.2'
-GUI_VERSION = '3.0.9-oi-vix-research'
+GUI_VERSION = '3.0.11-gui-minute-oi-flow'
 SCHEMA = 'CASH_VIX_INDICATOR_INPUTS_V1'
 UNITS = gui.CORE_UNITS + gui.GUI_UNITS
 

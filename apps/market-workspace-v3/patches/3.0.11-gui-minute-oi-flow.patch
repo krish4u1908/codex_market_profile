@@ -1,0 +1,19 @@
+diff --git a/apps/market-workspace-v3/components/market-workspace.tsx b/apps/market-workspace-v3/components/market-workspace.tsx
+--- a/apps/market-workspace-v3/components/market-workspace.tsx
++++ b/apps/market-workspace-v3/components/market-workspace.tsx
+@@
+ import {BasisPanel,PriceBasisRibbonCaption,withPriceBasisRibbon} from './basis-panel';
+ import {EntryBubbleReview} from './entry-bubbles';
++import {OptionOiFlowRibbon} from './option-oi-flow-ribbon';
+ import {COLORS,STRIKES,LEVELS,clock,compact,fmt,signed,words,type Frame,type Row} from './market-types';
+@@
+       <Plot label={`${frame.profile.label} index with OI-VPOC levels and a three-minute price/basis ribbon. Translucent vertical VIX marks: red for a five-minute rise of at least 0.4%, green for a fall of at least 0.4%. OI-fall bubbles: green PE with VIX rise above; red CE with VIX fall below; other combinations yellow for research.`} option={chartOptions.price} height={380}/>
+       <PriceBasisRibbonCaption frame={frame}/>
++      <OptionOiFlowRibbon frame={frame} min={min} max={max}/>
+       <EntryBubbleReview frame={frame} min={min} show={showEntries} onShow={setShowEntries} onSeek={onSeek} canSeek={canSeek}/>
+diff --git a/apps/market-workspace-v3/app/globals.css b/apps/market-workspace-v3/app/globals.css
+--- a/apps/market-workspace-v3/app/globals.css
++++ b/apps/market-workspace-v3/app/globals.css
+@@
+ .vix-ribbon-caption{display:flex;align-items:center;flex-wrap:wrap;gap:5px 14px;padding:0 15px 10px;color:#adc0d7;font-size:.7rem;line-height:1.5}.vix-ribbon-caption strong{font-weight:500;color:#dce7f6;white-space:nowrap}.vix-ribbon-caption span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}.vix-ribbon-caption i{display:inline-block;width:5px;height:15px;border-radius:2px}.vix-ribbon-reading{font-variant-numeric:tabular-nums}@media(max-width:640px){.vix-ribbon-caption{padding:0 10px 10px;gap:5px 10px}}
++.option-oi-flow-ribbon{padding:0 0 6px;border-top:1px solid #1b2b3f}.option-oi-flow-caption{display:flex;align-items:center;justify-content:space-between;gap:5px 16px;padding:6px 15px 2px;color:#aebfd4;font-size:.68rem;line-height:1.4}.option-oi-flow-caption>div{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap}.option-oi-flow-caption strong{font-weight:500;color:#dce7f6;white-space:nowrap}.option-oi-flow-caption span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-variant-numeric:tabular-nums}.option-oi-flow-caption i{display:inline-block;width:11px;height:5px;border-radius:1px}.oi-flow-positive{background:rgba(70,216,164,.68)}.oi-flow-negative{background:rgba(255,118,140,.68)}.option-oi-flow-latest{justify-content:flex-end}.option-oi-flow-plot{position:relative}.option-oi-flow-labels{position:absolute;z-index:2;pointer-events:none;left:15px;top:4px;height:54px;width:42px;display:flex;flex-direction:column;justify-content:space-between;color:#8da5c1;font-size:.66rem;font-weight:500}.option-oi-flow-status{padding:8px 15px 4px;color:#859bb7;font-size:.7rem}.price-panel:fullscreen .plot{height:calc(100dvh - 335px)!important}.price-panel:fullscreen .option-oi-flow-ribbon .plot{height:60px!important;min-height:60px!important}@media(max-width:640px){.option-oi-flow-caption{padding:6px 10px 2px;align-items:flex-start;flex-direction:column;gap:4px}.option-oi-flow-latest{justify-content:flex-start!important}.option-oi-flow-labels{left:10px}.option-oi-flow-status{padding-left:10px}.price-panel:fullscreen .plot{height:calc(100dvh - 430px)!important}.price-panel:fullscreen .option-oi-flow-ribbon .plot{height:60px!important;min-height:60px!important}}

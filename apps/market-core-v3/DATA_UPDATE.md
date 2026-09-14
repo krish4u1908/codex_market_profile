@@ -1,6 +1,6 @@
 # Basic OI / VIX bubble update
 
-Installs core **3.0.2** and GUI **3.0.9-oi-vix-research** on the existing
+Installs core **3.0.2** and GUI **3.0.11-gui-minute-oi-flow** on the existing
 BANKNIFTY/NIFTY shared workspace. PE bubbles sit above the ribbon and CE below;
 green means PE OI fall with VIX rise, red means CE OI fall with VIX fall, and
 the other two combinations are yellow for research. VIX threshold remains
@@ -55,7 +55,8 @@ curl -fsS http://127.0.0.1:8920/api/health | python3 -m json.tool
 curl -fsS http://127.0.0.1:8921/api/health | python3 -m json.tool
 ```
 
-Expected GUI version: `3.0.9-oi-vix-research`, policy `BASIC_OTM_OI_VIX_V2`.
+Expected GUI version: `3.0.11-gui-minute-oi-flow`, with bubble policy
+`BASIC_OTM_OI_VIX_V2` and minute-flow policy `NEAR_OTM_OPTION_OI_FLOW_1M_V1`.
 Both cores should show version `3.0.2` and
 `option_report_inputs.schema: OPTION_REPORT_INPUTS_V1`. An out-of-hours/current
 session with no archive can show pending/missing data without preventing older

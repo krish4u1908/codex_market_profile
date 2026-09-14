@@ -4,6 +4,7 @@ import { optionClimaxPoints } from './v2-option-climax.mjs';
 import { priceBasisRibbon } from './price-basis-ribbon.mjs';
 import { vixRibbonPoints } from './vix-ribbon.mjs';
 import { oiEntryBubbles } from './oi-entry-bubbles.mjs';
+import { optionOiMinuteFlows } from './option-oi-flow.mjs';
 
 const finite = Number.isFinite;
 const later = (...times) => Math.max(...times.map(t => typeof t === 'number' ? t : Date.parse(t)).filter(finite));
@@ -177,8 +178,9 @@ export function normalizePayload(payload, profileId = payload.workspace_profile)
   // Preserve pre-09:45 reports for the spike baseline, without changing the
   // existing fixed-basket cumulative-flow display or its analysis start.
   const entryAnalysis=oiEntryBubbles(data,payload.option_report_inputs);
-  return {...data,basisRibbon:priceBasisRibbon(data.price,data.session),vixRibbon,entryAnalysis,
-    end:Math.max(data.end,entryAnalysis.lastReportAt||0),
+  const optionOiFlowAnalysis=optionOiMinuteFlows(data,payload.option_report_inputs);
+  return {...data,basisRibbon:priceBasisRibbon(data.price,data.session),vixRibbon,entryAnalysis,optionOiFlowAnalysis,
+    end:Math.max(data.end,entryAnalysis.lastReportAt||0,optionOiFlowAnalysis.lastReportAt||0),
     indicatorInputs,
     liveKnowledgeAt:Date.parse(payload.live?.server_time)};
 }
