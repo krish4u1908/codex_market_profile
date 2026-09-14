@@ -28,7 +28,7 @@ function tooltip(rows:Row[],raw:any) {
 function seriesFor(rows:Row[],side:'PE'|'CE',field:'positive'|'negative',axis:number,zero=false):any {
   const positive=field==='positive';
   return {id:`option-oi-flow-${side}-${field}`,name:`${side} ${positive?'+OI':'−OI'}`,type:'bar',
-    xAxisIndex:axis,yAxisIndex:axis,stack:`${side}-flow`,barMaxWidth:5,barMinHeight:0,
+    xAxisIndex:axis,yAxisIndex:axis,stack:`${side}-flow`,barMaxWidth:7,barMinHeight:0,
     emphasis:{disabled:true},animation:false,progressive:0,itemStyle:{color:positive?'rgba(70,216,164,.68)':'rgba(255,118,140,.68)'},
     data:rows.filter(row=>row.side===side).map(row=>[row.x,positive?row.positive:-row.negative]),
     ...(zero?{markLine:{silent:true,symbol:'none',label:{show:false},lineStyle:{color:'#53657a',width:.7,opacity:.7},data:[{yAxis:0}]}}:{}),
@@ -45,7 +45,7 @@ export const OptionOiFlowRibbon=memo(function OptionOiFlowRibbon({frame,min,max}
     const xAxis=(gridIndex:number)=>({type:'time' as const,gridIndex,min,max,show:false,axisPointer:{show:true}});
     const yAxis=(gridIndex:number,extent:number)=>({type:'value' as const,gridIndex,min:-extent,max:extent,show:false,splitLine:{show:false}});
     return {backgroundColor:'transparent',animation:false,useUTC:true,
-      grid:[{left:66,right:22,top:2,height:24},{left:66,right:22,top:34,height:24}],
+      grid:[{left:36,right:10,top:4,height:46},{left:36,right:10,top:58,height:46}],
       xAxis:[xAxis(0),xAxis(1)],yAxis:[yAxis(0,peScale),yAxis(1,ceScale)],
       axisPointer:{link:[{xAxisIndex:'all'}],lineStyle:{color:'#829bb8',type:'dashed'}},
       dataZoom:[{type:'inside',xAxisIndex:[0,1],filterMode:'none',zoomOnMouseWheel:'ctrl',moveOnMouseWheel:false,preventDefaultMouseMove:false}],
@@ -59,7 +59,7 @@ export const OptionOiFlowRibbon=memo(function OptionOiFlowRibbon({frame,min,max}
       <div><strong>Near-OTM ΔOI · 1m receipts</strong><span><i className="oi-flow-positive"/> +OI added</span><span><i className="oi-flow-negative"/> −OI removed</span></div>
       <div className="option-oi-flow-latest"><span style={{color:dominantColor(latestPe)}}>PE {dominantLabel(latestPe)}{latestPe?` · +${compact(latestPe.positive)} / −${compact(latestPe.negative)}`:''}</span><span style={{color:dominantColor(latestCe)}}>CE {dominantLabel(latestCe)}{latestCe?` · +${compact(latestCe.positive)} / −${compact(latestCe.negative)}`:''}</span></div>
     </div>
-    {frame.optionOiFlowStatus?.status==='AVAILABLE'?<div className="option-oi-flow-plot"><div className="option-oi-flow-labels"><span>PE</span><span>CE</span></div><Plot option={option} height={60} label="Near OTM PE and CE one-minute OI additions above zero and removals below zero"/></div>
+    {frame.optionOiFlowStatus?.status==='AVAILABLE'?<div className="option-oi-flow-plot"><div className="option-oi-flow-labels"><span>PE</span><span>CE</span></div><Plot option={option} height={108} label="Near OTM PE and CE one-minute OI additions above zero and removals below zero"/></div>
       :<p className="option-oi-flow-status">{frame.optionOiFlowStatus?.reason||'Option-report quotes unavailable for this session.'}</p>}
   </section>;
 });
