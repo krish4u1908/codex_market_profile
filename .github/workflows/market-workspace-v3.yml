@@ -16,9 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Materialize V3 OI-flow lineage
-        run: |
-          git -C ../.. apply apps/market-workspace-v3/patches/3.0.11-gui-minute-oi-flow.patch
-          node scripts/materialize-gui-layout-3.0.12.mjs
+        run: node scripts/materialize-gui-layout-3.0.12.mjs
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
