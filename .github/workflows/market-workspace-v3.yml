@@ -15,6 +15,8 @@ jobs:
         working-directory: apps/market-workspace-v3
     steps:
       - uses: actions/checkout@v4
+      - name: Materialize V3 OI-flow lineage
+        run: node scripts/materialize-gui-layout-3.0.12.mjs
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

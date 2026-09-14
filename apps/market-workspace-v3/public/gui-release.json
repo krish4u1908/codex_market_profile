@@ -1,5 +1,5 @@
 {
-  "version": "3.0.11-gui-minute-oi-flow",
+  "version": "3.0.12-gui-oi-flow-layout",
   "optionClimaxPolicy": "CE_PE_CLIMAX_DISPLAY_V1",
   "profiles": [
     "banknifty-v1062",
