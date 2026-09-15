@@ -28,7 +28,7 @@ test('responsive price sizing targets only the main price plot',()=>{
   assert.match(css,/\.chart-card\.chart-expanded > \.plot\{height:75dvh!important/);
 });
 
-test('release identifies the GUI-only layout revision',()=>{
-  assert.equal(release.version,'3.0.12-gui-oi-flow-layout');
+test('3.0.12 OI-flow layout remains present in the newer GUI release',()=>{
   assert.equal(release.optionOiFlowPolicy,'NEAR_OTM_OPTION_OI_FLOW_1M_V1');
+  assert.match(release.version,/^3\.0\.13-/);
 });
