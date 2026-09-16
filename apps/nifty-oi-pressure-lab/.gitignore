@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+data/*.csv
+data/*.json
+data/*.jsonl
+data/*.gz
+data/*.tar
+data/*.zip
+data/oi_pressure_research_report.md
