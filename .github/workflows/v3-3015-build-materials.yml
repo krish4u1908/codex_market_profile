@@ -1,0 +1,31 @@
+name: V3 3015 isolated build materials
+on:
+  push:
+    branches:
+      - feature/v3-gui-oi-lens-3.0.15
+    paths:
+      - .github/workflows/v3-3015-build-materials.yml
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/market-workspace-v3/package-lock.json
+      - name: Install pinned GUI dependencies for offline 3.0.15 candidate build
+        working-directory: apps/market-workspace-v3
+        run: npm ci --no-audit --no-fund
+      - name: Archive exact source plus dependencies
+        run: tar -czf "$RUNNER_TEMP/v3-3015-build-materials.tar.gz" --exclude=dist --exclude=.git apps/market-workspace-v3 apps/market-core-v3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v3-3015-source-and-dependencies
+          path: ${{ runner.temp }}/v3-3015-build-materials.tar.gz
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
