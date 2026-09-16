@@ -20,8 +20,8 @@ jobs:
       - name: Install pinned GUI dependencies for offline 3.0.15 candidate build
         working-directory: apps/market-workspace-v3
         run: npm ci --no-audit --no-fund
-      - name: Archive exact source plus dependencies
-        run: tar -czf "$RUNNER_TEMP/v3-3015-build-materials.tar.gz" --exclude=dist --exclude=.git apps/market-workspace-v3 apps/market-core-v3
+      - name: Archive exact source plus full dependencies
+        run: tar -czf "$RUNNER_TEMP/v3-3015-build-materials.tar.gz" --exclude=apps/market-workspace-v3/dist --exclude=.git apps/market-workspace-v3 apps/market-core-v3
       - uses: actions/upload-artifact@v4
         with:
           name: v3-3015-source-and-dependencies
