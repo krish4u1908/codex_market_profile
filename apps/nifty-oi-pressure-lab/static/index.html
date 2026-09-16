@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>NIFTY OI Pressure Lab</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <div class="eyebrow">NIFTY MARKET PROFILE · RESEARCH PROTOTYPE</div>
+    <h1>CE / PE OI Pressure Lab</h1>
+  </div>
+  <div class="controls">
+    <label>Regime<select id="regime"><option value="expiry">Expiry</option><option value="normal">Normal</option></select></label>
+    <label>Session<select id="session"></select></label>
+    <label>Replay speed
+      <select id="speed" aria-label="Replay speed">
+        <option value="4000">Very slow · 4 s/min</option>
+        <option value="2500">Slow · 2.5 s/min</option>
+        <option value="1200" selected>Study · 1.2 s/min</option>
+        <option value="600">Fast · 0.6 s/min</option>
+        <option value="220">Original · 0.22 s/min</option>
+      </select>
+    </label>
+    <button id="prev" type="button" title="Previous minute (Left arrow)">← 1m</button>
+    <button id="play" type="button">▶ Play</button>
+    <button id="next" type="button" title="Next minute (Right arrow)">1m →</button>
+    <button id="reset" type="button">↺ Start</button>
+    <label class="pause-option"><input id="pauseOnChange" type="checkbox" checked /> Pause when OI score changes</label>
+  </div>
+</header>
+
+<main>
+<section class="status-grid">
+  <article class="hero-card">
+    <div class="hero-row"><div><span class="label">OI REGIME</span><div id="score" class="score neutral">0</div></div><div class="right"><div id="state" class="state">NEUTRAL</div><div id="persist" class="pill">NO REGIME</div></div></div>
+    <div class="meter"><div class="zero"></div><div id="needle" class="needle"></div></div>
+    <div class="meter-labels"><span>-100 BEAR</span><span>0</span><span>+100 BULL</span></div>
+    <div id="signalTags" class="signal-tags" aria-label="Active signal tags"></div>
+  </article>
+  <article class="kpi"><span class="label">NIFTY</span><strong id="spot">—</strong><small id="clock">—</small></article>
+  <article class="kpi"><span class="label">PRIOR 3M</span><strong id="prior">—</strong><small id="disagree">Price/OI disagreement: —</small></article>
+  <article class="kpi"><span class="label">CURRENT LAYERS</span><strong id="votes">0</strong><small id="layerText">No confirmations</small></article>
+</section>
+
+<section class="chart-card">
+  <div class="card-head"><div><span class="label">CAUSAL REPLAY</span><h2>Price vs OI regime</h2></div><div class="scrub"><span id="idxLabel">0 / 0</span><input id="scrubber" type="range" min="0" max="0" value="0" /></div></div>
+  <canvas id="priceChart" width="1400" height="330"></canvas>
+  <canvas id="scoreChart" width="1400" height="210"></canvas>
+  <div class="legend"><span>Price</span><span>OI score</span><span class="watch">WATCH ±35</span><span class="high">HIGH ±70</span></div>
+</section>
+
+<section class="two-col">
+  <article class="panel">
+    <div class="card-head"><div><span class="label">LAYER CONFIRMATION</span><h2>Why the score is active</h2></div></div>
+    <div id="layers" class="layers"></div>
+    <div class="mechanism" id="mechanism"></div>
+  </article>
+  <article class="panel">
+    <div class="card-head"><div><span class="label">REGIME RESET</span><h2>Persistence / rejection</h2></div></div>
+    <div class="reset-grid"><div><span>Persistence</span><strong id="persist2">—</strong></div><div><span>Price disagreement</span><strong id="disagree2">—</strong></div><div><span>Next 10m (research)</span><strong id="f10">—</strong></div><div><span>Next 15m (research)</span><strong id="f15">—</strong></div></div>
+    <p class="explain" id="resetExplain"></p>
+  </article>
+</section>
+
+<section class="two-col lower">
+  <article class="panel">
+    <div class="card-head"><div><span class="label">SESSION STUDY</span><h2>Independent episodes</h2></div></div>
+    <div id="stats" class="stats"></div>
+    <p class="caution">Observed historical outcomes are shown for research. They are not guaranteed probabilities or trade instructions.</p>
+  </article>
+  <article class="panel">
+    <div class="card-head"><div><span class="label">THEORY</span><h2>Current working interpretation</h2></div></div>
+    <div class="theory">
+      <p><b>Bearish:</b> PE -OI dominates + CE +OI dominates, strengthens, persists, and price bounce is not confirmed by OI.</p>
+      <p><b>Bullish:</b> CE -OI dominates + PE +OI dominates, strengthens, persists, and price dip is not confirmed by OI.</p>
+      <p><b>Key correction:</b> acceleration and cross-side confirmation matter more than a one-time <code>-OI &gt; +OI</code> reading.</p>
+    </div>
+  </article>
+</section>
+
+<section class="table-card">
+  <div class="card-head"><div><span class="label">MINUTE WINDOW</span><h2>Current ±5 minutes</h2></div></div>
+  <div class="table-wrap"><table><thead><tr><th>Time</th><th>NIFTY</th><th>Prior 3m</th><th>OI score</th><th>Layers</th><th>Next 5m</th><th>Next 10m</th><th>Next 15m</th></tr></thead><tbody id="tbody"></tbody></table></div>
+</section>
+</main>
+<footer>Prototype v0.1.2 · Signal tags in hero frame · Slower replay controls · Research-only · Data frozen from the current 14-session study</footer>
+<script src="/app.js"></script>
+</body></html>
