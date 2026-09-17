@@ -30,5 +30,5 @@ test('responsive price sizing targets only the main price plot',()=>{
 
 test('3.0.12 OI-flow layout remains present in the newer GUI release',()=>{
   assert.equal(release.optionOiFlowPolicy,'NEAR_OTM_OPTION_OI_FLOW_1M_V1');
-  assert.match(release.version,/^3\.0\.13-/);
+  assert.match(release.version,/^3\.0\.18-/);
 });

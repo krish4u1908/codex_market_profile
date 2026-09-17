@@ -1,3 +1,5 @@
+import {pressureReportVix} from './pressure-direction.mjs';
+import {fixedPressure} from './oi-fixed-pressure.mjs';
 import { getProfile, instrumentOf } from './profiles.mjs';
 import { unpack, stamp, withCumulativeOI } from './series.mjs';
 import { optionClimaxPoints } from './v2-option-climax.mjs';
@@ -179,7 +181,9 @@ export function normalizePayload(payload, profileId = payload.workspace_profile)
   // existing fixed-basket cumulative-flow display or its analysis start.
   const entryAnalysis=oiEntryBubbles(data,payload.option_report_inputs);
   const optionOiFlowAnalysis=optionOiMinuteFlows(data,payload.option_report_inputs);
-  return {...data,basisRibbon:priceBasisRibbon(data.price,data.session),vixRibbon,entryAnalysis,optionOiFlowAnalysis,
+  const fixedOiPressure=fixedPressure(data,payload.option_report_inputs);
+  const oiDirectionVix=pressureReportVix(data,payload.option_report_inputs);
+  return {...data,basisRibbon:priceBasisRibbon(data.price,data.session),vixRibbon,entryAnalysis,optionOiFlowAnalysis,fixedOiPressure,oiDirectionVix,
     end:Math.max(data.end,entryAnalysis.lastReportAt||0,optionOiFlowAnalysis.lastReportAt||0),
     indicatorInputs,
     liveKnowledgeAt:Date.parse(payload.live?.server_time)};

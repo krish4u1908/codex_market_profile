@@ -12,6 +12,8 @@ export type Frame = {
   basisRibbon:Row[]; basisRibbonLatest:Row|null;
   vixRibbon:Row[]; vixRibbonLatest:Row|null;
   entryBubbles:Row[]; entryAssessments:Row[]; entryStatus:Row;
+  pressureDirection:Row;oiDirectionVix:Row[];
+  fixedOiPressure:Row[]; fixedOiPressureStatus:Row;
   optionOiFlow:Row[]; optionOiFlowStatus:Row;
   cashVixQuality:Row;
 };

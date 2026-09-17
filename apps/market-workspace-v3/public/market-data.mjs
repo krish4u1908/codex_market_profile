@@ -1,3 +1,4 @@
+import {pressureDirection} from './pressure-direction.mjs';
 import {volumeClimaxPoints} from './v2-volume.mjs';
 import {atOrBefore,minuteClose,optionOIProfile} from './series.mjs';
 import {latestBasisRibbon,sampleBasisRibbon} from './price-basis-ribbon.mjs';
@@ -42,6 +43,10 @@ export function frameAt(data, now, {live=false}={}) {
     entryStatus:{status:data.entryAnalysis?.status,reason:data.entryAnalysis?.reason},
     entryBubbles:(data.entryAnalysis?.events||[]).filter(row=>row.x<=Math.min(now,knownAt)),
     entryAssessments:(data.entryAnalysis?.assessments||[]).filter(row=>row.x<=Math.min(now,knownAt)),
+    pressureDirection:pressureDirection(data.fixedOiPressure?.points||[],data.session,Math.min(now,knownAt),data.fixedOiPressure),
+    oiDirectionVix:(data.oiDirectionVix||[]).filter(row=>row.x<=Math.min(now,knownAt)),
+    fixedOiPressureStatus:{status:data.fixedOiPressure?.status,reason:data.fixedOiPressure?.reason},
+    fixedOiPressure:(data.fixedOiPressure?.points||[]).filter(row=>row.x<=Math.min(now,knownAt)),
     optionOiFlowStatus:{status:data.optionOiFlowAnalysis?.status,reason:data.optionOiFlowAnalysis?.reason},
     optionOiFlow:(data.optionOiFlowAnalysis?.points||[]).filter(row=>row.x<=Math.min(now,knownAt)),
     controls:[...controls.values()].filter(row => row.status === "AVAILABLE"),

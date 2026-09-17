@@ -21,3 +21,12 @@ Local regression inputs were the BANKNIFTY 28 August v1.0.62 interface export, N
 Third-party packages remain dependencies in package-lock.json. The retained shadcn stylesheet includes its original license in `vendor/`.
 
 The live integration uses the active VPS source capture reconciled in [the core source lineage](../market-core-v3/SOURCE_LINEAGE.md). GUI startup configuration restricts each deployed service to its own instrument. The static preview continues to support all four recorded workspace profiles.
+
+
+## GUI 3.0.18 pressure direction snapshot
+
+Git parent: `b9044f31395e873a8bfaebad20ed89c5391dc5b8` on `feature/v3-gui-replay-pace-3.0.13`. Runtime GUI lineage: 3.0.13 → 3.0.16 fixed-four pressure → 3.0.17 model comparison → 3.0.18 independent direction. This commit imports the delivered 3.0.18 materialized source, including the intervening GUI changes. It does not merge the separate 3.0.15 research-lens branch. Do not rerun the older materializer scripts.
+
+Release archive: `NIFTY_V3_0_18_PRESSURE_DIRECTION.zip`, SHA256 `224bce9cbb934d9a8a31d049dd1a0c728835830542be2e1d3a54b166df1b268a`. The code and synthetic tests match the source in that delivered package. Large retained historical data is excluded from Git and can be restored exactly from the package with `scripts/restore-release-data.py`. The 3.0.18 updater is retained under `releases/3.0.18/`; run it from the extracted deployment ZIP, not this source checkout.
+
+The named research revision `PRESSURE_DIRECTION_RULE_V1` is separate from the frozen V2 reference call. No core calculation, service configuration or live deployment was changed by this source check-in. Historical evaluation did not establish a forecasting edge.

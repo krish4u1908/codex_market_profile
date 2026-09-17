@@ -12,7 +12,7 @@ test('replay defaults to one recorded minute every 15 real seconds',()=>{
 
 test('replay pace offers 1s, 15s and 30s per market minute',()=>{
   assert.match(workspace,/Choice label="Replay pace"/);
-  assert.match(workspace,/\['1','15','30'\]\.map\(v=>\(\{value:v,label:`1m \/ \$\{v\}s`\}\)\)/);
+  assert.match(workspace,/\['0.22','0.6','1','1.2','2.5','4','15','30'\]\.map\(v=>\(\{value:v,label:`1m \/ \$\{v\}s`\}\)\)/);
 });
 
 test('manual replay step sizes remain unchanged',()=>{
@@ -20,5 +20,5 @@ test('manual replay step sizes remain unchanged',()=>{
 });
 
 test('release identifies the GUI-only replay pace revision',()=>{
-  assert.equal(release.version,'3.0.13-gui-replay-pace');
+  assert.equal(release.version,'3.0.18-gui-pressure-direction');
 });

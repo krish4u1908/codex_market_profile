@@ -1,3 +1,22 @@
+## Current GUI: 3.0.18 pressure direction
+
+The current source is fully materialized. Do not run the older 3.0.12/3.0.13 materializer scripts. See [3.0.18 release notes](releases/3.0.18/README.md), [source lineage](SOURCE_LINEAGE.md), and [pending live-review notes](research/PRESSURE_DIRECTION_REVIEW.md).
+
+The current NIFTY V2 tab is OI Direction: price, raw 1m/5m pressure, independent UP/DOWN/NEUTRAL direction, VIX and basis. Model P and realized-outcome frames are removed. Custom display choices and live/old-session replay are supported. The rule is exploratory; no forecasting edge was established.
+
+This repository stores source and synthetic tests, not deployment ZIPs or retained market recordings. The optional historical OI Research reference and offline research inputs remain in the delivered release package. Before producing an exact deployment rebuild or reproducing the historical study, restore them with:
+
+```sh
+python scripts/restore-release-data.py --package /absolute/path/NIFTY_V3_0_18_PRESSURE_DIRECTION.zip
+npm ci
+npm test
+npm run build
+```
+
+Without those historical files, the live raw-pressure/direction calculation, imported retained reports and synthetic tests work; the old frozen OI Research scores are unavailable and the historical study cannot be rerun. CI checks the source build and tests; it does not issue an incomplete deployment bundle. Use the already delivered ZIP for installation.
+
+---
+
 # Market Workspace V3
 
 One responsive React GUI for BANKNIFTY and NIFTY, with adapters for v1.0.62 reference publications and native V2.0.0 contexts. The shared-core deployment runs one GUI service per instrument. Changing the instrument or version selects a different data contract and cancels the previous session's workers. Opening another GUI does not create another calculation engine.

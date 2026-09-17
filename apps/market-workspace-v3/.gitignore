@@ -10,3 +10,6 @@ public/data/
 *.zip
 *.gz
 __pycache__/
+
+# Retained historical study data stays in the supplied release package.
+public/oi-pressure-reference-v1.json

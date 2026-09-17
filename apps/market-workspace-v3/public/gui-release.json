@@ -1,5 +1,5 @@
 {
-  "version": "3.0.13-gui-replay-pace",
+  "version": "3.0.18-gui-pressure-direction",
   "optionClimaxPolicy": "CE_PE_CLIMAX_DISPLAY_V1",
   "profiles": [
     "banknifty-v1062",
@@ -24,5 +24,17 @@
   "optionOiFlowPolicy": "NEAR_OTM_OPTION_OI_FLOW_1M_V1",
   "optionOiFlowPlacement": "below-price-basis-and-vix-inside-price-frame",
   "optionOiFlowBasket": "three-current-near-OTM-contracts-per-side",
-  "minimumCoreVersion": "3.0.2"
+  "minimumCoreVersion": "3.0.2",
+  "oiResearchPlacement": "NIFTY V2 Market main chart + independent OI Research tab",
+  "oiResearchSource": "fixed-four-receipt-calculation-live-and-replay; historical-confirmations-only",
+  "baseGuiVersion": "3.0.17-gui-oi-model-tab",
+  "prototypeVersion": "0.1.3",
+  "oiPressurePolicy": "FIXED_0945_FOUR_FIRST_RECEIPT_GROSS_1M_5M_V013",
+  "oiDirectionPolicy": "PRESSURE_DIRECTION_RULE_V1",
+  "oiDirectionPlacement": "NIFTY V2 OI Direction tab; Charts and Custom display",
+  "removedFrames": [
+    "Model P(up)",
+    "Realized next 10-minute move"
+  ],
+  "pressureDirectionValidation": "Exploratory; no forecasting edge established"
 }

@@ -1,0 +1,14 @@
+{
+  "policy": "PRESSURE_DIRECTION_RULE_V1",
+  "status": "Unfitted experimental directional hypothesis; no optimized thresholds",
+  "defined_before_candidate_evaluation": true,
+  "inputs": "Existing fixed-four first-receipt gross OI quantities; 1m and 5m windows",
+  "quantity": "100 * (PE_net - CE_net) / total gross additions and removals",
+  "aligned": "5m CE_net<0 and PE_net>0 gives UP if 1m quantity>0. Converse gives DOWN if 1m quantity<0.",
+  "mixed_reversal": "A continuous mixed episode remembers its immediately preceding aligned state. Bull-origin mixed gives DOWN only when 1m quantity<0 and 5m quantity has decreased since the preceding receipt. Bear-origin mixed gives UP only when 1m quantity>0 and 5m quantity has increased.",
+  "neutral": "Other complete inputs produce NEUTRAL; not a forecast of flat price",
+  "reset": "Missing 1m/5m inputs or receipt gap above 90 seconds clears state memory; no-flow clears mixed origin. No future receipt or outcome used.",
+  "window": "09:50 to before 15:00 IST; current status unavailable after 90s stale or at 15:00",
+  "evaluation": "All 4633 previously studied observations over 15 sessions, forward 5m/10m and preceding 5m, normal/expiry, first five/later ten sessions, all eligible rows and greedily spaced >=600s directional rows per session. Baselines raw5 strict, quantity5 sign, 1m/5m quantity agreement. All results retained; no winning rule chosen.",
+  "limitation": "Exploratory, previously examined sessions; not untouched holdout, no trading P&L or calibrated probabilities. September 17 screenshot is not used to fit or score the rule."
+}

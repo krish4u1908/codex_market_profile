@@ -1,3 +1,5 @@
+import {pressureReportVix} from './pressure-direction.mjs';
+import {fixedPressure} from './oi-fixed-pressure.mjs';
 import { normalizePayload, validatePayload } from './payload-adapters.mjs';
 import { frameAt } from './market-data.mjs';
 import { oiEntryBubbles } from './oi-entry-bubbles.mjs';
@@ -38,6 +40,8 @@ async function enrichReplay(profileId, session, generation, candidate) {
   if(feed?.status==='PENDING')feed={...feed,status:'UNAVAILABLE',error:'Option-report archive is still loading. Reopen this session to retry.'};
   data.entryAnalysis=oiEntryBubbles(data,feed);
   data.optionOiFlowAnalysis=optionOiMinuteFlows(data,feed);
+  data.fixedOiPressure=fixedPressure(data,feed);
+  data.oiDirectionVix=pressureReportVix(data,feed);
   data.end=Math.max(data.end,data.entryAnalysis.lastReportAt||0,data.optionOiFlowAnalysis.lastReportAt||0);
   if(lastFrameRequest)self.postMessage({id:lastFrameRequest.id,kind:'frame',frame:frameAt(data,lastFrameRequest.now),
     meta:{session:data.session,start:data.start,end:data.end,analysisStart:data.analysisStart,provenance:data.provenance}});
@@ -133,6 +137,7 @@ self.onmessage = async event => {
       if(action==='load'&&String(url).startsWith('/api/replay?')&&profileId.endsWith('-v200')&&payload.option_report_inputs?.status!=='AVAILABLE') {
         data.entryAnalysis={...data.entryAnalysis,status:'PENDING',reason:'Loading option-report quotes…'};
         data.optionOiFlowAnalysis={...data.optionOiFlowAnalysis,status:'PENDING',reason:'Loading option-report quotes…'};
+        data.fixedOiPressure={...data.fixedOiPressure,status:'PENDING',reason:'Loading archived option-report quotes…'};
         void enrichReplay(profileId,data.session,generation,data);
       }
     } else if (action === 'frame') {

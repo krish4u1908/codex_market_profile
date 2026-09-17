@@ -1,0 +1,53 @@
+{
+  "release": "3.0.18-gui-pressure-direction",
+  "baseGui": "3.0.17-gui-oi-model-tab",
+  "baseArtifactSHA256": "49e1a5d5a61f9c916558d1f343a2361039b15ff688db664f5220cbb6ad0af930",
+  "productionBuild": "PASS",
+  "typecheck": "PASS",
+  "tests": {
+    "passed": 113,
+    "failed": 0
+  },
+  "removals": [
+    "Model P(up) frame",
+    "Realized next 10-minute move frame",
+    "related custom-display switches",
+    "browser logistic inference and coefficient assets"
+  ],
+  "pressureRule": {
+    "policy": "PRESSURE_DIRECTION_RULE_V1",
+    "historicalRows": 4633,
+    "sessions": 15,
+    "directionalRows": 2884,
+    "coveragePct": 62.24908266781783,
+    "next10mDirectionHitPct": 49.30651872399445,
+    "spaced10mRows": 413,
+    "spaced10mDirectionHitPct": 48.18401937046005,
+    "verdict": "NO FORECASTING EDGE ESTABLISHED; exploratory pressure hypothesis only",
+    "noProbabilityOrOutcomeInputs": true
+  },
+  "displayControls": "PASS: five switches, persistent preferences, all-hidden recovery, Show all frames",
+  "replay": "PASS: early historical sessions, catalog quote enrichment, JSON.gz import, past-only cutoffs, missing/stale windows",
+  "chartRender": "PASS: four native ECharts SVG charts rendered from retained session and visually reviewed",
+  "browserVisualVerification": "React DOM interactions and ECharts render checked; full production browser/layout not verified",
+  "liveProductionConnection": "NOT TESTED; live-prefix equivalence and known-time filtering checked",
+  "deployment": "NOT DEPLOYED",
+  "coreChanges": false,
+  "installer": {
+    "change": "release identifier only",
+    "portsUnchanged": true,
+    "guiPorts": {
+      "NIFTY": 8921,
+      "BANKNIFTY": 8920
+    },
+    "restarts": [
+      "nifty-gui.service",
+      "banknifty-gui.service"
+    ],
+    "coreRestart": false,
+    "regressionTests": {
+      "passed": 7,
+      "failed": 0
+    }
+  }
+}

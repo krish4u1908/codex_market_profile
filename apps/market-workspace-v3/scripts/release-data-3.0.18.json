@@ -1,0 +1,22 @@
+{
+  "archive": "NIFTY_V3_0_18_PRESSURE_DIRECTION.zip",
+  "sha256": "224bce9cbb934d9a8a31d049dd1a0c728835830542be2e1d3a54b166df1b268a",
+  "prefix": "NIFTY_V3_0_18_PRESSURE_DIRECTION/source/",
+  "files": [
+    {
+      "path": "public/oi-pressure-reference-v1.json",
+      "sha256": "1902c9a2af08fe2524ca5c366d604c37c3a7aeaa2836a9b6421540041d0165e2",
+      "bytes": 2073888
+    },
+    {
+      "path": "scripts/pressure-validation/observations.jsonl.gz",
+      "sha256": "9791651d877efaec210dd0970d27100b55f23ffcdcbfad694df8507df5856081",
+      "bytes": 1788314
+    },
+    {
+      "path": "scripts/pressure-validation/evaluation_rows.jsonl.gz",
+      "sha256": "2d3fcbc5802c926cb9ecd83d8901e8ad03e2a83e9585eca7e654836c65048d22",
+      "bytes": 1788220
+    }
+  ]
+}
